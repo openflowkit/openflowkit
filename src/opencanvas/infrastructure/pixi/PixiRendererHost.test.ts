@@ -40,6 +40,23 @@ describe('Pixi renderer host lifecycle', () => {
     host.destroy();
   });
 
+  // Safari, 2026-10-26: a frame on a lost context compiled the shape shader through createShader, which returns null
+  // then, and shaderSource(null) threw "Argument 1 ('shader') … must be an instance of WebGLShader".
+  it('draws no frame while the WebGL context is lost, and draws again once it is back', () => {
+    const host = new PixiRendererHost();
+    let lost = true;
+    const render = vi.fn();
+    Object.defineProperty(host.app, 'renderer', { configurable: true, value: { gl: { isContextLost: () => lost } } });
+    Object.defineProperty(host.app, 'render', { configurable: true, value: render });
+    host.renderNow();
+    expect(render).not.toHaveBeenCalled();
+    lost = false;
+    host.renderNow();
+    expect(render).toHaveBeenCalledTimes(1);
+    Object.defineProperty(host.app, 'renderer', { configurable: true, value: undefined });
+    host.destroy();
+  });
+
   it('ends the arrow fade on time when no frame comes (a busy software GPU), so nothing waits on it forever', () => {
     vi.useFakeTimers();
     const frames = vi.spyOn(globalThis, 'requestAnimationFrame').mockReturnValue(1); // frames never come

@@ -37,6 +37,9 @@ separately; its changes are listed under *For developers* in each release.
 
 ### Fixed
 
+- **The canvas no longer breaks when Safari drops the drawing context.** Safari can take WebGL away (a GPU reset,
+  memory pressure); the next frame threw "Argument 1 ('shader') to WebGL2RenderingContext.shaderSource must be an
+  instance of WebGLShader". Frames now wait for the context to come back, then draw as before.
 - **Reorder works on the canvas** ([#92](https://github.com/openflowkit/openflowkit/issues/92)). Bring to front,
   Send to back and the step versions changed the order but the canvas kept drawing shapes in the order they were made.
   A shape in front now covers the text and images of the shapes behind it too, overlapping images keep their order
