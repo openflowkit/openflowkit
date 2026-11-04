@@ -22,6 +22,8 @@ import type { useV2RepoDocument, useV2RepoPanel } from './useV2RepoDocument';
 import type { useV2Selection } from './useV2Selection';
 import type { useV2WorkspaceFolder } from './useV2WorkspaceFolder';
 import type { useV2MapMode } from './map/useV2MapMode';
+import type { useV2Threads } from './useV2Threads';
+import { V2ThreadsPanel } from './V2ThreadsPanel';
 import type { ToastItem } from '../design-system';
 import { counted } from './v2EditorUtil';
 
@@ -57,6 +59,7 @@ interface SidePanelsProps {
   readonly pushToast: (toast: ToastItem) => void;
   readonly setAnnouncement: (message: string) => void;
   readonly focusCanvas: () => void;
+  readonly threads: ReturnType<typeof useV2Threads>;
 }
 
 /** The workspace panels on the right: code, agent pairing, inspect, model and the flow player. */
@@ -86,6 +89,14 @@ export function V2EditorSidePanels(p: SidePanelsProps): React.JSX.Element {
         onTokenChange={(bridgeToken) => updatePreferences({ bridgeToken })}
         onToggle={(connect) => updatePreferences({ agentBridgeEnabled: connect })} onClaim={agentBridge.claim}
         onClose={panels.closeWorkspace} /> : null}
+      {panels.workspace === 'threads' ? (
+        <V2ThreadsPanel entries={p.threads.entries} total={p.threads.total} unread={p.threads.unread} selectedId={p.threads.openThreadId}
+          query={p.threads.query} onQuery={p.threads.setQuery} filters={p.threads.filters} onFilters={p.threads.setFilters}
+          readOnly={docReadOnly} focusOnOpen={!p.threads.quiet}
+          onSelect={(threadId) => { p.threads.select(threadId); }} onToggleResolved={p.threads.toggleResolved}
+          onMarkRead={p.threads.markRead} onMarkUnread={p.threads.markUnread} onCopyLink={p.threads.copyLink} onDelete={p.threads.remove}
+          onClose={() => { panels.closeWorkspace(); p.focusCanvas(); }} />
+      ) : null}
       {panels.workspace === 'inspect' ? (
         <V2InspectPanel report={inspectSelection(viewPage, selection.nodeIds, selectedConnectorIds)}
           onClose={() => { panels.closeWorkspace(); p.focusCanvas(); }}

@@ -9,7 +9,7 @@ import { readableLanding, type LandingDirection } from '../../domain/camera/read
 import { foundation } from '../design-system/tokens';
 import { clearance } from './map/mapMode';
 import type { CanvasCamera } from '../../domain/camera/types';
-import type { Bounds2d } from '../../domain/geometry/types';
+import type { Bounds2d, Point2d } from '../../domain/geometry/types';
 import type { SceneDocumentV1 } from '../../domain/document/types';
 import type { PixiRendererStatus } from '../../infrastructure/pixi/PixiRendererHost';
 import type { PixiRendererHost } from '../../infrastructure/pixi/PixiRendererHost';
@@ -181,6 +181,17 @@ export function useV2Camera(hostRef: RefObject<PixiRendererHost | null>) {
     if (hostRef.current && !inView(bounds)) updateCamera(fitInto(bounds).camera);
   }, [hostRef, updateCamera, fitInto, inView]);
 
+  /**
+   * A comment pin (its tip is `point`, the marker stands above it): left alone when the marker is fully on screen, else glided to
+   * the middle of the free canvas at the current zoom, held between 50% and 200% so it never lands on a blur or a close-up.
+   */
+  const revealPin = useCallback((point: Point2d) => {
+    if (!hostRef.current) return;
+    const { zoom } = cameraRef.current;
+    const bounds = { x: point.x - 20 / zoom, y: point.y - 64 / zoom, width: 40 / zoom, height: 72 / zoom };
+    if (!inView(bounds)) animateTo(fitInto(bounds, FIT_PADDING, Math.min(2, Math.max(0.5, zoom))).camera);
+  }, [hostRef, animateTo, fitInto, inView]);
+
   /** A Layers row: glides `nodeIds` to the middle at the current zoom when any of them is off screen, zooming out only if they do not fit. */
   const revealNodes = useCallback((nodeIds: readonly string[]) => {
     const bounds = hostRef.current?.getContentBounds(nodeIds);
@@ -287,6 +298,7 @@ export function useV2Camera(hostRef: RefObject<PixiRendererHost | null>) {
     landReadable,
     revealBounds,
     revealNodes,
+    revealPin,
     revealReadable,
     zoomStep,
     zoomTo,
