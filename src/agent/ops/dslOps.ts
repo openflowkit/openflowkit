@@ -209,14 +209,15 @@ export const getDiagram = defineOp({
     + 'attributes to merge into that node\'s existing `[ … ]` list (one list per node) to keep the edit, or null when the '
     + 'language cannot say it. `canvasEdits` is null, with `canvasEditsNote` saying why, when it could not be compared. '
     + '`losses` names what the language cannot say at all. update_diagram drops anything the text you send does not carry. '
-    + 'With `diffOnly`, `dsl` is left out and `dslDiff` is a unified diff from the authored text to the text regenerated '
-    + 'from the canvas, both written the same way so only real changes show: empty while the canvas matches. Edits the '
+    + 'With `diffOnly`, `dsl` is left out and `dslDiff` is a unified diff of the canvas against the text it was drawn from, both '
+    + 're-serialized the same way so only real changes show: empty while the canvas matches. Line numbers refer to the '
+    + 'canonical text (what `get_diagram` returns without `diffOnly`), not your original source. Edits the '
     + 'text does not say, such as moves, are only in `canvasEdits`. When there is nothing to compare against, the whole '
     + '`dsl` comes back with `dslDiffNote`.',
   schema: z.object({
     frameId: z.string().min(1).optional().describe(`${FRAME_ID} Defaults to the first diagram on the page.`),
     pageId: z.string().min(1).optional().describe('Page to read (see list_pages); defaults to the page the editor shows, or the first page in file mode.'),
-    diffOnly: z.boolean().optional().describe('Return `dslDiff`, a unified diff from the authored text to the text the canvas regenerates to, instead of the whole `dsl`. For an agent that already holds the text it wrote.'),
+    diffOnly: z.boolean().optional().describe('Return `dslDiff`, a unified diff of the canvas against the text it was drawn from, instead of the whole `dsl`. Line numbers refer to the canonical text (what `get_diagram` returns without `diffOnly`), not your original source.'),
   }),
   async run({ frameId, pageId, diffOnly }, context) {
     const page = requirePage(context.document, pageId ?? context.pageId);

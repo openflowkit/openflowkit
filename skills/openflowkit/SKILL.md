@@ -35,7 +35,7 @@ calls no outside service. In claude.ai or ChatGPT, `https://mcp.openflowkit.com/
 text → `update_diagram` with `{ frameId, dsl }` → `openflow_save`. Not `create_diagram` again: that draws a second
 diagram. `update_diagram` redraws from the text, so `canvasEdits` (the user's recolours, moves, renames) are lost
 unless you merge each `carry` into that node's one `[ … ]` list; `discarded` lists any lost. To re-read it, `get_diagram`
-with `diffOnly: true` returns `dslDiff`, only the lines the canvas changed. "The box I selected" is `selection` in `get_document`.
+with `diffOnly: true` returns `dslDiff`, only the lines the canvas changed, numbered against the canonical text, not your source. "The box I selected" is `selection` in `get_document`.
 
 ## Draw this repo's architecture
 
