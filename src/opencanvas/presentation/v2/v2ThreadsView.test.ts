@@ -12,9 +12,8 @@ const bot = { kind: 'agent' as const, name: 'Claude Code' };
 const at = (minutes: number) => new Date(Date.UTC(2026, 9, 26, 12, minutes)).toISOString();
 const NOW = Date.UTC(2026, 9, 26, 13, 0);
 
-let counter = 0;
 const comment = (author: SceneComment['author'], body: string, minutes: number): SceneComment =>
-  ({ id: `c${++counter}`, author, body, createdAt: at(minutes) });
+  ({ id: `${author.name}-${minutes}-${body}`, author, body, createdAt: at(minutes) });
 function thread(id: string, number: number, comments: SceneComment[], extra: Partial<SceneThread> = {}): SceneThread {
   return { id, number, anchor: { nodeId: null, offset: null, point: { x: 0, y: 0 } }, resolved: false, comments, ...extra };
 }

@@ -1532,7 +1532,7 @@
 .ofk-threads-bar .ofk-icon-button[data-active] { color: var(--ofk-accent); }
 .ofk-threads-list { flex: 1; min-height: 0; margin: 0; padding: 0 8px 12px; overflow-y: auto; list-style: none; display: flex; flex-direction: column; gap: 2px; }
 .ofk-threads-card { position: relative; border-radius: 10px; }
-.ofk-threads-card:hover, .ofk-threads-card:focus-within, .ofk-threads-card[data-menu-open] { background: var(--ofk-hover, color-mix(in srgb, var(--ofk-text) 6%, transparent)); }
+.ofk-threads-card:hover, .ofk-threads-card:focus-within, .ofk-threads-card[data-menu-open] { background: color-mix(in srgb, var(--ofk-text) 6%, transparent); }
 .ofk-threads-card[data-selected] { background: color-mix(in srgb, var(--ofk-accent) 14%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ofk-accent) 55%, transparent); }
 .ofk-threads-card-main { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; align-items: start; width: 100%; box-sizing: border-box; padding: 10px 12px 10px 10px; font: inherit; color: var(--ofk-text); text-align: start; background: none; border: 0; border-radius: inherit; cursor: pointer; }
 .ofk-threads-card-main:focus-visible { outline: 2px solid var(--ofk-focus); outline-offset: -2px; }

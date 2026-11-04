@@ -17,8 +17,6 @@ export interface ThreadFilters {
   readonly unansweredOnly: boolean;
 }
 
-export const DEFAULT_THREAD_FILTERS: ThreadFilters = { showResolved: false, unansweredOnly: false };
-
 /** Every thread of the document, page by page in page order, each page's threads in the order they were started. */
 export function collectThreads(document: SceneDocumentV1): ThreadEntry[] {
   return document.pages.flatMap((page) =>

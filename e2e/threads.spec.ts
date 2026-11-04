@@ -72,6 +72,19 @@ async function open(page: Page): Promise<string> {
   return (await doc(page)).id;
 }
 
+/** The document as autosave stored it: the one place a reload reads from. */
+const persistedThreads = (page: Page, id: string) => page.evaluate((docId) => new Promise<number>((resolve) => {
+  const request = indexedDB.open('openflowkit-persistence');
+  request.onsuccess = () => {
+    const db = request.result;
+    const get = db.transaction('v2Documents', 'readonly').objectStore('v2Documents').get(docId);
+    get.onsuccess = () => {
+      db.close();
+      const record = get.result as { document: { pages: { threads?: unknown[] }[] } } | undefined;
+      resolve(record ? record.document.pages.reduce((total, p) => total + (p.threads?.length ?? 0), 0) : 0);
+    };
+  };
+}), id);
 const panel = (page: Page) => page.getByTestId('v2-threads-panel');
 const cards = (page: Page) => panel(page).getByTestId('v2-thread-card');
 const card = (page: Page, number: number) => cards(page).filter({ hasText: new RegExp(`#${number} ·`) });
@@ -198,25 +211,35 @@ test('a card switches page, brings its pin into view, opens the thread, and mark
   await card(page, 1).getByRole('button', { name: /Why is this a queue/ }).click();
   await expect(thread).toContainText('Latency: the queue absorbs bursts.');
   await expect(card(page, 1)).not.toHaveAttribute('data-unread', 'true');
+
+  // A request is answered once: close the popover, leave Canvas and come back, and it stays closed.
+  await thread.getByRole('button', { name: 'Close thread' }).click();
+  await page.getByRole('group', { name: 'View mode' }).getByRole('button', { name: 'Map' }).click();
+  await page.getByRole('group', { name: 'View mode' }).getByRole('button', { name: 'Canvas' }).click();
+  await expect(page.getByTestId('v2-comment-pin')).not.toHaveCount(0);
+  await expect(thread).toHaveCount(0);
 });
 
-test('the panel works from the keyboard: Enter opens the rail entry, a card and the filter menu', async ({ page }) => {
+test('Tab reaches the panel\'s search, filter, a card and its actions in order', async ({ page }) => {
   await open(page);
-  await page.getByRole('button', { name: /^Threads/ }).focus();
+  const rail = page.getByRole('button', { name: /^Threads/ });
+  await rail.focus();
   await page.keyboard.press('Enter');
   await expect(panel(page)).toBeVisible();
-  // A card is a button: Enter opens its thread.
-  await card(page, 2).getByRole('button', { name: /Rename the cache layer/ }).focus();
-  await page.keyboard.press('Enter');
-  await expect(page.getByTestId('v2-comment-thread')).toContainText('Rename the cache layer');
-  await expect(card(page, 2)).toHaveAttribute('data-selected', 'true');
-  // The filter menu opens and toggles with the keyboard alone.
-  await expect(card(page, 3)).toHaveCount(0);
-  await panel(page).getByRole('button', { name: 'Filter threads' }).focus();
-  await page.keyboard.press('Enter');
-  await page.getByRole('menuitemcheckbox', { name: 'Show resolved' }).focus();
-  await page.keyboard.press('Enter');
-  await expect(card(page, 3)).toBeVisible();
+  const first = cards(page).first();
+  await expect(panel(page).getByRole('button', { name: 'Close threads' })).toBeFocused(); // opening from the rail focuses the panel
+  for (const stop of [
+    panel(page).getByRole('searchbox', { name: 'Search threads' }),
+    panel(page).getByRole('button', { name: 'Filter threads' }),
+    first.locator('.ofk-threads-card-main'),
+    first.getByRole('button', { name: /^(Resolve|Reopen) thread$/ }),
+    first.getByRole('button', { name: 'Thread actions' }),
+  ]) {
+    await page.keyboard.press('Tab');
+    await expect(stop).toBeFocused();
+  }
+  await page.keyboard.press('Space');
+  await expect(page.getByRole('menuitem', { name: 'Copy link' })).toBeVisible();
 });
 
 test('a pin on the canvas highlights its card', async ({ page }) => {
@@ -283,7 +306,7 @@ test('Copy link puts #n · page · node and a link on the clipboard', async ({ p
 
 test('a deep link opens the panel and the thread, and takes the param off the address', async ({ page, baseURL }) => {
   const id = await open(page);
-  await page.waitForTimeout(1_500); // autosave
+  await expect.poll(() => persistedThreads(page, id)).toBe(4);
   await page.goto('about:blank');
   await page.goto(`${baseURL}/#/d/${id}?thread=thread-4`);
   await expect(panel(page)).toBeVisible({ timeout: 20_000 });
@@ -295,7 +318,7 @@ test('a deep link opens the panel and the thread, and takes the param off the ad
 
 test('a deep link to a thread that is gone says so and does not break the editor', async ({ page, baseURL }) => {
   const id = await open(page);
-  await page.waitForTimeout(1_500);
+  await expect.poll(() => persistedThreads(page, id)).toBe(4);
   await page.goto('about:blank');
   await page.goto(`${baseURL}/#/d/${id}?thread=nope`);
   await expect(page.getByText('That thread no longer exists')).toBeVisible({ timeout: 20_000 });
@@ -356,7 +379,6 @@ test('a pin drags to a new place with either tool: onto a node it follows it, on
   await page.getByTestId('v2-comment-thread').getByRole('button', { name: 'Close thread' }).click();
   await panel(page).getByRole('button', { name: 'Close threads' }).click();
   await page.getByRole('button', { name: 'Zoom to fit' }).click();
-  await page.waitForTimeout(800); // the camera settles
   const nodeId = (await doc(page)).pages[0]!.nodes[0]!.id;
   const pinOne = page.locator('.ofk-comment-pin[aria-label^="Comment by User, 2 messages"]');
   // The pin's centre once the camera has stopped moving it.
@@ -367,7 +389,7 @@ test('a pin drags to a new place with either tool: onto a node it follows it, on
       const now = `${Math.round(box.x)},${Math.round(box.y)}`;
       if (now === last) return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
       last = now;
-      await page.waitForTimeout(100);
+      await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(resolve)));
     }
     throw new Error('the pin never settled');
   };
@@ -411,7 +433,7 @@ test('a pin drags to a new place with either tool: onto a node it follows it, on
 
   // The comment tool: drop on a node, and the thread follows it.
   await page.keyboard.press('c');
-  await page.waitForTimeout(800); // the panel opens and the canvas narrows
+  await expect(panel(page)).toBeVisible();
   at = await centreOf();
   const rect = (await page.evaluate((id) => (window as unknown as { __V2__: V2Api }).__V2__.getNodeRect(id), nodeId))!;
   await dragTo(at, { x: rect.x + rect.width / 2, y: Math.min(rect.y + rect.height / 2, 760) });
@@ -420,6 +442,7 @@ test('a pin drags to a new place with either tool: onto a node it follows it, on
 });
 
 test('a click away from a box with text shakes it once instead of closing it; typing starts the count over', async ({ page }) => {
+  await page.clock.install();
   await open(page);
   await page.getByTestId('v2-canvas').focus();
   await page.keyboard.press('c');
@@ -437,7 +460,7 @@ test('a click away from a box with text shakes it once instead of closing it; ty
   // Typing resets: the next click away shakes again.
   await box.press('End');
   await box.pressSequentially('!');
-  await page.waitForTimeout(400);
+  await page.clock.fastForward(400); // past the shake
   await page.mouse.click(away.x, away.y);
   await expect(composer.locator('.ofk-comment-card')).toHaveAttribute('data-wiggle', /.*/, { timeout: 300 });
   await expect(box).toHaveValue('Half-written thought!');

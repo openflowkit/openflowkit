@@ -15,7 +15,7 @@ separately; its changes are listed under *For developers* in each release.
   unique across the document. Threads are not part of undo history, the diagram text or the diagram's content:
   undo and redo keep them, including on a page that is added, duplicated or deleted and brought back. JSON exports and
   share links leave them out; a bad thread in a file is dropped with a console warning and the rest of the diagram
-  loads. There is no way to write a comment yet.
+  loads.
 - **Comments on the canvas.** Press **C** (or pick **Comment** in the toolbar) and click to pin a thread; with the
   keyboard, press **Enter** instead, and the thread lands on the selected shape or the middle of the canvas. Type,
   press Enter to send; a pin opens its thread to reply, edit, resolve, delete or drag it elsewhere. Pins are not drawn

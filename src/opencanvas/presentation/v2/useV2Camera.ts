@@ -24,6 +24,9 @@ const CONTEXT_BAR_ROOM = 80;
 // Camera per I-12: wheel/trackpad pan-zoom anchored at the pointer, fit,
 // Space-pan (owned by the keyboard hook), zoom to 100%. Canvas zoom is
 // independent of browser zoom (I-32).
+/** Screen px a comment pin's marker takes around its tip: the 30px `.ofk-comment-pin` in v2EditorPage.css plus its outline and the room to hover. */
+const PIN_MARKER = { halfWidth: 20, above: 64, below: 8 };
+
 export function useV2Camera(hostRef: RefObject<PixiRendererHost | null>) {
   // The ref feeds gesture math mid-drag; the state re-renders screen-anchored
   // overlays (text editor, context bar) so they track pan and zoom.
@@ -188,7 +191,8 @@ export function useV2Camera(hostRef: RefObject<PixiRendererHost | null>) {
   const revealPin = useCallback((point: Point2d) => {
     if (!hostRef.current) return;
     const { zoom } = cameraRef.current;
-    const bounds = { x: point.x - 20 / zoom, y: point.y - 64 / zoom, width: 40 / zoom, height: 72 / zoom };
+    const { halfWidth, above, below } = PIN_MARKER;
+    const bounds = { x: point.x - halfWidth / zoom, y: point.y - above / zoom, width: 2 * halfWidth / zoom, height: (above + below) / zoom };
     if (!inView(bounds)) animateTo(fitInto(bounds, FIT_PADDING, Math.min(2, Math.max(0.5, zoom))).camera);
   }, [hostRef, animateTo, fitInto, inView]);
 
