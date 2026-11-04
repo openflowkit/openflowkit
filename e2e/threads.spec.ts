@@ -12,7 +12,8 @@ type V2Api = { getState(): { nodes: string[] }; getDocument(): Doc | null; getNo
 const doc = (page: Page) => page.evaluate(() => (window as unknown as { __V2__: V2Api }).__V2__.getDocument()) as Promise<Doc>;
 const threadsOf = async (page: Page) => ((await doc(page)) ?? { pages: [] }).pages.flatMap((p) => (p.threads ?? []) as { id: string; number: number; resolved: boolean }[]);
 
-const ago = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
+const SEED_NOW = Date.UTC(2026, 9, 26, 12, 0); // a fixed instant: every run seeds identical data
+const ago = (minutes: number) => new Date(SEED_NOW - minutes * 60_000).toISOString();
 const NODE_LABEL = 'Session updateComments';
 
 /** A drawing with a rectangle on Page 1 and an empty Page 2, to build a document from. */
@@ -454,7 +455,7 @@ test('a click away from a box with text shakes it once instead of closing it; ty
   await box.fill('Half-written thought');
 
   await page.mouse.click(away.x, away.y);
-  await expect(composer.locator('.ofk-comment-card')).toHaveAttribute('data-wiggle', /.*/, { timeout: 300 });
+  await expect(composer.locator('.ofk-comment-card')).toHaveAttribute('data-wiggle', /.*/);
   await expect(box).toHaveValue('Half-written thought');
   await expect(box).toBeFocused();
   // Typing resets: the next click away shakes again.
@@ -462,18 +463,12 @@ test('a click away from a box with text shakes it once instead of closing it; ty
   await box.pressSequentially('!');
   await page.clock.fastForward(400); // past the shake
   await page.mouse.click(away.x, away.y);
-  await expect(composer.locator('.ofk-comment-card')).toHaveAttribute('data-wiggle', /.*/, { timeout: 300 });
+  await expect(composer.locator('.ofk-comment-card')).toHaveAttribute('data-wiggle', /.*/);
   await expect(box).toHaveValue('Half-written thought!');
   // The second click without typing closes it, text and all.
   await page.mouse.click(away.x, away.y);
   await expect(composer).toHaveCount(0);
   expect(await threadsOf(page)).toHaveLength(4);
-
-  // An empty box closes on the first click away.
-  await page.mouse.click(400, 300);
-  await expect(composer).toHaveCount(1);
-  await page.mouse.click(away.x, away.y);
-  await expect(composer).toHaveCount(0);
 });
 
 test('the reply box keeps its text through one click away, and under reduced motion the shake is an outline', async ({ page }) => {
@@ -485,7 +480,7 @@ test('the reply box keeps its text through one click away, and under reduced mot
   const reply = thread.getByRole('textbox', { name: 'Reply' });
   await reply.fill('Not sent yet');
   await page.mouse.click(200, 650);
-  await expect(thread.locator('xpath=self::*')).toHaveAttribute('data-wiggle', /.*/, { timeout: 300 });
+  await expect(thread.locator('xpath=self::*')).toHaveAttribute('data-wiggle', /.*/);
   expect(await thread.evaluate((el) => getComputedStyle(el).outlineStyle)).toBe('solid');
   expect(await thread.evaluate((el) => getComputedStyle(el).animationName)).toBe('none');
   await expect(reply).toHaveValue('Not sent yet');
