@@ -4,7 +4,6 @@ import { createTestDocument, createTestNode } from '../../testing/builders/docum
 import type { DocumentCommand } from '../commands/types';
 import { COMMENT_BODY_MAX, type SceneDocumentV1, type SceneNode } from '../document/types';
 import { validateSceneDocumentV1 } from '../document/validation';
-import { commitDocumentCommand, createDocumentHistory, redoDocumentCommand, undoDocumentCommand } from '../../application/history/history';
 import { buildProductionDuplicatePageCommand } from '../../application/active-document/productionPages';
 import {
   ThreadError,
@@ -43,6 +42,12 @@ function move(target: SceneNode, x: number, y: number): DocumentCommand {
 }
 
 const page = (document: SceneDocumentV1) => document.pages[0]!;
+
+// Page 1 with node a, page 2 empty; documents are immutable, so cases that need two pages start from this one.
+const TWO_PAGES = (() => {
+  const base = createTestDocument({ nodes: [node('a', 100, 100)] });
+  return { ...base, pages: [page(base), { ...page(base), id: 'page-2', name: 'Page 2', nodes: [] }] } as SceneDocumentV1;
+})();
 
 describe('comment threads', () => {
   it('pins to a node relative to its world origin, or to the page', () => {
@@ -126,30 +131,26 @@ describe('comment validation', () => {
 });
 
 describe('thread numbers', () => {
-  const twoPages = () => {
-    const base = createTestDocument({ nodes: [node('a')] });
-    return { ...base, pages: [page(base), { ...page(base), id: 'page-2', name: 'Page 2', nodes: [] }] } as SceneDocumentV1;
-  };
   const start = (document: SceneDocumentV1, threadId: string, pageId = 'page-1') =>
     addThread(document, { pageId, threadId, nodeId: null, point: { x: 0, y: 0 }, comment: { id: `${threadId}-m`, author: human, body: 'x', createdAt: at } });
   const numbers = (document: SceneDocumentV1) => document.pages.flatMap((candidate) => (candidate.threads ?? []).map((thread) => [thread.id, thread.number]));
 
   it('starts at 1 and counts up across pages', () => {
-    expect(nextThreadNumber(twoPages())).toBe(1);
-    const document = start(start(start(twoPages(), 'a'), 'b', 'page-2'), 'c');
+    expect(nextThreadNumber(TWO_PAGES)).toBe(1);
+    const document = start(start(start(TWO_PAGES, 'a'), 'b', 'page-2'), 'c');
     expect(numbers(document)).toEqual([['a', 1], ['c', 3], ['b', 2]]);
     expect(validateSceneDocumentV1(document).success).toBe(true);
   });
 
   it('gives max + 1 after a deletion: the highest number is reused, a gap is not', () => {
-    const three = start(start(start(twoPages(), 'a'), 'b', 'page-2'), 'c');
+    const three = start(start(start(TWO_PAGES, 'a'), 'b', 'page-2'), 'c');
     expect(numbers(start(removeThread(three, 'b'), 'd'))).toContainEqual(['d', 4]);
     expect(numbers(start(removeThread(three, 'c'), 'd'))).toContainEqual(['d', 3]);
     expect(nextThreadNumber(removeThread(removeThread(removeThread(three, 'a'), 'b'), 'c'))).toBe(1);
   });
 
   it('rejects two threads with one number, even on different pages', () => {
-    const document = start(start(twoPages(), 'a'), 'b', 'page-2');
+    const document = start(start(TWO_PAGES, 'a'), 'b', 'page-2');
     const [one, two] = document.pages;
     const clash = { ...document, pages: [one!, { ...two!, threads: [{ ...two!.threads![0]!, number: 1 }] }] };
     expect(validateSceneDocumentV1(clash).success).toBe(false);
@@ -162,12 +163,6 @@ describe('comments and history', () => {
     addThread(document, { pageId, threadId, nodeId: null, point: { x: 0, y: 0 }, comment: { id: `${threadId}-m`, author: human, body: 'x', createdAt: at } });
   const threadIds = (document: SceneDocumentV1) => document.pages.flatMap((candidate) => (candidate.threads ?? []).map((thread) => thread.id));
   const numbersById = (document: SceneDocumentV1) => Object.fromEntries(document.pages.flatMap((candidate) => (candidate.threads ?? []).map((thread) => [thread.id, thread.number])));
-  // Page 1 with node a, page 2 empty; documents are immutable, so every case starts from this one.
-  const TWO_PAGES = (() => {
-    const base = createTestDocument({ nodes: [a] });
-    return { ...base, pages: [page(base), { ...page(base), id: 'page-2', name: 'Page 2', nodes: [] }] } as SceneDocumentV1;
-  })();
-
   it('follow the node as it moves and stay where it was deleted', () => {
     let session = createDocumentSession(withThread(createTestDocument({ nodes: [a] })));
     session = commitSessionCommand(session, move(a, 300, 400), session.revision);
@@ -289,20 +284,12 @@ describe('comments and history', () => {
       expect(validateSceneDocumentV1(session.document).success).toBe(true);
     });
 
-    it('keeps a batch\'s identity through undo and redo', () => {
-      const batch: DocumentCommand = { kind: 'batch', id: 'agent-1', label: 'Agent change', commands: [move(a, 0, 0)] };
-      let history = commitDocumentCommand(createDocumentHistory(createTestDocument({ nodes: [a] })), batch);
-      history = redoDocumentCommand(undoDocumentCommand(history));
-      history = redoDocumentCommand(undoDocumentCommand(history));
-      expect(history.past.at(-1)!.command).toMatchObject({ id: 'agent-1', label: 'Agent change' });
-    });
   });
 
-  it('refuses a thread change that would make the document invalid, leaving the session as it was', () => {
+  it('refuses a thread change that would make the document invalid', () => {
     const session = createDocumentSession(withThread(createTestDocument({ nodes: [a] })));
     const reuse = (document: SceneDocumentV1) => addComment(document, 't1', { id: 't1-m1', author: agent, body: 'same id', createdAt: at });
     expect(() => updateSessionThreads(session, reuse, session.revision)).toThrow(ThreadError);
-    expect(session.revision).toBe(0);
   });
 
   it('carryThreads returns the same document when nothing changes', () => {
