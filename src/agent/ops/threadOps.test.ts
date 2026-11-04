@@ -203,6 +203,8 @@ describe('comment ops, live', () => {
   it('a host without threadChange refuses writes', async () => {
     const host = await live({ threadChange: undefined });
     await expect(runLiveAgentOp(host.session, 'start_thread', { point: { x: 0, y: 0 }, body: 'x' })).rejects.toThrow(NO_THREADS_REFUSAL);
+    // The refusal comes before the op resolves, so an unknown id does not hide it.
+    await expect(runLiveAgentOp(host.session, 'resolve_thread', { threadId: 'ghost' })).rejects.toThrow(NO_THREADS_REFUSAL);
   });
 
   it('a bad thread id surfaces as an error for the agent', async () => {
