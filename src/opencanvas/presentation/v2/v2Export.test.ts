@@ -69,12 +69,12 @@ describe('slug', () => {
 });
 
 describe('comment threads in a JSON export', () => {
-  const commented = () =>
-    addThread(labeledConnectedDocument(), {
-      pageId: labeledConnectedDocument().pages[0]!.id, threadId: 't1', nodeId: null, point: { x: 0, y: 0 },
-      comment: { id: 'm1', author: { kind: 'human', name: 'Ada' }, body: 'private note', createdAt: '2026-10-26T12:00:00.000Z' },
-    });
-  const request = { document: commented(), format: 'json' as const, scope: 'document' as const, pageId: commented().pages[0]!.id };
+  const base = labeledConnectedDocument();
+  const document = addThread(base, {
+    pageId: base.pages[0]!.id, threadId: 't1', nodeId: null, point: { x: 0, y: 0 },
+    comment: { id: 'm1', author: { kind: 'human', name: 'Ada' }, body: 'private note', createdAt: '2026-10-26T12:00:00.000Z' },
+  });
+  const request = { document, format: 'json' as const, scope: 'document' as const, pageId: base.pages[0]!.id };
 
   it('are left out by default and put in on request', async () => {
     const [plain] = await buildV2Export(request);

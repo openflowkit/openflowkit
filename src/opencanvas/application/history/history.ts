@@ -80,7 +80,7 @@ export function undoDocumentCommand(history: DocumentHistoryState): DocumentHist
     past: history.past.slice(0, -1),
     // What redo does is what undoing this step did, seen from here: a page it brings back holds the threads
     // it has now, not the ones it had when the step was first made.
-    future: [{ command: applied.inverse, inverse: entry.inverse }, ...history.future].slice(0, history.limit),
+    future: [{ command: { ...applied.inverse, id: entry.command.id, label: entry.command.label }, inverse: entry.inverse }, ...history.future].slice(0, history.limit),
   };
 }
 
@@ -92,7 +92,7 @@ export function redoDocumentCommand(history: DocumentHistoryState): DocumentHist
     ...history,
     present: applied.document,
     // Likewise for what the next undo does.
-    past: appendBounded(history.past, { command: entry.command, inverse: applied.inverse }, history.limit),
+    past: appendBounded(history.past, { command: entry.command, inverse: { ...applied.inverse, id: entry.inverse.id, label: entry.inverse.label } }, history.limit),
     future: history.future.slice(1),
   };
 }

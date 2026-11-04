@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { projectLegacyDocument } from './legacyProjection';
 import { migrateSceneDocument } from './migration';
 
@@ -87,6 +87,7 @@ describe('migrateSceneDocument', () => {
   });
 
   describe('comment threads', () => {
+    afterEach(() => vi.restoreAllMocks());
     const comment = (id: string) => ({ id, author: { kind: 'human', name: 'Ada' }, body: 'hi', createdAt: '2026-10-26T12:00:00.000Z' });
     const thread = (id: string, number: number, overrides: Record<string, unknown> = {}) => ({
       id, number, anchor: { nodeId: null, offset: null, point: { x: 0, y: 0 } }, resolved: false, comments: [comment(`${id}-m`)], ...overrides,
@@ -103,14 +104,12 @@ describe('migrateSceneDocument', () => {
       expect(result.success).toBe(true);
       if (result.success) expect(result.document.pages[0]!.threads!.map(({ id }) => id)).toEqual(['good']);
       expect(warn).toHaveBeenCalledTimes(3);
-      warn.mockRestore();
     });
 
     it('leaves a page with no valid thread without the key', () => {
       const document = createDocument();
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined);
       const result = migrateSceneDocument({ ...document, pages: [{ ...document.pages[0]!, threads: [thread('bad', 0)] }] });
-      warn.mockRestore();
       expect(result.success && 'threads' in result.document.pages[0]!).toBe(false);
       expect(result.success).toBe(true);
     });

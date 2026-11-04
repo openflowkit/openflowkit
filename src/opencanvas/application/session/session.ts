@@ -1,5 +1,7 @@
 import type { DocumentCommand } from '../../domain/commands/types';
 import type { SceneDocumentV1 } from '../../domain/document/types';
+import { validateSceneDocumentV1 } from '../../domain/document/validation';
+import { ThreadError } from '../../domain/threads/threads';
 import {
   amendNewNode,
   commitDocumentCommand,
@@ -87,6 +89,8 @@ export function updateSessionThreads(
   requireCurrentRevision(session, expectedRevision);
   const document = change(session.document);
   if (document === session.document) return session;
+  const valid = validateSceneDocumentV1(document);
+  if (valid.success === false) throw new ThreadError(`Invalid thread change: ${valid.issues[0]!.message}`);
   return { document, revision: session.revision + 1, history: { ...session.history, present: document } };
 }
 

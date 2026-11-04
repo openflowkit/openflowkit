@@ -154,7 +154,10 @@ function applySetPage(document: SceneDocumentV1, command: SetPageCommand): Appli
     throw new DocumentCommandError(`Page "${command.pageId}" precondition failed.`);
   }
   const pages = [...document.pages];
-  pages[index] = command.after;
+  // The snapshot holds the threads of its time; the page keeps the ones it has now (numbers are unique across the document).
+  const { threads: _snapshot, ...shape } = command.after;
+  const current = document.pages[index]!;
+  pages[index] = current.threads ? { ...shape, threads: current.threads } : shape;
   return {
     document: { ...document, pages },
     inverse: { ...command, before: command.after, after: command.before },

@@ -1,6 +1,6 @@
-// Threads pinned on a page. They are document data but not diagram content: commands, undo and the
-// DSL never touch them, so every change goes through these functions and carryThreads keeps them across
-// a history step.
+// Threads pinned on a page. They are document data but not diagram content: commands never edit them
+// (page insert/remove keep a page's threads and renumber clashes, see withFreeThreadNumbers), so every
+// change goes through these functions and carryThreads keeps them across a history step.
 import type { Point2d } from '../geometry/types';
 import { buildNodeWorldMatrices } from '../scene/worldGeometry';
 import {
@@ -31,7 +31,7 @@ export function openThreadCount(page: ScenePage): number {
 }
 
 /** A body as stored: trimmed, non-empty and at most COMMENT_BODY_MAX characters. */
-export function commentBody(body: string): string {
+function commentBody(body: string): string {
   const trimmed = body.trim();
   if (!trimmed) throw new ThreadError('A comment cannot be empty.');
   if (trimmed.length > COMMENT_BODY_MAX) {
@@ -41,14 +41,14 @@ export function commentBody(body: string): string {
 }
 
 /** Pins `point` to `nodeId` (when it is on the page) so the pin follows the node, or to the page. */
-export function createAnchor(page: ScenePage, nodeId: string | null, point: Point2d): SceneThreadAnchor {
+function createAnchor(page: ScenePage, nodeId: string | null, point: Point2d): SceneThreadAnchor {
   const origin = nodeId === null ? undefined : buildNodeWorldMatrices(page).get(nodeId);
   if (!origin) return { nodeId: null, offset: null, point };
   return { nodeId, offset: { x: point.x - origin.tx, y: point.y - origin.ty }, point };
 }
 
 /** Moves each node-anchored pin to where its node is now; a pin whose node is gone keeps its last point. */
-export function refreshAnchors(page: ScenePage): ScenePage {
+function refreshAnchors(page: ScenePage): ScenePage {
   const threads = pageThreads(page);
   if (!threads.some((thread) => thread.anchor.nodeId !== null)) return page;
   const origins = buildNodeWorldMatrices(page);
@@ -120,7 +120,7 @@ export function withFreeThreadNumbers(document: SceneDocumentV1, page: ScenePage
 }
 
 /** `document` with `update` applied to one page's threads. An empty result drops the key. */
-export function updatePageThreads(
+function updatePageThreads(
   document: SceneDocumentV1,
   pageId: string,
   update: (threads: readonly SceneThread[], page: ScenePage) => readonly SceneThread[]
