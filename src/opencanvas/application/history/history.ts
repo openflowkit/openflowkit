@@ -1,9 +1,16 @@
-import { applyDocumentCommand } from '../../domain/commands/execute';
+import { carryThreads } from '../../domain/threads/threads';
+import { applyDocumentCommand as applyCommand } from '../../domain/commands/execute';
 import type { DocumentCommand } from '../../domain/commands/types';
 import type { SceneDocumentV1 } from '../../domain/document/types';
 import type { DocumentHistoryEntry, DocumentHistoryState } from './types';
 
 const DEFAULT_HISTORY_LIMIT = 100;
+
+/** A history step changes shapes only: the threads of the document it starts from stay (see carryThreads). */
+function applyDocumentCommand(present: SceneDocumentV1, command: DocumentCommand) {
+  const applied = applyCommand(present, command);
+  return { ...applied, document: carryThreads(applied.document, present) };
+}
 
 function requireHistoryLimit(limit: number): number {
   if (!Number.isInteger(limit) || limit < 1) {
@@ -71,7 +78,9 @@ export function undoDocumentCommand(history: DocumentHistoryState): DocumentHist
     ...history,
     present: applied.document,
     past: history.past.slice(0, -1),
-    future: [entry, ...history.future].slice(0, history.limit),
+    // What redo does is what undoing this step did, seen from here: a page it brings back holds the threads
+    // it has now, not the ones it had when the step was first made.
+    future: [{ command: applied.inverse, inverse: entry.inverse }, ...history.future].slice(0, history.limit),
   };
 }
 
@@ -82,7 +91,8 @@ export function redoDocumentCommand(history: DocumentHistoryState): DocumentHist
   return {
     ...history,
     present: applied.document,
-    past: appendBounded(history.past, entry, history.limit),
+    // Likewise for what the next undo does.
+    past: appendBounded(history.past, { command: entry.command, inverse: applied.inverse }, history.limit),
     future: history.future.slice(1),
   };
 }

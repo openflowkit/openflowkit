@@ -11,6 +11,11 @@ separately; its changes are listed under *For developers* in each release.
 
 ### Added
 
+- **Comment threads in the document.** A page can now hold threads of comments (`pages[].threads`), each with a number
+  unique across the document. Threads are not part of undo history, the diagram text or the diagram's content:
+  undo and redo keep them, including on a page that is added, duplicated or deleted and brought back. JSON exports and
+  share links leave them out; a bad thread in a file is dropped with a console warning and the rest of the diagram
+  loads. There is no way to write a comment yet.
 - **Private repos in the browser.** On the "not found, or it is private" screen, **Private repo? Use a GitHub token**
   takes a fine-grained token with Contents read-only access; the files are then read through the GitHub API. The
   token stays in this tab.

@@ -22,6 +22,8 @@ interface V2ExportRequest {
   /** Pixel multiplier baked into the emitted file (PNG and SVG alike). */
   readonly scale?: 1 | 2 | 3;
   readonly transparent?: boolean;
+  /** JSON only: comment threads go in the file (off by default; they carry names and private conversation). */
+  readonly includeThreads?: boolean;
 }
 
 export interface V2ExportFile {
@@ -110,7 +112,7 @@ export async function buildV2Export(request: V2ExportRequest): Promise<readonly 
   if (request.format === 'pdf') return [];
   const stem = fileStem(request);
   if (request.format === 'json') {
-    return [{ filename: `${stem}.json`, mime: 'application/json', text: serializeCanonicalJson(request.document) }];
+    return [{ filename: `${stem}.json`, mime: 'application/json', text: serializeCanonicalJson(request.document, { includeThreads: request.includeThreads === true }) }];
   }
   const pages = exportPages(request);
   const scale = request.scale ?? 1;
@@ -199,8 +201,8 @@ export function buildV2SvgExport(document: SceneDocumentV1): { filename: string;
   return { filename: `${document.id}.svg`, svg: exportCanonicalSvg(document) };
 }
 
-export function buildV2JsonExport(document: SceneDocumentV1): { filename: string; json: string } {
-  return { filename: `${document.id}.json`, json: serializeCanonicalJson(document) };
+export function buildV2JsonExport(document: SceneDocumentV1, options: { readonly includeThreads?: boolean } = {}): { filename: string; json: string } {
+  return { filename: `${document.id}.json`, json: serializeCanonicalJson(document, options) };
 }
 
 /** A damaged diagram is still the person's data: both stored copies, exactly as they are. A failed read downloads nothing. */

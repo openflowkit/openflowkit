@@ -75,6 +75,21 @@ export function forgetSessionHistory(session: DocumentSession): DocumentSession 
   return { ...session, history: createDocumentHistory(session.document, session.history.limit) };
 }
 
+/**
+ * A thread change (domain/threads): a new revision, so autosave and the agent bridge see it, but no undo
+ * step, and undo/redo of the steps around it keep it.
+ */
+export function updateSessionThreads(
+  session: DocumentSession,
+  change: (document: SceneDocumentV1) => SceneDocumentV1,
+  expectedRevision: number
+): DocumentSession {
+  requireCurrentRevision(session, expectedRevision);
+  const document = change(session.document);
+  if (document === session.document) return session;
+  return { document, revision: session.revision + 1, history: { ...session.history, present: document } };
+}
+
 export function undoSessionCommand(
   session: DocumentSession,
   expectedRevision: number
