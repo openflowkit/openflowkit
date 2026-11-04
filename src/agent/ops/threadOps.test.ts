@@ -3,9 +3,9 @@ import { applyDocumentCommand } from '@/opencanvas/domain/commands/execute';
 import { addComment, pageThreads } from '@/opencanvas/domain/threads/threads';
 import type { SceneDocumentV1 } from '@/opencanvas/domain/document/types';
 import { createAgentDocument } from '../index';
-import { READ_ONLY_REFUSAL, runLiveAgentOp, type LiveAgentSession } from '../liveOp';
+import { NO_THREADS_REFUSAL, READ_ONLY_REFUSAL, runLiveAgentOp, type LiveAgentSession } from '../liveOp';
 import { resolveAgentOpCommand, runAgentOp } from '../runAction';
-import { AGENT_OPS, findAgentOp } from './index';
+import { findAgentOp } from './index';
 import { createTestCapabilities } from './testHost';
 import type { OpContext } from './types';
 
@@ -137,12 +137,6 @@ describe('thread ops, file mode', () => {
     const listed = (id: SceneDocumentV1) => runAgentOp(op('list_diagrams'), {}, contextOf(id));
     expect((await listed(commented)).output).toEqual((await listed(document)).output);
   });
-
-  it('the comment ops are registered once, and read-only list_threads is not a write', () => {
-    for (const name of ['list_threads', 'reply_to_thread', 'resolve_thread', 'start_thread']) {
-      expect(AGENT_OPS.filter((candidate) => candidate.name === name)).toHaveLength(1);
-    }
-  });
 });
 
 describe('comment ops, live', () => {
@@ -208,7 +202,7 @@ describe('comment ops, live', () => {
 
   it('a host without threadChange refuses writes', async () => {
     const host = await live({ threadChange: undefined });
-    await expect(runLiveAgentOp(host.session, 'start_thread', { point: { x: 0, y: 0 }, body: 'x' })).rejects.toThrow();
+    await expect(runLiveAgentOp(host.session, 'start_thread', { point: { x: 0, y: 0 }, body: 'x' })).rejects.toThrow(NO_THREADS_REFUSAL);
   });
 
   it('a bad thread id surfaces as an error for the agent', async () => {

@@ -52,4 +52,4 @@ export function opInputShape(op: AnyAgentOp): ZodRawShape {
 
 export type { AgentOp, ExportedFile, ExportRequest, IconMatch, OpCapabilities, OpContext, OpOutcome } from './types';
 export { defineOp, pointOf, pointSchema, requireFrame, requirePage } from './types';
-export { THREAD_WRITE_OPS, LOOKUP_OPS, MAX_IMAGE_KB, PAGELESS_OPS, base64Kb } from './surface';
+export { LOOKUP_OPS, MAX_IMAGE_KB, PAGELESS_OPS, base64Kb } from './surface';

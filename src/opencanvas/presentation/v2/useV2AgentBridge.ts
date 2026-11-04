@@ -16,6 +16,7 @@ import {
   type BridgeClientInfo, type BridgePageSummary, type BridgeRequest,
 } from '../../../agent/bridge/protocol';
 import { agentName } from '../../../agent/agentName';
+import { THREAD_WRITE_OPS } from '../../../agent/ops/surface';
 import { runLiveAgentOp, type LiveAgentSession } from '../../../agent/liveOp';
 
 /** `waiting`: nothing answers yet, the normal state until the agent starts its server. `elsewhere`: another tab has it. */
@@ -67,14 +68,9 @@ const SLOW_AFTER_MS = 30_000;
 const LOCK = 'ofk-agent-bridge';
 const TAB_KEY = 'ofk-agent-tab';
 
-/** Comment writes: "is commenting…", and no drawing cursor. */
-const THREAD_OPS = new Set(['start_thread', 'reply_to_thread', 'resolve_thread']);
-
 /** Ops that only look: "is reading the canvas…" rather than "is drawing…". */
 const READS = new Set(['get_document', 'list_threads', 'get_diagram', 'list_diagrams', 'list_pages', 'screenshot', 'export', 'get_syntax',
   'search_icons', 'find_icons_for', 'fit_view']);
-
-export { agentName };
 
 const some = (count: number, noun: string): string => (count === 1 ? `${/^[aeiou]/.test(noun) ? 'an' : 'a'} ${noun}` : `${count} ${noun}s`);
 
@@ -196,7 +192,7 @@ export function useV2AgentBridge(options: V2AgentBridgeOptions): V2AgentBridge {
       const runRequest = async (request: BridgeRequest): Promise<void> => {
         const agent = agentName(request.client);
         setAgents((seen) => (seen[0] === agent ? seen : [agent, ...seen.filter((name) => name !== agent)].slice(0, 4)));
-        setActivity((last) => ({ agent, doing: READS.has(request.op) ? 'reading the canvas' : THREAD_OPS.has(request.op) ? 'commenting' : 'drawing', change: last?.change ?? null }));
+        setActivity((last) => ({ agent, doing: READS.has(request.op) ? 'reading the canvas' : THREAD_WRITE_OPS.has(request.op) ? 'commenting' : 'drawing', change: last?.change ?? null }));
         let result: { id: string; ok: boolean; output?: unknown; error?: string };
         try {
           const { command, output } = await runLiveAgentOp(() => optionsRef.current, request.op, request.input, request.pageId, undefined, request.client);

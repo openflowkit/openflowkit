@@ -39,6 +39,7 @@ export interface LiveAgentSession {
   readonly onApplied?: (nodeIds: readonly string[]) => void;
 }
 
+export const NO_THREADS_REFUSAL = 'This editor cannot take comments.';
 export const READ_ONLY_REFUSAL = 'This document is read-only, so the editor did not apply the change.';
 export const REPO_MAP_REFUSAL = 'The tab shows a repo map, which is read from the code, so the editor did not apply the change. '
   + 'Ask the user to press Canvas (or wait until the map is read), then call again: changes land on the map\'s drawing '
@@ -88,7 +89,8 @@ export async function runLiveAgentOp(current: () => LiveAgentSession, name: stri
   let pageId = pageHolding({ document: session.document, pageId: requestedPageId ?? session.pageId ?? session.document.pages[0]?.id ?? '', capabilities: session.capabilities }, input);
   // Thread writes are conversation, not drawing: no repo-map redirect, no page switch, no camera, no commit.
   const threadWrite = THREAD_WRITE_OPS.has(name);
-  if (threadWrite && (session.readOnly || !session.threadChange)) throw new Error(READ_ONLY_REFUSAL);
+  if (threadWrite && session.readOnly) throw new Error(READ_ONLY_REFUSAL);
+  if (threadWrite && !session.threadChange) throw new Error(NO_THREADS_REFUSAL);
   const mutates = !threadWrite && CAPABILITY_MANIFEST.some(({ action, mutates }) => action === name && mutates);
   const locked = session.lockedPageId ?? null;
   let opened = false;
@@ -108,7 +110,8 @@ export async function runLiveAgentOp(current: () => LiveAgentSession, name: stri
   if (outcome.threads) {
     stopIfAborted(signal);
     const now = current();
-    if (now.readOnly || !now.threadChange) throw new Error(READ_ONLY_REFUSAL);
+    if (now.readOnly) throw new Error(READ_ONLY_REFUSAL);
+    if (!now.threadChange) throw new Error(NO_THREADS_REFUSAL);
     // The change runs against the editor's document as it is then, so the output is read off that one.
     const { threads, report } = outcome;
     let applied: SceneDocumentV1 | null = null;
