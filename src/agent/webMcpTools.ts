@@ -33,7 +33,7 @@ export interface WebMcpEditor {
 }
 
 /** Results that carry the person's own text (labels, names, DSL, a picture of them): data for the agent, never instructions. */
-const USER_CONTENT = new Set(['get_document', 'get_diagram', 'list_diagrams', 'list_pages', 'export', 'screenshot', 'get_view']);
+const USER_CONTENT = new Set(['get_document', 'list_threads', 'get_diagram', 'list_diagrams', 'list_pages', 'export', 'screenshot', 'get_view']);
 /** Raster animation runs to megabytes: far past what a tool result carries. */
 const MOTION_RASTER = new Set(['gif', 'mp4', 'webm']);
 const pageIdField = z.string().min(1).optional()

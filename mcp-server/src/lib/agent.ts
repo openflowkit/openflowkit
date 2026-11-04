@@ -314,7 +314,7 @@ interface AgentBundle {
   readonly MAX_IMAGE_KB: number;
   base64Kb(base64: string): number;
   runAgentOp(op: AgentOp, rawInput: unknown, context: {
-    document: SceneDocumentV1; pageId: string; capabilities: OpCapabilities;
+    document: SceneDocumentV1; pageId: string; capabilities: OpCapabilities; client?: string;
   }): Promise<{ document: SceneDocumentV1; changed: boolean; output: unknown }>;
   createFileCapabilities(options: {
     grammar: string;

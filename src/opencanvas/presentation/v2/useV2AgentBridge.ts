@@ -15,6 +15,7 @@ import {
   BRIDGE_POLL_SECONDS, bridgeUrls, isBridgeRequest,
   type BridgeClientInfo, type BridgePageSummary, type BridgeRequest,
 } from '../../../agent/bridge/protocol';
+import { agentName } from '../../../agent/agentName';
 import { runLiveAgentOp, type LiveAgentSession } from '../../../agent/liveOp';
 
 /** `waiting`: nothing answers yet, the normal state until the agent starts its server. `elsewhere`: another tab has it. */
@@ -66,20 +67,14 @@ const SLOW_AFTER_MS = 30_000;
 const LOCK = 'ofk-agent-bridge';
 const TAB_KEY = 'ofk-agent-tab';
 
+/** Comment writes: "is commenting…", and no drawing cursor. */
+const THREAD_OPS = new Set(['start_thread', 'reply_to_thread', 'resolve_thread']);
+
 /** Ops that only look: "is reading the canvas…" rather than "is drawing…". */
-const READS = new Set(['get_document', 'get_diagram', 'list_diagrams', 'list_pages', 'screenshot', 'export', 'get_syntax',
+const READS = new Set(['get_document', 'list_threads', 'get_diagram', 'list_diagrams', 'list_pages', 'screenshot', 'export', 'get_syntax',
   'search_icons', 'find_icons_for', 'fit_view']);
 
-/** MCP clientInfo.name → what people call it. Unknown names show as sent. */
-const AGENT_NAMES: Record<string, string> = {
-  'claude-code': 'Claude Code', 'claude-ai': 'Claude Desktop', 'cursor-vscode': 'Cursor', cursor: 'Cursor',
-  'Visual Studio Code': 'VS Code', 'Visual Studio Code - Insiders': 'VS Code', 'codex-mcp-client': 'Codex', codex: 'Codex',
-};
-
-export function agentName(client: string | undefined): string {
-  const raw = client?.trim().slice(0, 40);
-  return raw ? AGENT_NAMES[raw] ?? raw : 'Your agent';
-}
+export { agentName };
 
 const some = (count: number, noun: string): string => (count === 1 ? `${/^[aeiou]/.test(noun) ? 'an' : 'a'} ${noun}` : `${count} ${noun}s`);
 
@@ -201,10 +196,10 @@ export function useV2AgentBridge(options: V2AgentBridgeOptions): V2AgentBridge {
       const runRequest = async (request: BridgeRequest): Promise<void> => {
         const agent = agentName(request.client);
         setAgents((seen) => (seen[0] === agent ? seen : [agent, ...seen.filter((name) => name !== agent)].slice(0, 4)));
-        setActivity((last) => ({ agent, doing: READS.has(request.op) ? 'reading the canvas' : 'drawing', change: last?.change ?? null }));
+        setActivity((last) => ({ agent, doing: READS.has(request.op) ? 'reading the canvas' : THREAD_OPS.has(request.op) ? 'commenting' : 'drawing', change: last?.change ?? null }));
         let result: { id: string; ok: boolean; output?: unknown; error?: string };
         try {
-          const { command, output } = await runLiveAgentOp(() => optionsRef.current, request.op, request.input, request.pageId);
+          const { command, output } = await runLiveAgentOp(() => optionsRef.current, request.op, request.input, request.pageId, undefined, request.client);
           const did = command ? agentDid(request.op, request.input, command.label) : null;
           setActivity((last) => ({ agent, doing: null, change: command && did ? { label: did, id: command.id } : last?.change ?? null }));
           optionsRef.current.onActivity(did ? `${agent} ${did}.` : `${agent} ran ${request.op}.`);

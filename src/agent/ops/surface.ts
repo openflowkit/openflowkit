@@ -12,3 +12,6 @@ export const MAX_IMAGE_KB = 1024;
 
 /** Decoded size of a base64 body, in KB. */
 export const base64Kb = (base64: string): number => Math.round(base64.length * 0.75 / 1024);
+
+/** Ops that write threads: refused on a read-only document, allowed on a locked (repo map) page, never an undo step. */
+export const THREAD_WRITE_OPS: ReadonlySet<string> = new Set(['start_thread', 'reply_to_thread', 'resolve_thread']);

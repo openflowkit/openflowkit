@@ -81,8 +81,8 @@ describe('agent manifest', () => {
 
   it('has a manifest row per op, with an existing proof file for every mutating op', () => {
     expect(unlistedOps()).toEqual([]);
-    // 16 ops: 7 with a UI twin proven by ops.test.ts, 6 of them mutating.
-    expect(manifestCoverage()).toEqual({ ops: AGENT_OPS.length, withEquivalentUiPath: 7, mutating: 6 });
+    // 20 ops: 10 with a UI twin proven by ops.test.ts or threadOps.test.ts, 9 of them mutating.
+    expect(manifestCoverage()).toEqual({ ops: AGENT_OPS.length, withEquivalentUiPath: 10, mutating: 9 });
     for (const row of CAPABILITY_MANIFEST) {
       if (!row.equivalenceTest) continue;
       const path = join(process.cwd(), row.equivalenceTest);

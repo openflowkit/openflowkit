@@ -1,6 +1,7 @@
 // The one registry every surface reads: the MCP server builds its tools here,
 // the editor's live bridge dispatches here, the manifest test proves it here.
 import { createDiagram, getDiagram, listDiagrams, updateDiagram } from './dslOps';
+import { listThreads, replyToThread, resolveThread, startThread } from './threadOps';
 import { findIconsFor, getSyntax, searchIcons } from './iconOps';
 import { exportDiagram, fitView, getDocument, listPages, screenshotDiagram } from './pipelineOps';
 import { addShape, deleteShapes, moveNodes, styleNodes } from './sceneOps';
@@ -28,6 +29,10 @@ export const AGENT_OPS: readonly AnyAgentOp[] = [
   fitView,
   getDocument,
   listPages,
+  listThreads,
+  replyToThread,
+  resolveThread,
+  startThread,
 ];
 
 export function findAgentOp(name: string): AnyAgentOp | null {
@@ -47,4 +52,4 @@ export function opInputShape(op: AnyAgentOp): ZodRawShape {
 
 export type { AgentOp, ExportedFile, ExportRequest, IconMatch, OpCapabilities, OpContext, OpOutcome } from './types';
 export { defineOp, pointOf, pointSchema, requireFrame, requirePage } from './types';
-export { LOOKUP_OPS, MAX_IMAGE_KB, PAGELESS_OPS, base64Kb } from './surface';
+export { THREAD_WRITE_OPS, LOOKUP_OPS, MAX_IMAGE_KB, PAGELESS_OPS, base64Kb } from './surface';

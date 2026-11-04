@@ -35,6 +35,7 @@ export const INSTRUCTIONS = [
     + ' Or use file mode: openflow_create (or openflow_open with a .openflow.json path), draw, then openflow_save;'
     + ' a file-mode drawing also returns an openUrl the user can open to see it.',
   'Several agent sessions can share one canvas: whoami shows bridge.shared when this server draws through another one.',
+  'Threads: list_threads reads the conversations people pinned on the canvas (filter by threadId, or unanswered: true for the ones waiting on you); reply_to_thread adds a comment, resolve_thread closes one and start_thread opens one.',
   'Call whoami when unsure which mode you are in.',
 ].join('\n');
 

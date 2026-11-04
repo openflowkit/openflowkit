@@ -51,6 +51,9 @@ describe('webMcpTools', () => {
   it('a read-only document offers the reads only', () => {
     const reads = webMcpTools(editor(), { readOnly: true }).map(({ name }) => name);
     expect(reads).toEqual([...CAPABILITY_MANIFEST.filter(({ mutates }) => !mutates).map(({ action }) => action), 'get_view', 'select']);
+    expect(reads).toContain('list_threads');
+    expect(reads).not.toContain('start_thread');
+    expect(tool(tools, 'list_threads').annotations?.untrustedContentHint).toBe(true);
   });
 
   it('an op runs through the editor with the page it names', async () => {

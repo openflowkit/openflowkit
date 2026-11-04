@@ -31,11 +31,11 @@ calls no outside service. In claude.ai or ChatGPT, `https://mcp.openflowkit.com/
 
 ## Change a diagram
 
-`get_diagram` returns the DSL and `frameId` (file mode: `openflow_open` first, then pass
-`documentId`) → edit the text → `update_diagram` with `{ frameId, dsl }` → `openflow_save`.
+`get_diagram` returns the DSL and `frameId` (file mode: `openflow_open` first, then pass `documentId`) → edit the text → `update_diagram` with `{ frameId, dsl }` → `openflow_save`.
 Not `create_diagram` again: that draws a second diagram. `update_diagram` redraws from the text, so
 `canvasEdits` (the user's recolours, moves, renames) are lost unless you merge each `carry` into that
 node's one `[ … ]` list; `discarded` lists any lost. "The box I selected" is `selection` in `get_document`.
+Pinned threads: `list_threads` (`unanswered: true` = waiting on you; `threadId`), `reply_to_thread`, `resolve_thread`, `start_thread` (`nodeId` or `point`). Not DSL; `get_document` counts them.
 
 ## Draw this repo's architecture
 
