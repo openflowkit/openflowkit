@@ -48,11 +48,12 @@ export class Placement {
     const { x, y, zoom } = this.camera();
     const left = entry.world.x * zoom + x;
     const top = entry.world.y * zoom + y;
-    const key = `${left}|${top}`;
+    const width = this.width();
+    const key = `${left}|${top}|${width}`;
     if (key === entry.key) return false;
     entry.key = key;
     el.style.transform = `translate3d(${left}px, ${top}px, 0)`;
-    const side = left > this.width() - CARD_ROOM ? 'left' : 'right';
+    const side = left > width - CARD_ROOM ? 'left' : 'right';
     if (el.dataset.side !== side) el.dataset.side = side;
     return true;
   }

@@ -84,7 +84,7 @@ the close button keeps you on the last match.
 Press `C` to pick the **Comment** tool and click where the comment belongs (on a shape, it follows the shape).
 With the keyboard alone, press `Enter` instead: the thread opens on the selected shape, or in the middle of the
 canvas when nothing is selected. Type, then `Enter` to send. A pin opens its thread, where you can reply, edit,
-resolve or delete; drag a pin to move it. Pins live on the page, not in the picture: PNG, SVG and PDF exports never
+resolve or delete; drag a pin to move it, or focus it and press `⌥ + Arrow` (`⇧⌥ + Arrow` for ten times as far). Pins live on the page, not in the picture: PNG, SVG and PDF exports never
 show them, and a JSON export includes comments only when **Include comments** is ticked.
 
 ## Structure

@@ -5,9 +5,9 @@ import { expect, test, type Page } from './test';
 
 const SHOTS = process.env.OFK_SHOTS_DIR;
 type V2Api = {
-  getState(): { nodes: string[]; revision: number; saveStatus?: string };
+  getState(): { nodes: string[]; revision: number; save: string };
   getNodeRect(id: string): { x: number; y: number; width: number; height: number } | null;
-  getDocument(): { pages: { threads?: { resolved: boolean; anchor: { nodeId: string | null }; comments: { body: string; author: { kind: string; name: string } }[] }[] }[] };
+  getDocument(): { pages: { threads?: { resolved: boolean; anchor: { nodeId: string | null; point: { x: number } }; comments: { body: string; author: { kind: string; name: string } }[] }[] }[] };
 };
 const api = <T,>(page: Page, run: (v2: V2Api) => T) => page.evaluate(`(${run.toString()})(window.__V2__)`) as Promise<T>;
 const threads = (page: Page) => api(page, (v2) => v2.getDocument().pages[0]!.threads ?? []);
@@ -66,9 +66,18 @@ test('press C, click a node, type, Enter: a pin appears, survives a reload, and 
   const moved = (await pin.boundingBox())!;
   expect(Math.round(moved.y - before.y)).toBeGreaterThan(70);
 
-  // Saved with the document.
-  await expect.poll(async () => (await api(page, (v2) => v2.getState())).saveStatus ?? 'saved').toMatch(/saved|idle/);
-  await page.waitForTimeout(600);
+  // The pin follows a pan of the camera as the shape does.
+  const node = (await page.evaluate((nodeId) => window.__V2__!.getNodeRect(nodeId), id))!;
+  const pinned = (await pin.boundingBox())!;
+  await page.mouse.move(centre.x + 200, centre.y + 150);
+  await page.mouse.wheel(-120, -80);
+  await expect.poll(async () => (await page.evaluate((nodeId) => window.__V2__!.getNodeRect(nodeId), id))!.x).not.toBe(node.x);
+  const panned = (await page.evaluate((nodeId) => window.__V2__!.getNodeRect(nodeId), id))!;
+  await expect.poll(async () => Math.round((await pin.boundingBox())!.x - pinned.x)).toBe(Math.round(panned.x - node.x));
+  expect(Math.round((await pin.boundingBox())!.y - pinned.y)).toBe(Math.round(panned.y - node.y));
+
+  // Saved with the document: reload only once the save has landed.
+  await expect.poll(async () => (await api(page, (v2) => v2.getState())).save).toBe('saved');
   await page.reload();
   await page.waitForFunction(() => window.__V2__?.getState());
   await expect(page.getByTestId('v2-comment-pin')).toHaveCount(1);
@@ -195,9 +204,10 @@ test('a thread is placed, written and sent with the keyboard alone', async ({ pa
   await box.press('Enter');
   await expect(page.getByTestId('v2-comment-pin')).toHaveCount(1);
   expect(await threads(page)).toMatchObject([{ anchor: { nodeId: null }, comments: [{ body: 'From the keyboard' }] }]);
+  // Sending hands focus back to the canvas, so the next key is the canvas's.
+  await expect(page.getByTestId('v2-canvas')).toBeFocused();
 
-  // With a shape selected the thread anchors to it.
-  await page.getByTestId('v2-canvas').focus();
+  // With a shape selected the thread anchors to it. Sending handed focus back to the canvas.
   await page.keyboard.press('v');
   await page.mouse.click(centre.x, centre.y);
   // A blank shape takes typed letters as its name; a named one keeps its tool letters.
@@ -212,8 +222,13 @@ test('a thread is placed, written and sent with the keyboard alone', async ({ pa
   await expect(page.getByTestId('v2-comment-pin')).toHaveCount(2);
   expect((await threads(page))[1]).toMatchObject({ anchor: { nodeId: id } });
 
-  // The pin itself is a button: Tab to it, Enter opens its thread.
-  await page.getByTestId('v2-comment-pin').first().getByRole('button').focus();
+  // The pin itself is a button: Alt+Arrow moves it, Enter opens its thread.
+  const pinButton = page.getByTestId('v2-comment-pin').first().getByRole('button', { name: /^Comment by/ });
+  const x = (await threads(page))[0]!.anchor.point.x;
+  await pinButton.focus();
+  await page.keyboard.press('Alt+ArrowRight');
+  await expect.poll(async () => (await threads(page))[0]!.anchor.point.x).toBe(x + 8);
+  await pinButton.focus();
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('v2-comment-thread')).toBeVisible();
 });

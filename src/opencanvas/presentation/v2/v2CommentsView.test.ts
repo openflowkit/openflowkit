@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { avatarColor, keyboardSpot, relativeTime } from './v2CommentsView';
+import { avatarColor, keyboardSpot, pinNudge, PIN_STEP, relativeTime } from './v2CommentsView';
 
 const NOW = Date.parse('2026-10-26T12:00:00.000Z');
 const ago = (ms: number) => new Date(NOW - ms).toISOString();
@@ -44,7 +44,23 @@ describe('keyboardSpot', () => {
   it('is the centre of the selected node, which the thread then anchors to', () => {
     expect(keyboardSpot({ x: 100, y: 200, width: 80, height: 40 }, viewport)).toEqual({ point: { x: 140, y: 220 }, onNode: true });
   });
+  it('is the centre of the canvas when the selected node is scrolled out of view', () => {
+    expect(keyboardSpot({ x: 2000, y: 200, width: 80, height: 40 }, viewport)).toEqual({ point: { x: 500, y: 300 }, onNode: false });
+    expect(keyboardSpot({ x: -300, y: 200, width: 80, height: 40 }, viewport)).toEqual({ point: { x: 500, y: 300 }, onNode: false });
+  });
   it('is the centre of the canvas, as a page pin, with nothing selected', () => {
     expect(keyboardSpot(null, viewport)).toEqual({ point: { x: 500, y: 300 }, onNode: false });
+  });
+});
+
+describe('pinNudge', () => {
+  it('moves a focused pin with Alt and an arrow, ten times as far with Shift', () => {
+    expect(pinNudge('ArrowLeft', true, false)).toEqual({ x: -PIN_STEP, y: 0 });
+    expect(pinNudge('ArrowDown', true, false)).toEqual({ x: 0, y: PIN_STEP });
+    expect(pinNudge('ArrowUp', true, true)).toEqual({ x: 0, y: -PIN_STEP * 10 });
+  });
+  it('leaves a plain arrow, another key and a missing Alt alone', () => {
+    expect(pinNudge('ArrowRight', false, false)).toBeNull();
+    expect(pinNudge('Enter', true, false)).toBeNull();
   });
 });

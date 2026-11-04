@@ -6,7 +6,7 @@ import { Button, Icon, IconButton, Menu, MenuItem, Tooltip } from '../design-sys
 import { avatarColor, relativeTime } from './v2CommentsView';
 
 // Keys typed into a comment belong to the comment: they never reach the editor's shortcuts.
-export const keep = (event: KeyboardEvent): void => event.stopPropagation();
+const keep = (event: KeyboardEvent): void => event.stopPropagation();
 
 export function Avatar({ kind, name, size = 24 }: { readonly kind: 'human' | 'agent'; readonly name: string; readonly size?: number }): React.JSX.Element {
   return kind === 'agent'
@@ -15,7 +15,7 @@ export function Avatar({ kind, name, size = 24 }: { readonly kind: 'human' | 'ag
 }
 
 /** Enter sends, Shift+Enter breaks a line, Esc leaves; the box grows with its text. */
-export function CommentInput(props: {
+function CommentInput(props: {
   readonly value: string;
   readonly onChange: (value: string) => void;
   readonly onSend: () => void;
@@ -142,7 +142,7 @@ export function ThreadPopover(props: {
   const { thread, readOnly } = props;
   const [reply, setReply] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
-  // 'thread' is also what deleting the opening message means.
+  // Deleting the opening message asks to delete the thread.
   const [confirming, setConfirming] = useState(false);
   const menuAnchor = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLUListElement>(null);

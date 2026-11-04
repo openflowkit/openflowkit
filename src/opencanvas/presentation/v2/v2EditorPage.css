@@ -1456,15 +1456,14 @@
 .ofk-comment-anchor { position: absolute; top: 0; left: 0; z-index: calc(var(--ofk-layer-toolbar, 10) - 1); width: 0; height: 0; pointer-events: none; will-change: transform; }
 .ofk-comment-anchor:has([data-comment-open]) { z-index: var(--ofk-layer-toolbar, 10); }
 .ofk-comment-pin {
-  position: absolute; left: 0; bottom: 0; box-sizing: border-box; width: 30px; height: 30px; padding: 0; border: 2px solid #fff;
-  border-radius: 50% 50% 50% 0; background: #fff; overflow: hidden; cursor: pointer; pointer-events: auto;
+  position: absolute; left: 0; bottom: 0; box-sizing: border-box; width: 30px; height: 30px; padding: 0; border: 2px solid var(--ofk-surface);
+  border-radius: 50% 50% 50% 0; background: var(--ofk-surface); overflow: hidden; cursor: pointer; pointer-events: auto;
   box-shadow: 0 1px 3px rgb(0 0 0 / .35), 0 3px 10px rgb(0 0 0 / .18);
   transition: transform .12s ease;
 }
 .ofk-comment-pin[data-ghost] { pointer-events: none; opacity: .9; }
 .ofk-comment-pin:hover { transform: scale(1.06); transform-origin: 0 100%; }
 .ofk-comment-pin:focus-visible, .ofk-comment-pin[data-selected] { outline: var(--ofk-focus-width, 2px) solid var(--ofk-focus); outline-offset: 2px; }
-.ofk-comment-pin[data-resolved] { opacity: .55; }
 .ofk-comment-pin[data-dragging] { cursor: grabbing; }
 .ofk-comment-pin .ofk-comment-avatar { width: 100% !important; height: 100% !important; border-radius: inherit; }
 .ofk-comment-avatar {

@@ -171,7 +171,8 @@
       "page": "canvas-basics",
       "shortcuts": [
         "Comment",
-        "Place a comment at the selection or the centre"
+        "Place a comment at the selection or the centre",
+        "Move a focused comment pin (10× with Shift)"
       ]
     },
     {

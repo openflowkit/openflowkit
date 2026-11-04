@@ -34,18 +34,19 @@ describe('Placement', () => {
   });
 
   it('schedules no frame while pins are mounted and nothing moves', () => {
-    const { placement } = setup();
+    const { placement, pins } = setup();
     for (let i = 0; i < 20; i += 1) runFrame();
     const settled = requests;
     for (let i = 0; i < 20; i += 1) runFrame();
     expect(requests).toBe(settled);
     expect(frames).toHaveLength(0);
-    // Moving a pin to where it already is, or kicking with the camera still, costs one frame at most and then ends.
-    placement.move(document.createElement('div'), { x: 0, y: 0 });
+    // Moving a pin to where it already is costs nothing; a kick with the camera still costs exactly one frame, which ends the loop.
+    placement.move(pins[0]!, { x: 0, y: 5 });
+    expect(requests).toBe(settled);
     placement.kick();
     runFrame();
     runFrame();
-    expect(requests).toBeLessThanOrEqual(settled + 1);
+    expect(requests).toBe(settled + 1);
     expect(frames).toHaveLength(0);
   });
 
@@ -56,6 +57,20 @@ describe('Placement', () => {
     expect(pins[0]!.style.transform).toBe('translate3d(5px, 5px, 0)');
     runFrame();
     expect(frames).toHaveLength(0);
+  });
+
+  it('repaints when the section is resized, so a card flips to the side that has room', () => {
+    const camera = { x: 0, y: 0, zoom: 1 };
+    let width = 1000;
+    const placement = new Placement(() => camera, () => width);
+    const el = document.createElement('div');
+    placement.add(el, { x: 500, y: 0 });
+    expect(el.dataset.side).toBe('right');
+    runFrame(); runFrame();
+    width = 800;
+    placement.kick();
+    runFrame();
+    expect(el.dataset.side).toBe('left');
   });
 
   it('repaints a pin whose anchor moved even when the camera did not', () => {

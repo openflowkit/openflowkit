@@ -381,7 +381,7 @@ export function V2ExportMenu({
 }
 
 /** The JSON export request's thread option: comments reach the file only when the box is ticked. */
-export function jsonOptions(includeComments: boolean): { readonly includeThreads?: true } {
+function jsonOptions(includeComments: boolean): { readonly includeThreads?: true } {
   return includeComments ? { includeThreads: true } : {};
 }
 

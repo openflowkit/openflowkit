@@ -8,10 +8,13 @@ import type { SceneThread, SceneDocumentV1, ScenePage } from '../../domain/docum
 import type { PixiRendererHost } from '../../infrastructure/pixi/PixiRendererHost';
 import { Avatar, CommentComposer, ThreadPopover } from './V2CommentsParts';
 import { mintV2Id } from './v2Document';
-import { HUMAN_AUTHOR_NAME, keyboardSpot } from './v2CommentsView';
+import { HUMAN_AUTHOR_NAME, keyboardSpot, pinNudge } from './v2CommentsView';
 import { Placement } from './v2CommentPlacement';
 import type { V2Tool } from './v2ToolCatalog';
 import { FRESH_GUARD, hasDraftText, outsideClick, typed, type DraftGuard } from './v2DraftGuard';
+
+const placementFor = (cameraRef: RefObject<CanvasCamera>, sectionRef: RefObject<HTMLElement | null>): Placement =>
+  new Placement(() => cameraRef.current, () => sectionRef.current?.clientWidth ?? Infinity);
 
 const PlacementContext = createContext<Placement | null>(null);
 
@@ -35,19 +38,15 @@ function Anchored(props: { readonly world: Point2d; readonly className?: string;
 
 type Open =
   | { readonly kind: 'composer'; readonly world: Point2d; readonly nodeId: string | null }
-  /** `shownResolved`: opened from the Threads panel while resolved, so it stays up (its pin is drawn dimmed) until closed. */
-  | { readonly kind: 'thread'; readonly id: string; readonly shownResolved?: boolean };
-
-/** Ask the canvas to open a thread's popover (the Threads panel, a deep link); `seq` makes asking twice for one thread count twice. */
-export interface OpenThreadRequest { readonly threadId: string; readonly seq: number }
+  | { readonly kind: 'thread'; readonly id: string };
 
 interface Props {
   readonly page: ScenePage;
   readonly sectionRef: RefObject<HTMLElement | null>;
   readonly hostRef: RefObject<PixiRendererHost | null>;
   readonly cameraRef: RefObject<CanvasCamera>;
-  /** The camera as React last saw it: a change wakes the pin loop, which otherwise sleeps. */
-  readonly camera: CanvasCamera;
+  /** Called on every camera write; the pin loop sleeps until one wakes it. Returns the way to stop listening. */
+  readonly subscribeCamera: (listener: () => void) => () => void;
   /** The selected node's id, read when a thread is placed from the keyboard. */
   readonly selectedNodeId: () => string | null;
   /** Filled with the way to open a composer without a pointer (Enter with the comment tool); false when it cannot. */
@@ -58,15 +57,7 @@ interface Props {
   /** The canvas shows another page than the one holding the threads (Map): their coordinates mean nothing there. */
   readonly hidden: boolean;
   readonly updateThreads: (change: (document: SceneDocumentV1) => SceneDocumentV1) => void;
-  /** Open this thread's popover as soon as its page is the one shown. */
-  readonly request?: OpenThreadRequest | null;
-  /** The thread whose popover is open (null for none): the Threads panel highlights its card. */
-  readonly onOpenThreadChange?: (threadId: string | null) => void;
-  /** Threads with news for this viewer: their pin carries a dot. */
-  readonly unread?: ReadonlySet<string>;
 }
-
-export { HUMAN_AUTHOR_NAME };
 
 /** A press on a pin that moves less than this is a click. */
 const DRAG_PX = 4;
@@ -87,37 +78,30 @@ function shake(section: HTMLElement): void {
 
 /** Comment pins over the canvas, the composer a click with the comment tool opens, and a pin's thread. DOM, so no export ever draws them. */
 export function V2Comments(props: Props): React.JSX.Element | null {
-  const { page, hidden, readOnly, tool, sectionRef, hostRef, cameraRef, updateThreads, camera, placeRef, selectedNodeId } = props;
+  const { page, hidden, readOnly, tool, sectionRef, hostRef, cameraRef, updateThreads, subscribeCamera, placeRef, selectedNodeId } = props;
   const [open, setOpen] = useState<Open | null>(null);
   const [now, setNow] = useState(() => Date.now());
   // The loop reads the refs when a frame runs, never during render.
-  const [placement] = useState(() => new Placement(() => cameraRef.current, () => sectionRef.current?.clientWidth ?? Infinity));
+  // eslint-disable-next-line react-hooks/refs -- only handed over here; a frame reads them
+  const [placement] = useState(() => placementFor(cameraRef, sectionRef));
   useEffect(() => () => placement.stop(), [placement]);
-  useEffect(() => { placement.kick(); }, [placement, camera]);
+  useEffect(() => subscribeCamera(() => placement.kick()), [placement, subscribeCamera]);
+  // A narrower section can put a card on the wrong side of its pin with the camera still.
+  useEffect(() => {
+    const section = sectionRef.current;
+    if (!section || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => placement.kick());
+    observer.observe(section);
+    return () => observer.disconnect();
+  }, [placement, sectionRef]);
 
-  const openId = open?.kind === 'thread' ? open.id : null;
-  const shownResolved = open?.kind === 'thread' && open.shownResolved === true;
-  const threads = useMemo(() => pageThreads(page).filter((thread) => !thread.resolved || (shownResolved && thread.id === openId)), [page, shownResolved, openId]);
+  const threads = useMemo(() => pageThreads(page).filter((thread) => !thread.resolved), [page]);
   const openThread = open?.kind === 'thread' ? pageThreads(page).find((thread) => thread.id === open.id) : undefined;
   // A thread that went away (deleted, an agent resolved it, another page) closes with it.
   useEffect(() => {
-    if (open?.kind === 'thread' && (!openThread || (openThread.resolved && !open.shownResolved))) setOpen(null);
+    if (open?.kind === 'thread' && (!openThread || openThread.resolved)) setOpen(null);
   }, [open, openThread]);
   useEffect(() => { setOpen(null); }, [page.id, hidden]);
-  // Asked from outside (after the reset above, which a page switch runs): open once this page holds the thread and the canvas is shown.
-  const requestSeq = props.request?.seq;
-  const requestedId = props.request?.threadId;
-  useEffect(() => {
-    if (requestSeq === undefined || requestedId === undefined || hidden) return;
-    const target = pageThreads(page).find((thread) => thread.id === requestedId);
-    if (target) setOpen({ kind: 'thread', id: target.id, ...(target.resolved ? { shownResolved: true } : {}) });
-    // Only a new request opens; the thread, page and mode are read as they are then.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [requestSeq, requestedId, page.id, hidden]);
-  const { onOpenThreadChange } = props;
-  useEffect(() => { onOpenThreadChange?.(openId); }, [openId, onOpenThreadChange]);
-  // Closing the canvas of a page (Map) or the editor reports nothing open.
-  useEffect(() => () => onOpenThreadChange?.(null), [onOpenThreadChange]);
   useEffect(() => { if (readOnly && open?.kind === 'composer') setOpen(null); }, [readOnly, open]);
   // Ages tick while a thread is open.
   useEffect(() => {
@@ -226,6 +210,7 @@ export function V2Comments(props: Props): React.JSX.Element | null {
     updateThreads((doc) => addThread(doc, { pageId: page.id, threadId, nodeId: open.nodeId, point: open.world, comment: next }));
     // The comment tool stays active: the next click starts the next thread. Esc or another tool leaves it.
     setOpen(null);
+    sectionRef.current?.focus({ preventScroll: true });
   };
   const reply = (thread: SceneThread, body: string) => {
     const next = message(body);
@@ -237,13 +222,18 @@ export function V2Comments(props: Props): React.JSX.Element | null {
       {threads.map((thread) => {
         const lead = thread.comments[0]!;
         const selected = open?.kind === 'thread' && open.id === thread.id;
-        const unread = props.unread?.has(thread.id) ?? false;
         return (
           <Anchored key={thread.id} world={drag?.id === thread.id ? drag.world : thread.anchor.point} className="ofk-comment-pinned" testId="v2-comment-pin">
             <button type="button" className="ofk-comment-pin" data-comment-ui data-selected={selected || undefined} data-kind={lead.author.kind}
-              data-unread={unread || undefined} data-resolved={thread.resolved || undefined}
-              aria-label={`Comment by ${lead.author.name}${thread.comments.length > 1 ? `, ${thread.comments.length} messages` : ''}${unread ? ', unread' : ''}`}
+              aria-label={`Comment by ${lead.author.name}${thread.comments.length > 1 ? `, ${thread.comments.length} messages` : ''}`}
               aria-expanded={selected} data-dragging={drag?.id === thread.id || undefined} {...pinHandlers(thread.id)}
+              onKeyDown={(event) => {
+                const by = readOnly ? null : pinNudge(event.key, event.altKey, event.shiftKey);
+                if (!by) return;
+                event.preventDefault();
+                const { nodeId, point } = thread.anchor;
+                updateThreads((doc) => moveThread(doc, thread.id, nodeId, { x: point.x + by.x, y: point.y + by.y }));
+              }}
               onClick={() => { if (!justDragged.current) setOpen(selected ? null : { kind: 'thread', id: thread.id }); }}>
               <Avatar kind={lead.author.kind} name={lead.author.name} size={22} />
             </button>
@@ -262,7 +252,7 @@ export function V2Comments(props: Props): React.JSX.Element | null {
       {open?.kind === 'composer' ? (
         <Anchored world={open.world} className="ofk-comment-pinned" testId="v2-comment-composer">
           <span className="ofk-comment-pin" data-ghost><Avatar kind="human" name={HUMAN_AUTHOR_NAME} size={22} /></span>
-          <CommentComposer onDraft={onDraft} onSend={create} onCancel={() => setOpen(null)} />
+          <CommentComposer onDraft={onDraft} onSend={create} onCancel={() => { setOpen(null); sectionRef.current?.focus({ preventScroll: true }); }} />
         </Anchored>
       ) : null}
     </PlacementContext.Provider>

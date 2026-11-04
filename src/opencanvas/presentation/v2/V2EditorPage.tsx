@@ -135,6 +135,7 @@ export function V2EditorPage({ shared }: { readonly shared?: V2SharedView } = {}
     selection, selectionRef, selectedConnectorId, selectedConnectorIds, selectedConnectorIdsRef,
     applySelection, applyConnectorSelection,
   } = selectionApi;
+  const selectedNodeId = useCallback(() => selectionRef.current.primaryNodeId, [selectionRef]);
   /** Exactly these shapes selected, and no connector. */
   const selectNodes = useCallback((nodeIds: readonly string[]) => {
     applyConnectorSelection([]);
@@ -437,8 +438,8 @@ export function V2EditorPage({ shared }: { readonly shared?: V2SharedView } = {}
               exportPanel={exportPanel} commit={commit} leaveStart={leaveStart} setTool={setTool} pickShape={pickShape} pickConnector={pickConnector}
               gestureApiRef={gestureApiRef} input={input} fitAll={fitAll} />
             <V2EditorCanvas
-              comments={<V2CommentsHost session={session} page={page} sectionRef={sectionRef} hostRef={hostRef} cameraRef={camera.cameraRef} camera={camera.camera}
-                selectedNodeId={() => selectionRef.current.primaryNodeId} placeRef={commentHereRef} tool={tool} readOnly={docReadOnly} hidden={map.active} />}
+              comments={<V2CommentsHost session={session} page={page} sectionRef={sectionRef} hostRef={hostRef} cameraRef={camera.cameraRef} subscribeCamera={camera.subscribe}
+                selectedNodeId={selectedNodeId} placeRef={commentHereRef} tool={tool} readOnly={docReadOnly} hidden={map.active} />}
               agentCursor={<AgentCursor ref={agents.presence.cursorRef} name={agents.agentShown} working={agents.agentBridge.activity?.doing === 'drawing'} data-testid="v2-agent-cursor" />}
               page={page} viewPage={viewPage ?? page} hostRef={hostRef} sectionRef={sectionRef} pageRef={pageRef} selectionRef={selectionRef}
               selectedConnectorIdsRef={selectedConnectorIdsRef} toolRef={toolRef} spacePanRef={spacePanRef} toolConfigRef={toolConfigRef}
