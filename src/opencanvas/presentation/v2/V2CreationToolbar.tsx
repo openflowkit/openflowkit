@@ -40,7 +40,7 @@ function skipCorners(event: React.KeyboardEvent<HTMLDivElement>): void {
 
 export type { V2Tool, V2ToolConfig, V2ConnectorTool };
 
-const POINTER_TOOLS = new Set<V2Tool>(['select', 'hand']);
+const POINTER_TOOLS = new Set<V2Tool>(['select', 'hand', 'comment']);
 const DRAW_TOOLS = new Set<V2Tool>(['pen', 'highlighter', 'eraser', 'laser']);
 
 // Seven buttons, grouped by intent. Every flyout is one level: a pick places or

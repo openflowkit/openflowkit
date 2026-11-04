@@ -51,6 +51,7 @@ export function shortcutGroups(apple = isApplePlatform()): readonly ShortcutGrou
       rows: [
         ['Select', 'V', ['v']],
         ['Hand', 'H', ['h']],
+        ['Comment', 'C', ['c']],
         ['Rectangle', 'R', ['r']],
         ['Ellipse', 'O', ['o']],
         ['Shapes', 'S', ['s']],
@@ -63,6 +64,7 @@ export function shortcutGroups(apple = isApplePlatform()): readonly ShortcutGrou
         ['Frame', 'F', ['f']],
         ['Sticky note', 'N', ['n']],
         ['Place the armed shape at the centre', '↵', []],
+        ['Place a comment at the selection or the centre', '↵', []],
         ['Connect two selected shapes', 'A', []],
         ['Insert: media, charts, frames, wireframe', '⇧S', ['KeyS']],
         ['Icons and emoji', 'I / E', ['i', 'e']],

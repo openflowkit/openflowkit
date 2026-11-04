@@ -3,7 +3,7 @@ import type { KeyboardEvent } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { keyOwnedByTarget, useV2Keyboard } from './useV2Keyboard';
 
-function setup(onTypeToEdit = vi.fn(() => true)) {
+function setup(onTypeToEdit = vi.fn(() => true), tool: string = 'select', onCommentHere?: () => boolean) {
   const onToolChange = vi.fn();
   const onFitView = vi.fn();
   const onResetZoom = vi.fn();
@@ -24,7 +24,7 @@ function setup(onTypeToEdit = vi.fn(() => true)) {
   const arrange = { onAlign: vi.fn(), onDistribute: vi.fn(), onFlip: vi.fn(), onZoomToSelection: vi.fn(), onTextStyle: vi.fn() };
   const { result } = renderHook(() => useV2Keyboard({
     onReorder, onToggleLock, ...clipboard, ...arrange, ...insert,
-    toolRef: { current: 'select' }, editingRef: { current: false }, onToolChange,
+    toolRef: { current: tool as never }, ...(onCommentHere ? { onCommentHere } : {}), editingRef: { current: false }, onToolChange,
     onUndo: vi.fn(), onRedo: vi.fn(), onDelete: vi.fn(), onDuplicate: vi.fn(), onEditPrimary, onPasteKey, onRemoveFromModel: vi.fn(),
     onNudge: vi.fn(), onEscapePanel: () => false, onToggleEmoji: () => undefined, onInsertImage: () => undefined, onCancelGesture: () => false, onClearSelection: vi.fn(), onSelectAll: vi.fn(),
     onFitView, onZoomStep, onResetZoom, onToggleTree: vi.fn(), onToggleIcons, onToggleInspect, onToggleMap, onFind,
@@ -282,5 +282,35 @@ describe('keyOwnedByTarget', () => {
     expect(keyOwnedByTarget(event(document.createElement('section')))).toBe(false);
     // Escape is never a control's: it still closes what is open.
     expect(keyOwnedByTarget(event(button, { key: 'Escape' }))).toBe(false);
+  });
+});
+
+describe('useV2Keyboard comment tool', () => {
+  it('bare C arms the comment tool; ⌘C still copies and ⇧C does not', () => {
+    const { key, onToolChange, onCopy } = setup(vi.fn(() => false));
+    key({ key: 'c' });
+    expect(onToolChange).toHaveBeenCalledExactlyOnceWith('comment');
+    key({ key: 'c', metaKey: true });
+    expect(onCopy).toHaveBeenCalledOnce();
+    expect(onToolChange).toHaveBeenCalledOnce();
+    key({ key: 'C', shiftKey: true });
+    expect(onToolChange).toHaveBeenCalledOnce();
+  });
+
+  it('Enter with the comment tool places a thread from the keyboard and edits nothing', () => {
+    const place = vi.fn(() => true);
+    const { key, onEditPrimary } = setup(vi.fn(() => false), 'comment', place);
+    key({ key: 'Enter' });
+    expect(place).toHaveBeenCalledOnce();
+    expect(onEditPrimary).not.toHaveBeenCalled();
+  });
+
+  it('Enter falls through to editing when nothing could be placed, and with any other tool', () => {
+    const { key, onEditPrimary } = setup(vi.fn(() => false), 'comment', () => false);
+    key({ key: 'Enter' });
+    expect(onEditPrimary).toHaveBeenCalledWith('enter');
+    const other = setup(vi.fn(() => false), 'select', vi.fn(() => true));
+    other.key({ key: 'Enter' });
+    expect(other.onEditPrimary).toHaveBeenCalledWith('enter');
   });
 });

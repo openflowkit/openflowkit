@@ -17,6 +17,8 @@ import { enteredGroup, type V2GestureApi } from './v2PointerGestures';
 
 interface EditorKeyboardInput {
   readonly toolRef: RefObject<V2Tool>;
+  /** The comment layer's way to open a composer without a pointer (Enter with the comment tool). */
+  readonly commentHereRef: RefObject<() => boolean>;
   readonly editingRef: RefObject<boolean>;
   readonly pageRef: RefObject<ScenePage | null>;
   readonly selectionRef: RefObject<CanvasSelection>;
@@ -50,12 +52,13 @@ interface EditorKeyboardInput {
 /** Every editor shortcut, wired to what it does. */
 export function useV2EditorKeyboard(k: EditorKeyboardInput) {
   const {
-    toolRef, editingRef, pageRef, selectionRef, gestureApiRef, setTool, setSpacePan, input, editActions, architectureActions, camera, connectorLabel,
+    toolRef, commentHereRef, editingRef, pageRef, selectionRef, gestureApiRef, setTool, setSpacePan, input, editActions, architectureActions, camera, connectorLabel,
     panels, selectionApi, map, find, viewPage, selectedElementId, selectedConnectorIds, docReadOnly, editLocked, undo, redo, escapePanel, openEditor,
     selectNodes, fitAll, toggleCode, backToMap,
   } = k;
   return useV2Keyboard({
     toolRef, editingRef,
+    onCommentHere: () => commentHereRef.current(),
     // A with two shapes selected connects them (first-selected → second); otherwise it arms the connector.
     onToolChange: (next) => { if (next !== 'connector' || !gestureApiRef.current?.connectSelection()) setTool(next); },
     onToggleIcons: () => {

@@ -30,6 +30,8 @@ interface V2KeyboardOptions {
   readonly onTextStyle: (toggle: 'bold' | 'italic' | 'underline') => void;
   /** Enter drills into a model view when there is one; F2/⌘Enter always rename. */
   readonly onEditPrimary: (source: 'enter' | 'f2') => void;
+  /** Enter with the comment tool: open a new thread's composer at the selection or the viewport centre; false when it could not. */
+  readonly onCommentHere?: () => boolean;
   /** ⌘⇧⌫ on a C4 element: remove it from the model and every view. */
   readonly onRemoveFromModel: () => void;
   readonly onNudge: (delta: { x: number; y: number }) => void;
@@ -206,6 +208,8 @@ export function useV2Keyboard(options: V2KeyboardOptions) {
       opts.onToolChange('select');
     } else if (!command && !event.shiftKey && !event.altKey && key === 'h') {
       opts.onToolChange('hand');
+    } else if (!command && !event.shiftKey && !event.altKey && key === 'c') {
+      opts.onToolChange('comment');
     } else if (!command && !event.shiftKey && !event.altKey && key === 'r') {
       opts.onToolChange('rectangle');
     } else if (!command && !event.shiftKey && !event.altKey && key === 'o') {
@@ -234,6 +238,8 @@ export function useV2Keyboard(options: V2KeyboardOptions) {
       opts.onToggleEmoji();
     } else if (event.key === 'F2') {
       opts.onEditPrimary('f2');
+    } else if (event.key === 'Enter' && !command && !event.shiftKey && opts.toolRef.current === 'comment' && opts.onCommentHere?.()) {
+      /* a thread placed from the keyboard */
     } else if (event.key === 'Enter') {
       opts.onEditPrimary(command || event.shiftKey ? 'f2' : 'enter');
     } else if (event.key === 'Escape') {

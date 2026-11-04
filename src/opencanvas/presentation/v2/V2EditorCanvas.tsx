@@ -50,6 +50,8 @@ interface EditorCanvasProps {
   readonly repoDrawing: boolean;
   readonly code: ReturnType<typeof useV2CodeWorkspace>;
   readonly agentCursor: ReactNode;
+  /** Comment pins, composer and thread (V2Comments). */
+  readonly comments: ReactNode;
   readonly labelEditing: ReturnType<typeof useV2LabelEditing>;
   readonly connectorLabel: ReturnType<typeof useV2ConnectorLabelEditing>;
   readonly iconActions: ReturnType<typeof useV2IconActions>;
@@ -108,6 +110,7 @@ export function V2EditorCanvas(p: EditorCanvasProps): React.JSX.Element {
     >
       {repoSource && map.active ? <V2RepoMapOverlay source={repoSource} map={p.repo.state} links={map.links}
         onOpenDrawing={p.repoDrawing ? () => { p.openDrawingRef.current(); } : undefined} /> : null}
+      {p.comments}
       {p.agentCursor}
       {map.start ? (
         <V2MapStart busy={code.generating} onStartModel={() => { void code.startFrom(C4_STARTER, { openPanel: false }).then(counted('created_template')); p.setModelPanelOnStart(true); }}

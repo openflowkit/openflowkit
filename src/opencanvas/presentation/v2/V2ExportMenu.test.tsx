@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { compile } from '../../../dsl/compile';
 import { createTestDocument } from '../../testing/builders/documentBuilder';
+import { addThread } from '../../domain/threads/threads';
 import { V2ExportMenu } from './V2ExportMenu';
 
 // jsdom has no ResizeObserver; the popover places itself with one.
@@ -19,8 +20,11 @@ vi.mock('../../../dsl/mermaid/toMermaid', async (importOriginal) => {
 const exporter = vi.hoisted(() => ({ download: vi.fn() }));
 vi.mock('./v2Export', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./v2Export')>();
+  // JSON is built for real (its text is what the option changes); the image formats need a canvas jsdom has not got.
   return { ...actual, downloadV2Export: exporter.download,
-    buildV2Export: async () => [{ filename: 'diagram-page-1.svg', mime: 'image/svg+xml', text: '<svg/>' }] };
+    buildV2Export: async (request: Parameters<typeof actual.buildV2Export>[0]) => request.format === 'json'
+      ? actual.buildV2Export(request)
+      : [{ filename: 'diagram-page-1.svg', mime: 'image/svg+xml', text: '<svg/>' }] };
 });
 const share = vi.hoisted(() => ({ fail: null as Error | null }));
 vi.mock('../../../services/share/shareClient', async (importOriginal) => {
@@ -65,6 +69,34 @@ describe('Download', () => {
     await waitFor(() => expect(onToast).toHaveBeenCalledWith('diagram-page-1.svg downloaded', 'success'));
     expect(exporter.download).toHaveBeenCalledTimes(1);
     expect(onClose).not.toHaveBeenCalled();
+  });
+});
+
+describe('Include comments', () => {
+  const exportJson = async (tick: boolean): Promise<string> => {
+    exporter.download.mockClear();
+    const base = createTestDocument({ nodes: [(await compile('flowchart right\nA -> B')).frame] });
+    const document = addThread(base, {
+      pageId: base.pages[0]!.id, threadId: 't1', nodeId: null, point: { x: 0, y: 0 },
+      comment: { id: 'm1', author: { kind: 'human', name: 'Ada' }, body: 'private note', createdAt: '2026-10-26T12:00:00.000Z' },
+    });
+    const view = render(<V2ExportMenu open anchorRef={{ current: window.document.body }} document={document} pageId={document.pages[0]!.id}
+      selectedNodeIds={[]} onClose={vi.fn()} onToast={vi.fn()} onOpenAnimation={vi.fn()} />);
+    // The box belongs to JSON only.
+    expect(screen.queryByRole('checkbox', { name: 'Include comments' })).toBeNull();
+    fireEvent.click(screen.getByRole('radio', { name: 'JSON' }));
+    const box = screen.getByRole('checkbox', { name: 'Include comments' }) as HTMLInputElement;
+    expect(box.checked).toBe(false);
+    if (tick) fireEvent.click(box);
+    fireEvent.click(screen.getByRole('button', { name: 'Download' }));
+    await waitFor(() => expect(exporter.download).toHaveBeenCalledTimes(1));
+    view.unmount();
+    return (exporter.download.mock.calls[0]![0] as { text: string }[])[0]!.text;
+  };
+
+  it('keeps comments out of a JSON file unless the box is ticked', async () => {
+    expect(await exportJson(false)).not.toContain('private note');
+    expect(await exportJson(true)).toContain('private note');
   });
 });
 

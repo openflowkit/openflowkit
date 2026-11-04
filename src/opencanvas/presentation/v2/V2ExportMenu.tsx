@@ -89,6 +89,7 @@ export function V2ExportMenu({
   const [scale, setScale] = useState<1 | 2>(2);
   const [theme, setTheme] = useState<V2ExportTheme>('light');
   const [transparent, setTransparent] = useState(false);
+  const [includeComments, setIncludeComments] = useState(false);
   const [busy, setBusy] = useState(false);
   const [sharing, setSharing] = useState<'snapshot' | 'code' | null>(null);
   const [linkKind, setLinkKind] = useState<'snapshot' | 'code'>('snapshot');
@@ -109,6 +110,7 @@ export function V2ExportMenu({
     ...(effectiveScope === 'selection'
       ? { selectedNodeIds, ...(selectedConnectorIds.length ? { selectedConnectorIds } : {}) }
       : {}),
+    ...(effectiveFormat === 'json' ? jsonOptions(includeComments) : {}),
     ...(effectiveFormat === 'png' ? { scale } : {}),
     ...(effectiveFormat === 'png' || effectiveFormat === 'svg' ? { transparent } : {}),
   } as const;
@@ -307,6 +309,12 @@ export function V2ExportMenu({
               { value: 'transparent', label: 'Transparent', title: 'No background rectangle' },
             ]} />
         ) : null}
+        {effectiveFormat === 'json' ? (
+          <label className="ofk-v2-export-option">
+            <input type="checkbox" checked={includeComments} onChange={(event) => setIncludeComments(event.target.checked)} />
+            <span>Include comments</span>
+          </label>
+        ) : null}
         <div className="ofk-v2-export-actions">
           <Button variant="primary" disabled={busy || empty} onClick={() => { void run('download'); }}>
             <Icon icon={IconDownload} /> {effectiveFormat === 'pdf' ? 'Print / PDF' : 'Download'}
@@ -370,6 +378,11 @@ export function V2ExportMenu({
       </div>
     </Popover>
   );
+}
+
+/** The JSON export request's thread option: comments reach the file only when the box is ticked. */
+export function jsonOptions(includeComments: boolean): { readonly includeThreads?: true } {
+  return includeComments ? { includeThreads: true } : {};
 }
 
 function frameName(frame: SceneDocumentV1['pages'][number]['nodes'][number]): string {
