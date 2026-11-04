@@ -981,7 +981,11 @@
         "screenshot",
         "fit_view",
         "get_document",
-        "list_pages"
+        "list_pages",
+        "list_threads",
+        "reply_to_thread",
+        "resolve_thread",
+        "start_thread"
       ]
     },
     {
