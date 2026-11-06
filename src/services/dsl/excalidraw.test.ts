@@ -4,6 +4,7 @@ import { excalidrawToDocument, looksLikeExcalidraw, readExcalidraw } from './exc
 import architecture from './fixtures/excalidraw/architecture.excalidraw?raw';
 import dbSchema from './fixtures/excalidraw/db-schema.excalidraw?raw';
 import linkedList from './fixtures/excalidraw/linked-list.excalidraw?raw';
+import freehandFrameImage from './fixtures/excalidraw/freehand-frame-image.excalidraw?raw';
 
 const NOW = '2026-10-24T00:00:00.000Z';
 
@@ -204,6 +205,24 @@ describe('excalidrawToDocument', () => {
     expect(turned!.target.point!.y).toBeCloseTo(50);
     expect(document.pages[0]!.nodes[0]).toMatchObject({ transform: { translation: { x: 70, y: 80 } },
       content: { points: [{ x: 30, y: 20 }, { x: 0, y: 0 }] } });
+  });
+
+  it('opens a real export with freehand drawn upward, a picture and a frame', () => {
+    // Its picture is swapped for a 1×1 PNG, to keep the fixture small.
+    const source = JSON.parse(freehandFrameImage) as { elements: { id: string; type: string; x: number; y: number; isDeleted: boolean; points?: number[][] }[] };
+    const { document, losses } = open(freehandFrameImage);
+    const nodes = new Map(document.pages[0]!.nodes.map((node) => [node.id, node]));
+    for (const element of source.elements.filter(({ type, isDeleted }) => type === 'freedraw' && !isDeleted)) {
+      const pen = nodes.get(element.id)!;
+      const low = Math.min(...element.points!.map(([, y]) => y!));
+      // Drawn upward from its start: placed by its highest point, every point at or below the top.
+      expect(pen.transform.translation.y).toBeCloseTo(element.y + low);
+      expect(Math.min(...(pen.content.points as { y: number }[]).map(({ y }) => y))).toBeCloseTo(0);
+    }
+    expect([...nodes.values()].filter(({ kind }) => kind === 'image')).toHaveLength(1);
+    const frame = [...nodes.values()].find(({ kind }) => kind === 'frame')!;
+    expect([...nodes.values()].filter(({ parentId }) => parentId === frame.id)).toHaveLength(3);
+    expect(losses).toEqual(['hatched fills are drawn solid (2 times)']);
   });
 
   it('says why it can’t open something', () => {
