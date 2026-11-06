@@ -73,3 +73,16 @@ test('Home → Import opens an Excalidraw drawing where it was drawn, and its co
   await expect.poll(async () => (await drawn(page)).nodes.length).toBe(before + 1);
   expect((await drawn(page)).connectors).toHaveLength(scene.connectors.length + 1);
 });
+
+test('Excalidraw’s copied shapes paste into an ordinary new diagram @gate', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByTestId('v2-canvas')).toBeVisible();
+  await page.evaluate(() => {
+    const data = new DataTransfer();
+    data.setData('text/plain', JSON.stringify({ type: 'excalidraw/clipboard', files: {}, elements: [{
+      id: 'pasted', type: 'rectangle', x: 0, y: 0, width: 120, height: 60, angle: 0, isDeleted: false,
+    }] }));
+    document.body.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true }));
+  });
+  await expect.poll(async () => (await drawn(page)).nodes.length).toBe(1);
+});

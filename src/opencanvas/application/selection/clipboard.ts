@@ -119,7 +119,7 @@ export function buildPasteProductionSelectionCommand(
     return { kind: 'insert-node', id: `paste-node:${pasted.id}`, label: 'Paste node',
       pageId: page.id, index: page.nodes.length + index, node: pasted };
   });
-  // A free end (no node) keeps its null and moves with the paste.
+  // A free end (no node) keeps its null and moves with the paste, as do the connector's bends.
   const end = (endpoint: SceneConnector['source']): SceneConnector['source'] => endpoint.nodeId === null
     ? { ...endpoint, point: endpoint.point && { x: endpoint.point.x + offset.x, y: endpoint.point.y + offset.y } }
     : { ...endpoint, nodeId: nodeIds.get(endpoint.nodeId)! };
@@ -128,6 +128,7 @@ export function buildPasteProductionSelectionCommand(
     if (!id || occupied.has(id)) throw new TypeError('Paste ids must be unique.');
     const pasted: SceneConnector = {
       ...structuredClone(connector), id, source: end(connector.source), target: end(connector.target),
+      waypoints: connector.waypoints.map((point) => ({ x: point.x + offset.x, y: point.y + offset.y })),
     };
     commands.push({ kind: 'insert-connector', id: `paste-connector:${id}`, label: 'Paste connector',
       pageId: page.id, index: page.connectors.length + commands.length - snapshot.nodes.length,

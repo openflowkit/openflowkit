@@ -168,6 +168,15 @@ describe('excalidrawToDocument', () => {
     expect(color(list, 'head')).toBeUndefined();
   });
 
+  it('draws hand-edited types and heads named like Object’s keys as a box and a plain end', () => {
+    const { document, losses } = open(file([
+      { ...base, id: 'odd', type: 'constructor', x: 0, y: 0, width: 40, height: 40 },
+      { ...base, id: 'go', type: 'arrow', x: 0, y: 100, width: 50, height: 0, points: [[0, 0], [50, 0]], endArrowhead: 'toString' },
+    ]));
+    expect(document.pages[0]!.nodes[0]).toMatchObject({ content: { shape: 'rectangle' } });
+    expect(losses).toContain('the “toString” arrowhead is drawn as a plain end');
+  });
+
   it('says why it can’t open something', () => {
     expect(excalidrawToDocument('{}', 'doc', NOW)).toEqual({ error: 'It isn’t an Excalidraw drawing.' });
     expect(excalidrawToDocument(file([]), 'doc', NOW)).toEqual({ error: 'The drawing is empty.' });

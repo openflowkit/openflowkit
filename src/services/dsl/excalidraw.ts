@@ -1,4 +1,4 @@
-import { UNTITLED_DOCUMENT_NAME } from '../../opencanvas/domain/document/defaults';
+import { createDefaultSceneLayer, DEFAULT_SCENE_LAYER_ID, UNTITLED_DOCUMENT_NAME } from '../../opencanvas/domain/document/defaults';
 import type { JsonObject } from '../../opencanvas/domain/document/json';
 import {
   SCENE_DOCUMENT_FORMAT, SCENE_DOCUMENT_VERSION,
@@ -151,7 +151,8 @@ class SceneBuilder {
     element: ExcalidrawElement, type: string, page: ScenePage,
     at: { id: string; at: Point2d; size: { width: number; height: number }; label: string; bound: ExcalidrawElement | undefined },
   ): SceneNode {
-    const shape = SHAPES[type];
+    // Own keys only: a hand-edited "constructor" falls back to a box instead of reading Object's.
+    const shape = Object.hasOwn(SHAPES, type) ? SHAPES[type] : undefined;
     if (shape) {
       const rounded = shape === 'rectangle' && element.roundness !== null && element.roundness !== undefined;
       const circle = shape === 'ellipse' && Math.abs(at.size.width - at.size.height) < 1;
@@ -271,7 +272,7 @@ class SceneBuilder {
 }
 
 /** A drawing's nodes and connectors for one page under `layerId`, and what didn't come across. */
-export function excalidrawScene(scene: ExcalidrawScene, layerId: string): { nodes: SceneNode[]; connectors: SceneConnector[]; losses: string[] } {
+export function excalidrawScene(scene: ExcalidrawScene, layerId = DEFAULT_SCENE_LAYER_ID): { nodes: SceneNode[]; connectors: SceneConnector[]; losses: string[] } {
   const builder = new SceneBuilder(scene, layerId);
   builder.build();
   return { nodes: builder.nodes, connectors: builder.connectors, losses: builder.lossList() };
@@ -281,12 +282,11 @@ export function excalidrawScene(scene: ExcalidrawScene, layerId: string): { node
 export function excalidrawToDocument(source: string, id: string, now = new Date().toISOString()): ExcalidrawImport {
   const scene = readExcalidraw(source);
   if (!scene) return { error: 'It isn’t an Excalidraw drawing.' };
-  const layerId = 'layer:default';
-  const { nodes, connectors, losses } = excalidrawScene(scene, layerId);
+  const { nodes, connectors, losses } = excalidrawScene(scene);
   if (nodes.length === 0 && connectors.length === 0) return { error: 'The drawing is empty.' };
   const page: ScenePage = {
     id: `${id}:page-1`, name: 'Excalidraw', diagramKind: 'flowchart',
-    layers: [{ id: layerId, name: 'Default', visible: true, locked: false }],
+    layers: [createDefaultSceneLayer()],
     nodes, connectors, metadata: {}, extensions: {},
   };
   const metadata: JsonObject = { importedFrom: 'excalidraw' };

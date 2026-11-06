@@ -101,7 +101,7 @@ const HEADS: Readonly<Record<string, string>> = {
 /** One end's head: our marker word, `null` for none, or `{ lost }` naming a head we can't draw. */
 export function excalidrawHead(value: unknown): string | null | { readonly lost: string } {
   if (typeof value !== 'string' || value === '') return null;
-  return HEADS[value] ?? { lost: value };
+  return Object.hasOwn(HEADS, value) ? HEADS[value]! : { lost: value };
 }
 
 /** An arrow's or line's paint; heads are set by the caller, which also reports the ones we can't draw. */

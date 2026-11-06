@@ -4,6 +4,7 @@ import { createTestDocument, createTestNode } from '../../testing/builders/docum
 import { buildPasteProductionSelectionCommand, copyProductionSelection, pastePlacement } from './clipboard';
 import type { ScenePage } from '../../domain/document/types';
 import { buildNodeWorldMatrices, nodeWorldBounds } from '../../domain/scene/worldGeometry';
+import { excalidrawScene, readExcalidraw } from '../../../services/dsl/excalidraw';
 
 describe('production clipboard', () => {
   it('copies a hierarchy and internal connectors, remaps ids, offsets, and reverses atomically', () => {
@@ -44,6 +45,30 @@ describe('production clipboard', () => {
     expect(applied.document.pages[0].connectors[0]).toMatchObject({
       source: { nodeId: 'node-1' }, target: { nodeId: null, point: { x: 310, y: 60 } },
     });
+  });
+
+  it('pastes Excalidraw’s clipboard into an ordinary diagram, on its layer', () => {
+    const document = createTestDocument({ nodes: [createTestNode('mine')] });
+    const scene = readExcalidraw(JSON.stringify({ type: 'excalidraw/clipboard', files: {}, elements: [
+      { id: 'box', type: 'rectangle', x: 0, y: 0, width: 120, height: 60, angle: 0, isDeleted: false },
+    ] }))!;
+    const { nodes, connectors } = excalidrawScene(scene);
+    const result = buildPasteProductionSelectionCommand(document.pages[0], { version: 1, nodes, connectors },
+      (kind) => `${kind}-pasted`, { offset: { x: 0, y: 0 }, keepParents: false });
+    expect(applyDocumentCommand(document, result.command).document.pages[0].nodes).toHaveLength(2);
+  });
+
+  it('moves a pasted connector’s bends with its ends', () => {
+    const document = createTestDocument({ nodes: [] });
+    const snapshot = { version: 1 as const, nodes: [createTestNode('box')], connectors: [{
+      id: 'bent', source: { nodeId: 'box', portId: null, anchor: null, point: null },
+      target: { nodeId: null, portId: null, anchor: null, point: { x: 300, y: 40 } },
+      route: { kind: 'polyline' as const, ownership: 'imported-fixed' as const }, waypoints: [{ x: 200, y: 100 }], labels: [],
+      appearance: {}, semantics: {}, metadata: {}, extensions: {},
+    }] };
+    const result = buildPasteProductionSelectionCommand(document.pages[0], snapshot,
+      (kind) => `${kind}-1`, { offset: { x: 10, y: 20 }, keepParents: false });
+    expect(applyDocumentCommand(document, result.command).document.pages[0].connectors[0]!.waypoints).toEqual([{ x: 210, y: 120 }]);
   });
 });
 

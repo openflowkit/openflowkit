@@ -62,7 +62,7 @@ your machine; see [Self-hosting](/self-hosting/).
 
 | Direction | Formats |
 | --- | --- |
-| Open or import | OpenFlowKit `.json` (including files from version 1), Mermaid (`.mmd`, `.mermaid`), D2 (`.d2`), Structurizr DSL (`.dsl`), OpenFlow DSL (`.ofk`, `.txt`) |
+| Open or import | OpenFlowKit `.json` (including files from version 1), Mermaid (`.mmd`, `.mermaid`), D2 (`.d2`), Structurizr DSL (`.dsl`), OpenFlow DSL (`.ofk`, `.txt`), Excalidraw (`.excalidraw`) |
 | Export | PNG, SVG, PDF (through the print dialog), JSON; animated SVG, GIF, MP4 and WebM ([Animated export](/animated-export/)) |
 | Copy | PNG to the clipboard; a flowchart or sequence diagram as Mermaid text |
 

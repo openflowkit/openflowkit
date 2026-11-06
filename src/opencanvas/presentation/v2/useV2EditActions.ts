@@ -44,7 +44,7 @@ function parseClipboard(text: string): ProductionClipboardSnapshot | null {
 function excalidrawClipboard(text: string): ProductionClipboardSnapshot | null {
   const scene = readExcalidraw(text);
   if (!scene) return null;
-  const { nodes, connectors } = excalidrawScene(scene, 'layer:default');
+  const { nodes, connectors } = excalidrawScene(scene);
   return { version: 1, nodes, connectors };
 }
 
