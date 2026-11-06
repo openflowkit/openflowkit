@@ -59,6 +59,25 @@ const pointsOf = (element: ExcalidrawElement): Point2d[] =>
     ? element.points.flatMap((point) => (Array.isArray(point) && point.length >= 2 ? [{ x: finite(point[0]), y: finite(point[1]) }] : []))
     : [];
 
+const lowest = (points: readonly Point2d[]): Point2d =>
+  points.length ? { x: Math.min(...points.map((point) => point.x)), y: Math.min(...points.map((point) => point.y)) } : { x: 0, y: 0 };
+
+/** A line's or arrow's points, turned by its angle about their centre, as Excalidraw draws them. */
+function turnedPoints(element: ExcalidrawElement): Point2d[] {
+  const points = pointsOf(element);
+  const radians = finite(element.angle);
+  if (!radians || points.length === 0) return points;
+  const xs = points.map((point) => point.x);
+  const ys = points.map((point) => point.y);
+  const centre = { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2 };
+  const cos = Math.cos(radians);
+  const sin = Math.sin(radians);
+  return points.map(({ x, y }) => ({
+    x: centre.x + (x - centre.x) * cos - (y - centre.y) * sin,
+    y: centre.y + (x - centre.x) * sin + (y - centre.y) * cos,
+  }));
+}
+
 const bindingOf = (value: unknown): string | null => {
   if (!value || typeof value !== 'object') return null;
   const id = (value as { elementId?: unknown }).elementId;
@@ -76,12 +95,20 @@ class SceneBuilder {
   private readonly frames = new Set<string>();
 
   constructor(private readonly scene: ExcalidrawScene, private readonly layerId: string) {
+    const groups = new Set<string>();
     for (const element of scene.elements) {
       if (element.isDeleted === true || typeof element.id !== 'string') continue;
+      if (this.byId.has(element.id)) { this.lose('elements sharing an earlier element’s id were left out'); continue; }
       this.byId.set(element.id, element);
-      if (element.type === 'text' && typeof element.containerId === 'string') this.labels.set(element.containerId, element);
+      if (element.type === 'text' && typeof element.containerId === 'string') {
+        if (this.labels.has(element.containerId)) this.lose('a second text bound to the same shape was left out');
+        else this.labels.set(element.containerId, element);
+      }
       if (element.type === 'frame' || element.type === 'magicframe') this.frames.add(element.id);
+      if (Array.isArray(element.groupIds)) for (const group of element.groupIds) if (typeof group === 'string') groups.add(group);
+      if (text(element.link) && element.type !== 'embeddable' && element.type !== 'iframe') this.lose('links on shapes were left out');
     }
+    for (let index = 0; index < groups.size; index += 1) this.lose('groups come in as separate shapes');
   }
 
   /** Each kind of loss once, counted: "3 freehand strokes…" reads better than three lines. */
@@ -117,8 +144,10 @@ class SceneBuilder {
   private addNode(element: ExcalidrawElement, type: string, zIndex: number): void {
     const id = element.id as string;
     const { parentId, origin } = this.place(element);
-    const x = finite(element.x) - origin.x;
-    const y = finite(element.y) - origin.y;
+    // A freehand stroke drawn up or left of its start has negative points: place it by its lowest one.
+    const low = type === 'freedraw' ? lowest(pointsOf(element)) : { x: 0, y: 0 };
+    const x = finite(element.x) + low.x - origin.x;
+    const y = finite(element.y) + low.y - origin.y;
     const width = Math.max(1, finite(element.width, 1));
     const height = Math.max(1, finite(element.height, 1));
     const rotation = finite(element.angle);
@@ -185,10 +214,12 @@ class SceneBuilder {
       };
     }
     if (type === 'freedraw') {
+      const points = pointsOf(element);
+      const low = lowest(points);
       return {
         id: at.id, kind: 'pen', parentId: null, layerId: this.layerId, zIndex: 0,
         transform: { translation: at.at, rotationRadians: 0, scale: { x: 1, y: 1 } }, size: at.size,
-        content: { points: pointsOf(element).map((point) => ({ x: point.x, y: point.y })), ...excalidrawStrokeContent(element) },
+        content: { points: points.map((point) => ({ x: point.x - low.x, y: point.y - low.y })), ...excalidrawStrokeContent(element) },
         appearance: {}, ports: [], metadata: {}, extensions: {},
       };
     }
@@ -219,7 +250,7 @@ class SceneBuilder {
     const id = element.id as string;
     const x = finite(element.x);
     const y = finite(element.y);
-    const points = pointsOf(element);
+    const points = turnedPoints(element);
     if (points.length < 2) { this.lose('an arrow without two points was left out'); return; }
     const startId = bindingOf(element.startBinding);
     const endId = bindingOf(element.endBinding);
@@ -255,8 +286,7 @@ class SceneBuilder {
   }
 
   private addLine(element: ExcalidrawElement, points: readonly Point2d[], zIndex: number): void {
-    const minX = Math.min(...points.map((point) => point.x));
-    const minY = Math.min(...points.map((point) => point.y));
+    const { x: minX, y: minY } = lowest(points);
     const { parentId, origin } = this.place(element);
     this.nodes.push({
       id: element.id as string, kind: 'line', parentId, layerId: this.layerId, zIndex,

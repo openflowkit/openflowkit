@@ -37,6 +37,7 @@ export interface ExcalidrawElement {
   readonly elbowed?: unknown;
   readonly fileId?: unknown;
   readonly link?: unknown;
+  readonly groupIds?: unknown;
 }
 
 export const finite = (value: unknown, fallback = 0): number =>

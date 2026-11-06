@@ -148,7 +148,7 @@ describe('excalidrawToDocument', () => {
     expect(labelled('CDN')).toMatchObject({ kind: 'text', content: { fontFamily: 'hand', fontSize: 20 } });
     const gateway = labelled('API\nGateway')!;
     expect(page!.connectors.filter((connector) => connector.target.nodeId === gateway.id)).toHaveLength(4);
-    expect(losses).toEqual(['hatched fills are drawn solid (17 times)']);
+    expect(losses).toEqual(['groups come in as separate shapes (18 times)', 'hatched fills are drawn solid (17 times)']);
   });
 
   it('opens real exports whose words and arrows are loose, not bound', () => {
@@ -175,6 +175,35 @@ describe('excalidrawToDocument', () => {
     ]));
     expect(document.pages[0]!.nodes[0]).toMatchObject({ content: { shape: 'rectangle' } });
     expect(losses).toContain('the “toString” arrowhead is drawn as a plain end');
+  });
+
+  it('names what it drops: groups, links, a second bound text, a repeated id', () => {
+    const { document, losses } = open(file([
+      { ...base, id: 'a', type: 'rectangle', x: 0, y: 0, width: 50, height: 50, groupIds: ['g1'], link: 'https://example.com' },
+      { ...base, id: 'b', type: 'rectangle', x: 100, y: 0, width: 50, height: 50, groupIds: ['g1', 'g2'] },
+      { ...base, id: 'b', type: 'ellipse', x: 200, y: 0, width: 50, height: 50 },
+      { ...base, id: 't1', type: 'text', x: 0, y: 0, width: 20, height: 20, text: 'one', containerId: 'a' },
+      { ...base, id: 't2', type: 'text', x: 0, y: 20, width: 20, height: 20, text: 'two', containerId: 'a' },
+    ]));
+    expect(document.pages[0]!.nodes.map((node) => [node.id, node.content.label])).toEqual([['a', 'one'], ['b', '']]);
+    expect(losses).toEqual([
+      'links on shapes were left out', 'elements sharing an earlier element’s id were left out',
+      'a second text bound to the same shape was left out', 'groups come in as separate shapes (2 times)',
+    ]);
+  });
+
+  it('turns a line by its angle, and places freehand drawn up and left by its lowest point', () => {
+    const { document } = open(file([
+      // A flat 100px line turned a quarter about its centre (50, 0) stands upright from (50, -50) to (50, 50).
+      { ...base, id: 'turned', type: 'arrow', x: 0, y: 0, width: 100, height: 0, angle: Math.PI / 2, points: [[0, 0], [100, 0]] },
+      { ...base, id: 'pen', type: 'freedraw', x: 100, y: 100, width: 30, height: 20, points: [[0, 0], [-30, -20]] },
+    ]));
+    const [turned] = document.pages[0]!.connectors;
+    expect(turned!.source.point!.x).toBeCloseTo(50);
+    expect(turned!.source.point!.y).toBeCloseTo(-50);
+    expect(turned!.target.point!.y).toBeCloseTo(50);
+    expect(document.pages[0]!.nodes[0]).toMatchObject({ transform: { translation: { x: 70, y: 80 } },
+      content: { points: [{ x: 30, y: 20 }, { x: 0, y: 0 }] } });
   });
 
   it('says why it can’t open something', () => {
