@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { avatarColor, keyboardSpot, pinLabel, pinNudge, pinsOnPreview, PIN_STEP, relativeTime } from './v2CommentsView';
+import { keyboardSpot, pinLabel, pinNudge, pinsOnPreview, PIN_STEP, relativeTime } from './v2CommentsView';
 import { createTestDocument, createTestNode } from '../../testing/builders/documentBuilder';
 import { addThread } from '../../domain/threads/threads';
 import type { SceneNode } from '../../domain/document/types';
@@ -27,18 +27,6 @@ describe('relativeTime', () => {
     expect(relativeTime(ago(8 * 86_400_000), NOW)).toMatch(/\w/);
     expect(relativeTime(ago(8 * 86_400_000), NOW)).not.toMatch(/\d+d$/);
     expect(relativeTime('not a date', NOW)).toBe('');
-  });
-});
-
-describe('avatars', () => {
-  it('gives a name one stable colour, regardless of case and padding', () => {
-    expect(avatarColor('Ada')).toBe(avatarColor(' ada '));
-    expect(avatarColor('Ada')).toMatch(/^hsl\(\d{1,3} 55% 42%\)$/);
-  });
-
-  it('spreads different names over different hues', () => {
-    const hues = new Set(['Ada', 'Bo', 'Cy', 'Di', 'Ed', 'Flo', 'Gus', 'Hal'].map(avatarColor));
-    expect(hues.size).toBeGreaterThan(4);
   });
 });
 

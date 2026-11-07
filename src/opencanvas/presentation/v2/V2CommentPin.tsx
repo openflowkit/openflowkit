@@ -59,7 +59,7 @@ export const CommentPin = memo(function CommentPin(props: {
         onPointerDown={(event) => actions.press(thread.id, event)} onPointerMove={(event) => actions.drag(thread.id, event)}
         onPointerUp={(event) => actions.drop(thread.id, event)} onPointerCancel={actions.cancel}
         onKeyDown={(event) => actions.key(thread, event)} onClick={() => actions.toggle(thread.id)}>
-        <Avatar kind={lead.author.kind} name={lead.author.name} size={22} />
+        <Avatar kind={lead.author.kind} size={22} />
       </button>
       {props.children}
     </Anchored>

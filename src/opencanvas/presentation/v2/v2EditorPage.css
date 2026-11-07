@@ -1465,14 +1465,17 @@
 }
 .ofk-comment-pin[data-ghost] { pointer-events: none; opacity: .9; }
 .ofk-comment-pin:hover { transform: scale(1.06); transform-origin: 0 100%; }
-.ofk-comment-pin:focus-visible, .ofk-comment-pin[data-selected] { outline: var(--ofk-focus-width, 2px) solid var(--ofk-focus); outline-offset: 2px; }
+/* Selected is a neutral ring, keyboard focus the system blue. */
+.ofk-comment-pin[data-selected] { outline: var(--ofk-focus-width, 2px) solid var(--ofk-text); outline-offset: 2px; }
+.ofk-comment-pin:focus-visible { outline: var(--ofk-focus-width, 2px) solid var(--ofk-focus); outline-offset: 2px; }
 .ofk-comment-pin[data-dragging] { cursor: grabbing; }
 .ofk-comment-pin .ofk-comment-avatar { width: 100% !important; height: 100% !important; border-radius: inherit; }
+/* A person is the neutral inverse tile, an agent the brand one; the glyph says which. */
 .ofk-comment-avatar {
-  display: inline-grid; place-items: center; flex: none; border-radius: 50%; color: #fff; font-size: 11px; font-weight: 600; line-height: 1;
-  user-select: none;
+  display: inline-grid; place-items: center; flex: none; border-radius: 50%; line-height: 1; user-select: none;
+  background: var(--ofk-inverse); color: var(--ofk-onInverse);
 }
-.ofk-comment-avatar[data-kind='agent'] { background: var(--ofk-primary); color: var(--ofk-onPrimary, #fff); }
+.ofk-comment-avatar[data-kind='agent'] { background: var(--ofk-primary); color: var(--ofk-onPrimary); }
 .ofk-comment-avatar svg { width: 60%; height: 60%; }
 
 .ofk-comment-card {
@@ -1509,7 +1512,7 @@
 .ofk-comment-input textarea::placeholder { color: var(--ofk-muted); }
 .ofk-comment-send {
   display: grid; place-items: center; flex: none; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50%;
-  background: var(--ofk-primary); color: var(--ofk-onPrimary, #fff); cursor: pointer;
+  background: var(--ofk-primary); color: var(--ofk-onPrimary); cursor: pointer;
 }
 .ofk-comment-send:disabled { background: color-mix(in srgb, var(--ofk-text) 14%, transparent); color: var(--ofk-muted); cursor: default; }
 .ofk-comment-send:focus-visible { outline: var(--ofk-focus-width, 2px) solid var(--ofk-focus); outline-offset: 1px; }

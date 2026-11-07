@@ -1,4 +1,4 @@
-// Pure helpers for the comment overlays: how a message's age reads, the avatar a name gets, where a pin is drawn mid-drag.
+// Pure helpers for the comment overlays: how a message's age reads, what a pin is called, where a pin is drawn mid-drag.
 import type { Point2d } from '../../domain/geometry/types';
 import type { SceneNode, ScenePage, SceneThread } from '../../domain/document/types';
 import { pageThreads, pinOnNode } from '../../domain/threads/threads';
@@ -21,13 +21,6 @@ export function relativeTime(iso: string, now: number = Date.now()): string {
   if (age < DAY) return `${Math.floor(age / HOUR)}h`;
   if (age < 7 * DAY) return `${Math.floor(age / DAY)}d`;
   return new Date(then).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
-
-/** The same name always gets the same colour (a hue from a hash), dark enough for white text. */
-export function avatarColor(name: string): string {
-  let hash = 0;
-  for (const char of name.trim().toLowerCase()) hash = (hash * 31 + char.codePointAt(0)!) >>> 0;
-  return `hsl(${hash % 360} 55% 42%)`;
 }
 
 /**

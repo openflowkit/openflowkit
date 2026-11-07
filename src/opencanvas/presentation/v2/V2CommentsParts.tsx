@@ -3,7 +3,7 @@ import { IconArrowUp, IconCheck, IconDots, IconPencil, IconSparkles, IconTrash, 
 import type { SceneComment, SceneThread } from '../../domain/document/types';
 import { COMMENT_BODY_MAX } from '../../domain/document/types';
 import { Button, Icon, IconButton, Menu, MenuItem, Tooltip } from '../design-system';
-import { avatarColor, relativeTime } from './v2CommentsView';
+import { relativeTime } from './v2CommentsView';
 import { CommentDrafts, draftKey } from './v2DraftGuard';
 import { composing } from './useV2Keyboard';
 
@@ -32,10 +32,13 @@ function cardKeys(onClose: () => void) {
   };
 }
 
-export function Avatar({ kind, name, size = 24 }: { readonly kind: 'human' | 'agent'; readonly name: string; readonly size?: number }): React.JSX.Element {
-  return kind === 'agent'
-    ? <span className="ofk-comment-avatar" data-kind="agent" style={{ width: size, height: size }} aria-hidden="true"><Icon icon={IconSparkles} /></span>
-    : <span className="ofk-comment-avatar" style={{ width: size, height: size, background: avatarColor(name) }} aria-hidden="true"><Icon icon={IconUser} /></span>;
+/** An icon tile, as people and agents are drawn on the canvas: the kind's glyph tells them apart (the author's name is beside it). */
+export function Avatar({ kind, size = 24 }: { readonly kind: 'human' | 'agent'; readonly size?: number }): React.JSX.Element {
+  return (
+    <span className="ofk-comment-avatar" data-kind={kind} style={{ width: size, height: size }} aria-hidden="true">
+      <Icon icon={kind === 'agent' ? IconSparkles : IconUser} />
+    </span>
+  );
 }
 
 /** Enter sends, Shift+Enter breaks a line; `onEscape` gives the box its own Escape (else the card's closes it). The box grows with its text. */
@@ -65,7 +68,7 @@ function CommentInput(props: {
   const empty = props.value.trim() === '';
   return (
     <div className="ofk-comment-input">
-      <textarea ref={ref} rows={1} value={props.value} maxLength={COMMENT_BODY_MAX} placeholder={props.placeholder} aria-label={props.label}
+      <textarea ref={ref} rows={1} dir="auto" value={props.value} maxLength={COMMENT_BODY_MAX} placeholder={props.placeholder} aria-label={props.label}
         onChange={(event) => props.onChange(event.target.value)}
         onKeyDown={(event) => {
           // The card around the box keeps every key from the editor and closes on an Escape this box leaves alone.
@@ -134,7 +137,7 @@ function Message(props: {
   const commit = () => { if (draft.trim()) { props.onEdit(draft); stop(); } };
   return (
     <li className="ofk-comment-message" data-testid="v2-comment-message">
-      <Avatar kind={message.author.kind} name={message.author.name} />
+      <Avatar kind={message.author.kind} />
       <div>
         <p className="ofk-comment-meta">
           <strong>{message.author.name}</strong>
@@ -146,7 +149,7 @@ function Message(props: {
             <CommentInput value={draft} onChange={setDraft} onSend={commit} onEscape={stop}
               placeholder="Edit comment" label="Edit comment" sendLabel="Save comment" autoFocus selectOnFocus />
           </div>
-        ) : <p className="ofk-comment-body">{message.body}</p>}
+        ) : <p className="ofk-comment-body" dir="auto">{message.body}</p>}
       </div>
       {props.canEdit && !editing ? (
         <MessageMenu label="Comment actions" onEdit={() => setEditing(true)} onDelete={props.onDelete} />

@@ -300,7 +300,7 @@ export const V2Comments = memo(function V2Comments(props: Props): React.JSX.Elem
       })}
       {open?.kind === 'composer' ? (
         <Anchored world={open.world} card className="ofk-comment-pinned" testId="v2-comment-composer">
-          <span className="ofk-comment-pin" data-ghost><Avatar kind="human" name={HUMAN_AUTHOR_NAME} size={22} /></span>
+          <span className="ofk-comment-pin" data-ghost><Avatar kind="human" size={22} /></span>
           <CommentComposer pageId={page.id} onSend={create} onCancel={close} />
         </Anchored>
       ) : null}
