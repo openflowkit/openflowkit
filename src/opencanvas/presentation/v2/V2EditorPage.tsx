@@ -453,10 +453,6 @@ export function V2EditorPage({ shared }: { readonly shared?: V2SharedView } = {}
             <V2EditorExport exportPanel={exportPanel} session={session} page={page} map={map} selectedNodeIds={selection.nodeIds}
               selectedConnectorIds={selectedConnectorIds} shared={Boolean(shared)} onExported={() => setExported(true)} onOpenAnimation={panels.openMotion}
               pushToast={pushToast} focusCanvas={focusCanvas} />
-            {/* A drawing tool armed means the next click draws: the welcome steps aside instead of catching it. */}
-            {page.nodes.length === 0 && page.connectors.length === 0 && !ghostPage && !docReadOnly && rendererReady && !map.active && tool === 'select'
-              ? <V2CanvasWelcome onOpen={openWorkspace}
-                blankDocument={session.document?.pages.every((candidate) => candidate.nodes.length === 0 && candidate.connectors.length === 0) ?? true} /> : null}
             <V2EditorSidePanels
               panels={panels} code={code} preferences={preferences} updatePreferences={updatePreferences} agents={agents} session={session}
               viewPage={viewPage ?? page} selection={selection} selectedConnectorIds={selectedConnectorIds} selectionApi={selectionApi} selectNodes={selectNodes}
@@ -464,7 +460,12 @@ export function V2EditorPage({ shared }: { readonly shared?: V2SharedView } = {}
               repoPanel={repoPanel} repoSource={repoSource} repoLoading={repo.state.status === 'loading'} mapArrow={mapArrow} renameRequest={renameRequest}
               selectedElementId={selectedElementId} placedElementIds={placedElementIds} canvasElementIds={canvasElementIds} showOnCanvas={showOnCanvas}
               workspaceFolder={workspaceFolder} docReadOnly={docReadOnly} pushToast={pushToast} setAnnouncement={setAnnouncement} focusCanvas={focusCanvas}
-              threads={threads} toggleCode={toggleCode} />
+              threads={threads} toggleCode={toggleCode}>
+              {/* A drawing tool armed means the next click draws: the welcome steps aside instead of catching it. */}
+              {page.nodes.length === 0 && page.connectors.length === 0 && !ghostPage && !docReadOnly && rendererReady && !map.active && tool === 'select'
+                ? <V2CanvasWelcome onOpen={openWorkspace}
+                  blankDocument={session.document?.pages.every((candidate) => candidate.nodes.length === 0 && candidate.connectors.length === 0) ?? true} /> : null}
+            </V2EditorSidePanels>
             <V2EditorOverlays
               panels={panels} find={find} tips={tips} runTip={runTip} feedback={feedback} transient={transient} mapActive={map.active} code={code}
               session={session} page={page} viewPage={viewPage ?? page} chartPanelNode={chartPanelNode} selection={selection}

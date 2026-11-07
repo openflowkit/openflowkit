@@ -529,3 +529,24 @@ test('screenshot: the panel with a resolved, an agent-answered and an unread thr
   await card(page, 1).hover();
   await shot(page, 'threads-panel');
 });
+
+test('on an empty document Tab reaches the workspace rail before the welcome card', { tag: '@gate' }, async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/');
+  await expect(page.getByTestId('v2-welcome')).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator('[data-cover]')).toHaveCount(0, { timeout: 15_000 });
+  await page.getByTestId('v2-canvas').focus();
+  const first = await (async () => {
+    for (let press = 0; press < 40; press += 1) {
+      await page.keyboard.press('Tab');
+      const where = await page.evaluate(() => {
+        const at = document.activeElement;
+        if (at?.closest('[role="toolbar"][aria-label="Workspace"]')) return 'rail';
+        return at?.closest('[data-testid="v2-welcome"]') ? 'welcome' : null;
+      });
+      if (where) return where;
+    }
+    return 'neither';
+  })();
+  expect(first).toBe('rail');
+});

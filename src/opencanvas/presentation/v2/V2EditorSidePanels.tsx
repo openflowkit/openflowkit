@@ -1,4 +1,4 @@
-import type { ComponentProps } from 'react';
+import type { ComponentProps, ReactNode } from 'react';
 import { C4_STARTER } from '../../../agent/starterTemplates';
 import { placedElementId } from '../../../dsl/model/model';
 import type { CanvasSelection } from '../../application/selection/selection';
@@ -63,6 +63,8 @@ interface SidePanelsProps {
   readonly threads: ReturnType<typeof useV2Threads>;
   /** Diagram as code on the rail (codeToggle). */
   readonly toggleCode: () => void;
+  /** Rendered between the rail and the panels, so the editor's tab order stays rail, welcome, panels. */
+  readonly children?: ReactNode;
 }
 
 /** The workspace rail and the panels on the right it opens: code, agent pairing, threads, inspect, model and the flow player. */
@@ -82,6 +84,7 @@ export function V2EditorSidePanels(p: SidePanelsProps): React.JSX.Element {
           else if (mode === 'threads') p.threads.toggleFromRail();
           else panels.toggleWorkspace(mode);
         }} />
+      {p.children}
       {panels.workspace === 'code' ? <V2CodePanel code={code.draft} palette={preferences.diagramPalette} autoFocus={code.panelFocus} selectAll={code.panelSelect}
         onPaletteChange={(diagramPalette) => updatePreferences({ diagramPalette })}
         onCodeChange={code.edit}
