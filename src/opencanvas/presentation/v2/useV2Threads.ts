@@ -148,7 +148,8 @@ export function useV2Threads(input: ThreadsInput) {
     if (!document || !found) return;
     const entry = { thread: found.thread, pageId: found.page.id, pageName: found.page.name };
     const text = threadLinkText(document, entry, `${window.location.origin}${window.location.pathname}`);
-    const done = () => pushToast({ id: 'thread-link', tone: 'success', title: 'Link copied' });
+    // The document lives in this browser's storage, so that is where the link opens it.
+    const done = () => pushToast({ id: 'thread-link', tone: 'success', title: 'Link copied', description: 'It opens this thread in this browser.' });
     const failed = () => pushToast({ id: 'thread-link', tone: 'danger', title: 'Couldn’t copy', description: 'This browser blocked the clipboard.' });
     if (!navigator.clipboard) { failed(); return; }
     void navigator.clipboard.writeText(text).then(done, failed);

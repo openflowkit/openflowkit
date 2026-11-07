@@ -2,9 +2,9 @@
 // the document, the unread marks and the camera are the host's (useV2Threads).
 import { useEffect, useRef, useState } from 'react';
 import {
-  IconAdjustmentsHorizontal, IconCheck, IconDots, IconLink, IconMail, IconMailOpened, IconMessageCircle, IconSearch, IconTrash,
+  IconAdjustmentsHorizontal, IconArrowBackUp, IconCheck, IconDots, IconLink, IconMail, IconMailOpened, IconMessageCircle, IconSearch, IconTrash,
 } from '@tabler/icons-react';
-import { Button, Dialog, Icon, IconButton, Menu, MenuItem, MenuSeparator, Panel } from '../design-system';
+import { Button, Dialog, EmptyState, Icon, IconButton, Menu, MenuItem, MenuSeparator, Panel, Tooltip } from '../design-system';
 import { Avatar } from './V2CommentsParts';
 import { relativeTime } from './v2CommentsView';
 import { replyCount, type ThreadEntry, type ThreadFilters } from './v2ThreadsView';
@@ -72,16 +72,21 @@ function Card(props: {
       </button>
       <div className="ofk-threads-card-actions">
         {readOnly ? null : (
-          <IconButton variant="quiet" label={thread.resolved ? 'Reopen thread' : 'Resolve thread'} icon={<Icon icon={IconCheck} />}
-            onClick={props.onToggleResolved} />
+          <Tooltip content={thread.resolved ? 'Reopen thread' : 'Resolve thread'}>
+            <IconButton variant="quiet" label={thread.resolved ? 'Reopen thread' : 'Resolve thread'}
+              icon={<Icon icon={thread.resolved ? IconArrowBackUp : IconCheck} />} onClick={props.onToggleResolved} />
+          </Tooltip>
         )}
-        <IconButton ref={anchor} variant="quiet" label="Thread actions" aria-haspopup="menu" aria-expanded={menuOpen}
-          icon={<Icon icon={IconDots} />} onClick={() => setMenuOpen((open) => !open)} />
+        <Tooltip content="Thread actions">
+          <IconButton ref={anchor} variant="quiet" label="Thread actions" aria-haspopup="menu" aria-expanded={menuOpen}
+            icon={<Icon icon={IconDots} />} onClick={() => setMenuOpen((open) => !open)} />
+        </Tooltip>
         <Menu open={menuOpen} anchorRef={anchor} onClose={() => setMenuOpen(false)} label="Thread actions" placement="bottom-end">
           <MenuItem icon={<Icon icon={unread ? IconMailOpened : IconMail} />} onSelect={props.onToggleRead}>
             {unread ? 'Mark as read' : 'Mark as unread'}
           </MenuItem>
-          <MenuItem icon={<Icon icon={IconLink} />} onSelect={props.onCopyLink}>Copy link</MenuItem>
+          {/* The link opens the document where it is saved: this browser. */}
+          <MenuItem icon={<Icon icon={IconLink} />} onSelect={props.onCopyLink}>Copy link to this thread</MenuItem>
           {readOnly ? null : <>
             <MenuSeparator />
             <MenuItem icon={<Icon icon={IconTrash} />} danger onSelect={props.onDelete}>Delete thread…</MenuItem>
@@ -129,8 +134,10 @@ export function V2ThreadsPanel(props: Props): React.JSX.Element {
                 if (event.key === 'Escape' && query) { event.stopPropagation(); event.preventDefault(); props.onQuery(''); }
               }} />
           </label>
-          <IconButton ref={filterAnchor} variant="quiet" label="Filter threads" aria-haspopup="menu" aria-expanded={filterOpen}
-            data-active={filtering || undefined} icon={<Icon icon={IconAdjustmentsHorizontal} />} onClick={() => setFilterOpen((open) => !open)} />
+          <Tooltip content="Filter threads">
+            <IconButton ref={filterAnchor} variant="quiet" label="Filter threads" aria-haspopup="menu" aria-expanded={filterOpen}
+              data-active={filtering || undefined} icon={<Icon icon={IconAdjustmentsHorizontal} />} onClick={() => setFilterOpen((open) => !open)} />
+          </Tooltip>
           <Menu open={filterOpen} anchorRef={filterAnchor} onClose={() => setFilterOpen(false)} label="Filter threads" placement="bottom-end">
             <MenuItem checked={filters.showResolved} keepOpen onSelect={() => props.onFilters({ showResolved: !filters.showResolved })}>Show resolved</MenuItem>
             <MenuItem checked={filters.unansweredOnly} keepOpen onSelect={() => props.onFilters({ unansweredOnly: !filters.unansweredOnly })}>Unanswered only</MenuItem>
@@ -138,18 +145,13 @@ export function V2ThreadsPanel(props: Props): React.JSX.Element {
         </div>
         {entries.length === 0 ? (
           <div className="ofk-threads-empty" data-testid="v2-threads-empty">
-            <Icon icon={IconMessageCircle} />
             {total === 0 ? (
-              <>
-                <h3>No threads yet</h3>
-                <p>{readOnly ? 'Nobody has started a thread in this document.' : 'Press C, then click the canvas to start one. Your agent can reply and start its own.'}</p>
-              </>
+              <EmptyState icon={<Icon icon={IconMessageCircle} />} title="No threads yet"
+                description={readOnly ? 'Nobody has started a thread in this document.' : 'Press C, then click the canvas to start one.'} />
             ) : (
-              <>
-                <h3>Nothing matches</h3>
-                <p>{query.trim() ? 'No comment has that text' : 'No thread fits'}{filtering ? ' with these filters' : ''}.</p>
-                <Button variant="quiet" onClick={clear}>Clear search and filters</Button>
-              </>
+              <EmptyState icon={<Icon icon={IconSearch} />} title="Nothing matches"
+                description={`${query.trim() ? 'No comment has that text' : 'No thread fits'}${filtering ? ' with these filters' : ''}.`}
+                action={<Button variant="quiet" onClick={clear}>Clear search and filters</Button>} />
             )}
           </div>
         ) : (

@@ -1542,11 +1542,12 @@
 .ofk-threads-search svg { width: 16px; height: 16px; flex: none; }
 .ofk-threads-search input { flex: 1; min-width: 0; padding: 0; font: inherit; font-size: 13px; color: var(--ofk-text); background: none; border: 0; outline: none; }
 .ofk-threads-bar .ofk-icon-button { flex: none; color: var(--ofk-secondary); }
-.ofk-threads-bar .ofk-icon-button[data-active] { color: var(--ofk-accent); }
+.ofk-threads-bar .ofk-icon-button[data-active] { color: var(--ofk-text); background: color-mix(in srgb, var(--ofk-text) 9%, transparent); }
 .ofk-threads-list { flex: 1; min-height: 0; margin: 0; padding: 0 8px 12px; overflow-y: auto; list-style: none; display: flex; flex-direction: column; gap: 2px; }
 .ofk-threads-card { position: relative; border-radius: 10px; }
 .ofk-threads-card:hover, .ofk-threads-card:focus-within, .ofk-threads-card[data-menu-open] { background: color-mix(in srgb, var(--ofk-text) 6%, transparent); }
-.ofk-threads-card[data-selected] { background: color-mix(in srgb, var(--ofk-accent) 14%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ofk-accent) 55%, transparent); }
+/* Selected is a neutral lift, never the brand colour, as a tree row's. */
+.ofk-threads-card[data-selected] { background: color-mix(in srgb, var(--ofk-text) 9%, transparent); }
 .ofk-threads-card-main { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; align-items: start; width: 100%; box-sizing: border-box; padding: 10px 12px 10px 10px; font: inherit; color: var(--ofk-text); text-align: start; background: none; border: 0; border-radius: inherit; cursor: pointer; }
 .ofk-threads-card-main:focus-visible { outline: 2px solid var(--ofk-focus); outline-offset: -2px; }
 .ofk-threads-card-text { display: grid; gap: 2px; min-width: 0; }
@@ -1565,10 +1566,7 @@
 .ofk-threads-card:hover .ofk-threads-card-actions, .ofk-threads-card:focus-within .ofk-threads-card-actions, .ofk-threads-card[data-menu-open] .ofk-threads-card-actions { opacity: 1; }
 .ofk-threads-card-actions .ofk-icon-button { width: 28px; height: 28px; min-width: 28px; min-height: 28px; color: var(--ofk-secondary); }
 @media (hover: none) { .ofk-threads-card-actions { opacity: 1; } }
-.ofk-threads-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 32px 32px 64px; text-align: center; color: var(--ofk-muted); }
-.ofk-threads-empty > svg { width: 32px; height: 32px; margin-bottom: 4px; }
-.ofk-threads-empty h3 { margin: 0; font-size: 14px; font-weight: 600; color: var(--ofk-text); }
-.ofk-threads-empty p { margin: 0 0 8px; font-size: 13px; line-height: 1.45; }
+.ofk-threads-empty { flex: 1; display: grid; place-items: center; padding-bottom: 32px; }
 @media (prefers-reduced-motion: reduce) { .ofk-threads-card-actions { transition: none; } }
 
 /* A pin with news carries a dot; a resolved thread opened from the panel is shown dimmed. */
