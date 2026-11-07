@@ -250,6 +250,33 @@ test('with the comment tool, the selection bar, Space-drag and a middle-button p
   expect(await threads(page)).toHaveLength(0);
 });
 
+test('unsent text is never lost: a click away warns first, and a closed thread keeps its reply', { tag: '@gate' }, async ({ page }) => {
+  const { centre } = await start(page);
+  await comment(page, centre, 'First');
+  await page.keyboard.press('v');
+  const pin = page.getByTestId('v2-comment-pin').getByRole('button');
+  const thread = page.getByTestId('v2-comment-thread');
+  await pin.click();
+  const reply = thread.getByRole('textbox', { name: 'Reply' });
+  await reply.fill('Half a thought');
+  // The first press away only shakes the card and hands the text back its focus.
+  await page.mouse.click(centre.x + 260, centre.y + 180);
+  await expect(thread).toBeVisible();
+  await expect(reply).toBeFocused();
+  await shot(page, 'comment-unsent-warned');
+  // The second closes it; the text waits in the thread.
+  await page.mouse.click(centre.x + 260, centre.y + 180);
+  await expect(thread).toHaveCount(0);
+  await pin.click();
+  await expect(thread.getByRole('textbox', { name: 'Reply' })).toHaveValue('Half a thought');
+  // Switching tool from the toolbar keeps it too.
+  await page.getByRole('toolbar', { name: 'Create' }).getByRole('button', { name: 'Text', exact: true }).click();
+  await page.mouse.click(centre.x + 260, centre.y + 180);
+  await pin.click();
+  await expect(thread.getByRole('textbox', { name: 'Reply' })).toHaveValue('Half a thought');
+  expect(await threads(page)).toMatchObject([{ comments: [{ body: 'First' }] }]);
+});
+
 test('a thread is placed, written and sent with the keyboard alone', async ({ page }) => {
   const { id, centre } = await start(page);
   await page.getByTestId('v2-canvas').focus();

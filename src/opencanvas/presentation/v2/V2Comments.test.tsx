@@ -139,3 +139,93 @@ describe('Enter', () => {
     expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Reply' }));
   });
 });
+
+describe('unsent text', () => {
+  const twoPages = (): SceneDocumentV1 => {
+    const base = withThread();
+    return addThread({ ...base, pages: [...base.pages, { ...base.pages[0]!, id: 'p2', threads: undefined }] }, {
+      pageId: base.pages[0]!.id, threadId: 't2', nodeId: null, point: { x: 300, y: 10 },
+      comment: { id: 'm2', author: human, body: 'second', createdAt: new Date().toISOString() } });
+  };
+  const type = (name: string, value: string) => fireEvent.change(screen.getByRole('textbox', { name }), { target: { value } });
+  const box = (name: string) => (screen.getByRole('textbox', { name }) as HTMLTextAreaElement).value;
+  const pins = () => screen.getAllByRole('button', { name: /^Comment\b.*by User/ });
+
+  it('a composer holding text stays open when the tool changes; an empty one closes', () => {
+    const view = render(<Harness initial={blank()} tool="comment" />);
+    canvasClick();
+    type('Comment', 'half written');
+    view.rerender(<Harness initial={blank()} tool="rectangle" />);
+    expect(box('Comment')).toBe('half written');
+    type('Comment', '');
+    view.rerender(<Harness initial={blank()} tool="select" />);
+    expect(composer()).toBeNull();
+  });
+
+  it('a reply closed by a page switch is still in its box when the thread opens again', () => {
+    const doc = twoPages();
+    const view = render(<Harness initial={doc} tool="select" pageIndex={0} />);
+    fireEvent.click(pins()[0]!);
+    type('Reply', 'unsent reply');
+    view.rerender(<Harness initial={doc} tool="select" pageIndex={1} />);
+    expect(screen.queryByRole('textbox', { name: 'Reply' })).toBeNull();
+    view.rerender(<Harness initial={doc} tool="select" pageIndex={0} />);
+    fireEvent.click(pins()[0]!);
+    expect(box('Reply')).toBe('unsent reply');
+  });
+
+  it('opening another pin keeps the first thread\'s reply; sending one clears it', () => {
+    render(<Harness initial={twoPages()} tool="select" />);
+    fireEvent.click(pins()[0]!);
+    type('Reply', 'for the first');
+    fireEvent.click(pins()[1]!);
+    expect(box('Reply')).toBe('');
+    fireEvent.click(pins()[0]!);
+    expect(box('Reply')).toBe('for the first');
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Reply' }), { key: 'Enter' });
+    fireEvent.click(pins()[1]!);
+    fireEvent.click(pins()[0]!);
+    expect(box('Reply')).toBe('');
+  });
+
+  it('an edit in progress survives the thread closing, and Escape in it throws it away', () => {
+    render(<Harness initial={withThread('original')} tool="select" />);
+    fireEvent.click(pinButton());
+    fireEvent.click(screen.getByRole('button', { name: 'Comment actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Edit' }));
+    type('Edit comment', 'better wording');
+    act(() => { api.current!.escape(); });
+    fireEvent.click(pinButton());
+    expect(box('Edit comment')).toBe('better wording');
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Edit comment' }), { key: 'Escape' });
+    act(() => { api.current!.escape(); });
+    fireEvent.click(pinButton());
+    expect(screen.queryByRole('textbox', { name: 'Edit comment' })).toBeNull();
+  });
+
+  it('a new comment left unsent comes back in the next composer on its page', () => {
+    const doc = twoPages();
+    const view = render(<Harness initial={doc} tool="comment" pageIndex={0} />);
+    canvasClick();
+    type('Comment', 'about this box');
+    view.rerender(<Harness initial={doc} tool="comment" pageIndex={1} />);
+    canvasClick();
+    expect(box('Comment')).toBe('');
+    act(() => { api.current!.escape(); });
+    view.rerender(<Harness initial={doc} tool="comment" pageIndex={0} />);
+    canvasClick({ x: 400, y: 300 });
+    expect(box('Comment')).toBe('about this box');
+  });
+
+  it('a click away warns once about any unsent text in the open box, the edit box included', () => {
+    render(<><button type="button" data-testid="toolbar">Rectangle</button><Harness initial={withThread('original')} tool="select" /></>);
+    fireEvent.click(pinButton());
+    fireEvent.click(screen.getByRole('button', { name: 'Comment actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Edit' }));
+    type('Edit comment', 'changed');
+    fireEvent.pointerDown(screen.getByTestId('toolbar'), { button: 0 });
+    expect(thread()).not.toBeNull();
+    fireEvent.pointerDown(screen.getByTestId('toolbar'), { button: 0 });
+    expect(thread()).toBeNull();
+  });
+});

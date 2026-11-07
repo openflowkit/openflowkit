@@ -6,12 +6,12 @@ import {
 import type { Point2d } from '../../domain/geometry/types';
 import type { SceneThread, SceneDocumentV1, ScenePage } from '../../domain/document/types';
 import type { PixiRendererHost } from '../../infrastructure/pixi/PixiRendererHost';
-import { Avatar, CommentComposer, ThreadPopover } from './V2CommentsParts';
+import { Avatar, CommentComposer, DraftsContext, ThreadPopover } from './V2CommentsParts';
 import { mintV2Id } from './v2Document';
 import { HUMAN_AUTHOR_NAME, keyboardSpot, pinNudge } from './v2CommentsView';
 import { Placement } from './v2CommentPlacement';
 import type { V2Tool } from './v2ToolCatalog';
-import { FRESH_GUARD, hasDraftText, outsideClick, typed, type DraftGuard } from './v2DraftGuard';
+import { CommentDrafts, draftKey, FRESH_GUARD, outsideClick, typed, type DraftGuard } from './v2DraftGuard';
 
 /** The editor's ways into the comment layer, filled by V2Comments (as useV2Pointer fills the gesture API). */
 export interface V2CommentApi {
@@ -122,10 +122,17 @@ export function V2Comments(props: Props): React.JSX.Element | null {
 
   const latest = useRef({ open, tool, readOnly, hidden });
   useEffect(() => { latest.current = { open, tool, readOnly, hidden }; });
-  // What is typed in the open box, and whether a click away has already warned about it.
-  const draft = useRef({ text: '', guard: FRESH_GUARD as DraftGuard });
-  const onDraft = useCallback((text: string) => { draft.current = { text, guard: typed(draft.current.guard) }; }, []);
-  useEffect(() => { draft.current = { text: '', guard: FRESH_GUARD }; }, [open]);
+  // Unsent text by box, kept for the editor's life; whether a click away has already warned about the open box's.
+  const guard = useRef<DraftGuard>(FRESH_GUARD);
+  // eslint-disable-next-line react-hooks/refs -- only handed over here; a later keystroke writes it
+  const [drafts] = useState(() => new CommentDrafts(() => { guard.current = typed(guard.current); }));
+  useEffect(() => { guard.current = FRESH_GUARD; }, [open]);
+  const pageId = page.id;
+  const pageIdRef = useRef(pageId);
+  useEffect(() => { pageIdRef.current = pageId; });
+  /** The open box holds unsent text. */
+  const unsent = useCallback((box: Open | null) => (box?.kind === 'thread' ? drafts.inThread(box.id)
+    : box?.kind === 'composer' ? drafts.has(draftKey.compose(pageIdRef.current)) : false), [drafts]);
   /** Closes the open box; focus goes back to the thread's pin, or to the canvas. */
   const close = useCallback(() => {
     const current = latest.current.open;
@@ -144,14 +151,14 @@ export function V2Comments(props: Props): React.JSX.Element | null {
       if (!pressFoundOpen.current || event.button !== 0) return;
       // The open box, the pins and the menus they open.
       if ((event.target as Element | null)?.closest?.('[data-comment-ui]')) return;
-      const verdict = outsideClick(draft.current.guard, hasDraftText(draft.current.text));
-      draft.current.guard = verdict.guard;
+      const verdict = outsideClick(guard.current, unsent(state.open));
+      guard.current = verdict.guard;
       if (verdict.outcome === 'warn') { if (sectionRef.current) shake(sectionRef.current); return; }
       setOpen(null);
     };
     document.addEventListener('pointerdown', onDown, true);
     return () => document.removeEventListener('pointerdown', onDown, true);
-  }, [sectionRef]);
+  }, [sectionRef, unsent]);
   useEffect(() => {
     // A composer at a screen point of the canvas, on the node under it.
     const compose = (point: Point2d, nodeId: string | null) => {
@@ -184,8 +191,10 @@ export function V2Comments(props: Props): React.JSX.Element | null {
     };
     return () => { apiRef.current = null; };
   }, [apiRef, hostRef, sectionRef, selectedNodeId, close]);
-  // Leaving the comment tool abandons a half-written composer.
-  useEffect(() => { if (tool !== 'comment') setOpen((current) => (current?.kind === 'composer' ? null : current)); }, [tool]);
+  // Leaving the comment tool closes an empty composer; one holding text stays until it is sent or closed.
+  useEffect(() => {
+    if (tool !== 'comment') setOpen((current) => (current?.kind === 'composer' && !unsent(current) ? null : current));
+  }, [tool, unsent]);
 
   // A pin pressed and moved past DRAG_PX is carried with the pointer and dropped somewhere else: under a node it follows it, on empty canvas it is a page pin.
   const [drag, setDrag] = useState<{ id: string; world: Point2d } | null>(null);
@@ -245,6 +254,7 @@ export function V2Comments(props: Props): React.JSX.Element | null {
   };
 
   return (
+    <DraftsContext.Provider value={drafts}>
     <PlacementContext.Provider value={placement}>
       {threads.map((thread) => {
         const lead = thread.comments[0]!;
@@ -265,10 +275,10 @@ export function V2Comments(props: Props): React.JSX.Element | null {
               <Avatar kind={lead.author.kind} name={lead.author.name} size={22} />
             </button>
             {selected && openThread ? (
-              <ThreadPopover thread={openThread} readOnly={readOnly} onDraft={onDraft} now={now}
+              <ThreadPopover thread={openThread} readOnly={readOnly} now={now}
                 onClose={close}
                 onResolve={() => { updateThreads((doc) => setThreadResolved(doc, thread.id, !thread.resolved)); setOpen(null); }}
-                onDeleteThread={() => { updateThreads((doc) => removeThread(doc, thread.id)); setOpen(null); }}
+                onDeleteThread={() => { updateThreads((doc) => removeThread(doc, thread.id)); drafts.dropThread(thread.id); setOpen(null); }}
                 onReply={(body) => reply(thread, body)}
                 onEditMessage={(commentId, body) => updateThreads((doc) => editComment(doc, thread.id, commentId, body, new Date().toISOString()))}
                 onDeleteMessage={(commentId) => updateThreads((doc) => removeComment(doc, thread.id, commentId))} />
@@ -279,9 +289,10 @@ export function V2Comments(props: Props): React.JSX.Element | null {
       {open?.kind === 'composer' ? (
         <Anchored world={open.world} className="ofk-comment-pinned" testId="v2-comment-composer">
           <span className="ofk-comment-pin" data-ghost><Avatar kind="human" name={HUMAN_AUTHOR_NAME} size={22} /></span>
-          <CommentComposer onDraft={onDraft} onSend={create} onCancel={close} />
+          <CommentComposer pageId={page.id} onSend={create} onCancel={close} />
         </Anchored>
       ) : null}
     </PlacementContext.Provider>
+    </DraftsContext.Provider>
   );
 }

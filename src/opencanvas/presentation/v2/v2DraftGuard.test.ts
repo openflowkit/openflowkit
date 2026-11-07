@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FRESH_GUARD, hasDraftText, outsideClick, typed } from './v2DraftGuard';
+import { CommentDrafts, draftKey, FRESH_GUARD, hasDraftText, outsideClick, typed } from './v2DraftGuard';
 
 describe('draft guard', () => {
   it('closes an empty box on the first outside click', () => {
@@ -33,5 +33,29 @@ describe('draft guard', () => {
     expect(hasDraftText('  \n\t ')).toBe(false);
     expect(hasDraftText(' a ')).toBe(true);
     expect(hasDraftText('')).toBe(false);
+  });
+});
+
+describe('CommentDrafts', () => {
+  it('keeps text by box, drops blank text, and tells its owner of every write', () => {
+    const heard: number[] = [];
+    const drafts = new CommentDrafts(() => heard.push(1));
+    drafts.set(draftKey.reply('t1'), 'unsent');
+    drafts.set(draftKey.compose('p1'), '   ');
+    expect(drafts.get(draftKey.reply('t1'))).toBe('unsent');
+    expect(drafts.has(draftKey.compose('p1'))).toBe(false);
+    expect(drafts.get(draftKey.compose('p1'))).toBe('');
+    expect(heard).toHaveLength(2);
+  });
+
+  it('knows a thread holds unsent text through its reply or an edit, and forgets a deleted thread', () => {
+    const drafts = new CommentDrafts();
+    expect(drafts.inThread('t1')).toBe(false);
+    drafts.set(draftKey.edit('t1', 'm2'), 'better');
+    drafts.set(draftKey.reply('t10'), 'other thread');
+    expect(drafts.inThread('t1')).toBe(true);
+    drafts.dropThread('t1');
+    expect(drafts.inThread('t1')).toBe(false);
+    expect(drafts.inThread('t10')).toBe(true);
   });
 });

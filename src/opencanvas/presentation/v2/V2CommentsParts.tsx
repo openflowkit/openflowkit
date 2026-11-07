@@ -1,9 +1,21 @@
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { IconArrowUp, IconCheck, IconDots, IconPencil, IconSparkles, IconTrash, IconUser, IconX } from '@tabler/icons-react';
 import type { SceneComment, SceneThread } from '../../domain/document/types';
 import { COMMENT_BODY_MAX } from '../../domain/document/types';
 import { Button, Icon, IconButton, Menu, MenuItem, Tooltip } from '../design-system';
 import { avatarColor, relativeTime } from './v2CommentsView';
+import { CommentDrafts, draftKey } from './v2DraftGuard';
+
+/** Where every comment box keeps its unsent text (V2Comments owns it), so closing a box never loses what was typed. */
+export const DraftsContext = createContext(new CommentDrafts());
+
+/** A box's text, kept in the drafts under `key` as it is typed. `initial` is what an untouched box holds (an edit's message). */
+function useDraft(key: string, initial = ''): readonly [string, (text: string) => void] {
+  const drafts = useContext(DraftsContext);
+  const [text, setText] = useState(() => (drafts.has(key) ? drafts.get(key) : initial));
+  const write = (next: string) => { setText(next); drafts.set(key, next === initial ? '' : next); };
+  return [text, write];
+}
 
 // Keys typed into a comment belong to the comment: they never reach the editor's shortcuts.
 const keep = (event: KeyboardEvent): void => event.stopPropagation();
@@ -73,16 +85,16 @@ function CommentInput(props: {
 
 /** A new thread's opening box, next to the ghost pin. */
 export function CommentComposer(props: {
-  /** The text typed so far, for the guard that keeps a stray click from closing the box. */
-  readonly onDraft: (text: string) => void;
+  /** The page it is on: a new thread's unsent text is kept per page (draftKey.compose). */
+  readonly pageId: string;
   readonly onSend: (body: string) => void;
   readonly onCancel: () => void;
 }): React.JSX.Element {
-  const [body, setBody] = useState('');
+  const [body, setBody] = useDraft(draftKey.compose(props.pageId));
   return (
     <div className="ofk-comment-card ofk-comment-composer" role="dialog" aria-label="New comment" data-comment-ui data-comment-open
       onKeyDown={cardKeys(props.onCancel)}>
-      <CommentInput value={body} onChange={(text) => { setBody(text); props.onDraft(text); }} onSend={() => props.onSend(body)}
+      <CommentInput value={body} onChange={setBody} onSend={() => { props.onSend(body); setBody(''); }}
         placeholder="Add a comment" label="Comment" autoFocus />
     </div>
   );
@@ -104,6 +116,7 @@ function MessageMenu(props: { readonly label: string; readonly onEdit: () => voi
 }
 
 function Message(props: {
+  readonly threadId: string;
   readonly message: SceneComment;
   readonly canEdit: boolean;
   readonly now: number;
@@ -111,9 +124,13 @@ function Message(props: {
   readonly onDelete: () => void;
 }): React.JSX.Element {
   const { message } = props;
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(message.body);
-  const commit = () => { if (draft.trim()) { props.onEdit(draft); setEditing(false); } };
+  const key = draftKey.edit(props.threadId, message.id);
+  const drafts = useContext(DraftsContext);
+  // An edit left unsaved when the thread closed is still open, with its text, when the thread opens again.
+  const [editing, setEditing] = useState(() => drafts.has(key));
+  const [draft, setDraft] = useDraft(key, message.body);
+  const stop = () => { setDraft(message.body); setEditing(false); };
+  const commit = () => { if (draft.trim()) { props.onEdit(draft); stop(); } };
   return (
     <li className="ofk-comment-message" data-testid="v2-comment-message">
       <Avatar kind={message.author.kind} name={message.author.name} />
@@ -125,13 +142,13 @@ function Message(props: {
         </p>
         {editing ? (
           <div className="ofk-comment-edit">
-            <CommentInput value={draft} onChange={setDraft} onSend={commit} onEscape={() => { setEditing(false); setDraft(message.body); }}
+            <CommentInput value={draft} onChange={setDraft} onSend={commit} onEscape={stop}
               placeholder="Edit comment" label="Edit comment" sendLabel="Save comment" autoFocus selectOnFocus />
           </div>
         ) : <p className="ofk-comment-body">{message.body}</p>}
       </div>
       {props.canEdit && !editing ? (
-        <MessageMenu label="Comment actions" onEdit={() => { setDraft(message.body); setEditing(true); }} onDelete={props.onDelete} />
+        <MessageMenu label="Comment actions" onEdit={() => setEditing(true)} onDelete={props.onDelete} />
       ) : null}
     </li>
   );
@@ -141,7 +158,6 @@ function Message(props: {
 export function ThreadPopover(props: {
   readonly thread: SceneThread;
   readonly readOnly: boolean;
-  readonly onDraft: (text: string) => void;
   readonly onClose: () => void;
   readonly onResolve: () => void;
   readonly onDeleteThread: () => void;
@@ -151,7 +167,7 @@ export function ThreadPopover(props: {
   readonly now: number;
 }): React.JSX.Element {
   const { thread, readOnly } = props;
-  const [reply, setReply] = useState('');
+  const [reply, setReply] = useDraft(draftKey.reply(thread.id));
   const [menuOpen, setMenuOpen] = useState(false);
   // Deleting the opening message asks to delete the thread.
   const [confirming, setConfirming] = useState(false);
@@ -192,7 +208,7 @@ export function ThreadPopover(props: {
       {body}
       <ul ref={listRef} className="ofk-comment-messages">
         {thread.comments.map((message) => (
-          <Message key={message.id} message={message} now={props.now}
+          <Message key={message.id} threadId={thread.id} message={message} now={props.now}
             canEdit={!readOnly && message.author.kind === 'human'}
             onEdit={(text) => props.onEditMessage(message.id, text)}
             onDelete={() => (message.id === first ? setConfirming(true) : props.onDeleteMessage(message.id))} />
@@ -200,8 +216,8 @@ export function ThreadPopover(props: {
       </ul>
       {readOnly ? null : (
         <footer>
-          <CommentInput value={reply} onChange={(text) => { setReply(text); props.onDraft(text); }} placeholder="Reply" label="Reply" sendLabel="Send reply"
-            onSend={() => { props.onReply(reply); setReply(''); props.onDraft(''); }} />
+          <CommentInput value={reply} onChange={setReply} placeholder="Reply" label="Reply" sendLabel="Send reply"
+            onSend={() => { props.onReply(reply); setReply(''); }} />
         </footer>
       )}
     </div>
