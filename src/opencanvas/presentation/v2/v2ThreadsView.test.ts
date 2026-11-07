@@ -93,6 +93,22 @@ describe('search', () => {
     expect(ids(selectThreads(fixture(), 'Page', filters()))).toEqual(expect.arrayContaining(['a', 'b', 'd']));
   });
 
+  it('reads a page name from the start of a word, so a letter inside "Page 1" selects no page', () => {
+    const t = thread('x', 1, [comment(me, 'ok', 0)]);
+    for (const query of ['a', 'e', 'ge', 'age', 'g 1']) expect(matchesQuery(t, query, 'Page 1'), query).toBe(false);
+    for (const query of ['p', 'page', 'PAGE 1', '1']) expect(matchesQuery(t, query, 'Page 1'), query).toBe(true);
+    expect(matchesQuery(t, 'plan', 'Q3 plan')).toBe(true);
+    expect(matchesQuery(t, 'lan', 'Q3 plan')).toBe(false);
+    // The comments still match anywhere in the text.
+    expect(matchesQuery(thread('y', 2, [comment(me, 'a change', 0)]), 'a', 'Page 1')).toBe(true);
+  });
+
+  it('"#3" is thread number 3, or text holding "#3"', () => {
+    expect(matchesQuery(thread('x', 3, [comment(me, 'hello', 0)]), '#3', 'Page 1')).toBe(true);
+    expect(matchesQuery(thread('y', 7, [comment(me, 'see #3 first', 0)]), '#3')).toBe(true);
+    expect(matchesQuery(thread('z', 7, [comment(me, 'see 3 first', 0)]), '#3')).toBe(false);
+  });
+
   it('finds nothing when nothing matches', () => {
     expect(selectThreads(fixture(), 'zzz', filters({ showResolved: true }))).toEqual([]);
   });

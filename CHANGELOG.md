@@ -17,7 +17,7 @@ separately; its changes are listed under *For developers* in each release.
   (**Include comments** puts them in a JSON export). A file with a damaged thread still opens: a repeated number or
   id is fixed, and only a thread that cannot be repaired is dropped.
 - **Threads panel.** The **Threads** button on the rail, with the number of open threads, lists every thread in the
-  document. Search comments, page names or `#3`; show resolved or only unanswered threads; resolve, delete, mark read
+  document. Search comments, the start of a page name, or `#3`; show resolved or only unanswered threads; resolve, delete, mark read
   or unread, or copy a link that opens the thread in this browser. Click a thread to open it on the canvas, on its
   page. Filters and read marks are kept in this browser.
 - **Private repos in the browser.** On the "not found, or it is private" screen, **Private repo? Use a GitHub token**

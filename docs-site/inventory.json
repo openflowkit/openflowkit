@@ -180,7 +180,7 @@
       "name": "Threads panel",
       "status": "shipped",
       "evidence": "src/opencanvas/presentation/v2/V2ThreadsPanel.tsx",
-      "notes": "The Threads rail button (with the open count) lists every thread in the document. Search covers comments, page names and #numbers; filters for resolved and unanswered; a card opens the thread on the canvas, switching page. Read marks, filters and copied links (which open in this browser) are per browser. The comment tool never opens it.",
+      "notes": "The Threads rail button (with the open count) lists every thread in the document. Search covers comments, the start of a page name and #numbers; filters for resolved and unanswered; a card opens the thread on the canvas, switching page. Read marks, filters and copied links (which open in this browser) are per browser. The comment tool never opens it.",
       "page": "canvas-basics"
     },
     {

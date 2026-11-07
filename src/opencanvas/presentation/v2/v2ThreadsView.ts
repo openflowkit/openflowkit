@@ -43,16 +43,26 @@ export function isUnanswered(thread: SceneThread): boolean {
   return thread.comments[thread.comments.length - 1]?.author.kind === 'human';
 }
 
+/** `needle` (lower case) starts a word of `text`: a page called "Page 1" is found by "pa" or "1", not by "a" or "ge". */
+function startsAWord(text: string, needle: string): boolean {
+  const lower = text.toLowerCase();
+  for (let at = lower.indexOf(needle); at !== -1; at = lower.indexOf(needle, at + 1)) {
+    if (at === 0 || /[^\p{L}\p{N}]/u.test(lower[at - 1]!)) return true;
+  }
+  return false;
+}
+
 /**
- * Case-insensitive substring over every comment body and the page's name; "#3" is thread number 3, as people say it. An
- * empty (or blank) query matches everything.
+ * Case-insensitive. A comment matches by substring anywhere in its text; the page's name only from the start of a word, so
+ * a letter never selects every thread of "Page 1". "#3" is thread number 3, or any text holding "#3". An empty (or blank)
+ * query matches everything.
  */
 export function matchesQuery(thread: SceneThread, query: string, pageName = ''): boolean {
   const needle = query.trim().toLowerCase();
   if (!needle) return true;
   const number = /^#(\d+)$/.exec(needle);
-  if (number) return thread.number === Number(number[1]);
-  return pageName.toLowerCase().includes(needle) || thread.comments.some((comment) => comment.body.toLowerCase().includes(needle));
+  if (number && thread.number === Number(number[1])) return true;
+  return startsAWord(pageName, needle) || thread.comments.some((comment) => comment.body.toLowerCase().includes(needle));
 }
 
 /** What the panel lists: filtered, searched, and newest activity first (ties keep document order, so the order is stable). */
