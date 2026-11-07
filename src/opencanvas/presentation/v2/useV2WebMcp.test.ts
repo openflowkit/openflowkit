@@ -21,7 +21,7 @@ function installModelContext() {
 
 const testDocument = createTestDocument();
 const options = (overrides: Partial<V2WebMcpOptions> = {}): V2WebMcpOptions => ({
-  document: testDocument, pageId: 'page-1', capabilities: createTestCapabilities(), commit: vi.fn(() => true), onActivity: vi.fn(),
+  document: testDocument, pageId: 'page-1', capabilities: createTestCapabilities(), commit: vi.fn(() => true), threadChange: vi.fn(), onActivity: vi.fn(),
   scene: testDocument.pages[0]!, mode: 'canvas', camera: () => ({ x: 0, y: 0, zoom: 1 }),
   screenRect: () => null, viewport: () => ({ width: 800, height: 600 }), select: vi.fn(), ...overrides,
 });

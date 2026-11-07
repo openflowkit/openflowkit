@@ -18,10 +18,10 @@ export interface LiveAgentSession {
   /** Commits as one undo step; false when the session refused it (a locked page), so nothing landed. */
   readonly commit: (command: DocumentCommand) => boolean | void;
   /**
-   * Applies a thread change outside undo history (the session's updateThreads); throws on bad input. Absent in a
-   * host that cannot take threads, which then refuses the thread ops.
+   * Applies a thread change outside undo history (the session's updateThreads); throws on bad input, and runs
+   * nothing when no document is open.
    */
-  readonly threadChange?: (change: (document: SceneDocumentV1) => SceneDocumentV1) => void;
+  readonly threadChange: (change: (document: SceneDocumentV1) => SceneDocumentV1) => void;
   /** A document the reader cannot edit (a shared link, a repo map): an agent's change is refused, and told so. */
   readonly readOnly?: boolean;
   /** A page that stays as it is (a repo document's map page): a change addressed to it lands on its drawing (`openDrawing`), never on it. */
@@ -39,7 +39,6 @@ export interface LiveAgentSession {
   readonly onApplied?: (nodeIds: readonly string[]) => void;
 }
 
-export const NO_THREADS_REFUSAL = 'This editor cannot take comments.';
 const NO_DOCUMENT = 'The editor has no document open.';
 export const READ_ONLY_REFUSAL = 'This document is read-only, so the editor did not apply the change.';
 export const REPO_MAP_REFUSAL = 'The tab shows a repo map, which is read from the code, so the editor did not apply the change. '
@@ -91,7 +90,6 @@ export async function runLiveAgentOp(current: () => LiveAgentSession, name: stri
   // Thread writes are conversation, not drawing: no repo-map redirect, no page switch, no camera, no commit.
   const threadWrite = THREAD_WRITE_OPS.has(name);
   if (threadWrite && session.readOnly) throw new Error(READ_ONLY_REFUSAL);
-  if (threadWrite && !session.threadChange) throw new Error(NO_THREADS_REFUSAL);
   const mutates = !threadWrite && CAPABILITY_MANIFEST.some(({ action, mutates }) => action === name && mutates);
   const locked = session.lockedPageId ?? null;
   let opened = false;
@@ -112,7 +110,6 @@ export async function runLiveAgentOp(current: () => LiveAgentSession, name: stri
     stopIfAborted(signal);
     const now = current();
     if (now.readOnly) throw new Error(READ_ONLY_REFUSAL);
-    if (!now.threadChange) throw new Error(NO_THREADS_REFUSAL);
     // The change runs against the editor's document as it is then, so the output is read off that one.
     const { threads, report } = outcome;
     let applied: SceneDocumentV1 | null = null;

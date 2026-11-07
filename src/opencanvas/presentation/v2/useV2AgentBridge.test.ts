@@ -67,7 +67,7 @@ describe('useV2AgentBridge', () => {
     }));
     const base: V2AgentBridgeOptions = {
       enabled: true, port: 43119, token: 'secret', document: null, pageId: null, revision: 0,
-      capabilities: {} as OpCapabilities, commit: vi.fn(), onActivity: vi.fn(),
+      capabilities: {} as OpCapabilities, commit: vi.fn(), threadChange: vi.fn(), onActivity: vi.fn(),
     };
     const { rerender, unmount } = renderHook((options: V2AgentBridgeOptions) => useV2AgentBridge(options), { initialProps: base });
     await waitFor(() => expect(calls.some((call) => call.startsWith('GET /health'))).toBe(true));
@@ -90,7 +90,7 @@ describe('useV2AgentBridge', () => {
     : null;
   const options: V2AgentBridgeOptions = {
     enabled: true, port: 43119, token: '', document: createTestDocument(), pageId: 'page-1', revision: 1,
-    capabilities: {} as OpCapabilities, commit: vi.fn(), onActivity: vi.fn(),
+    capabilities: {} as OpCapabilities, commit: vi.fn(), threadChange: vi.fn(), onActivity: vi.fn(),
   };
 
   it('a hello the server refuses is a failure, whatever the status', async () => {

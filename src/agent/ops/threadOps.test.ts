@@ -3,7 +3,7 @@ import { applyDocumentCommand } from '@/opencanvas/domain/commands/execute';
 import { addComment, pageThreads } from '@/opencanvas/domain/threads/threads';
 import type { SceneDocumentV1 } from '@/opencanvas/domain/document/types';
 import { createAgentDocument } from '../index';
-import { NO_THREADS_REFUSAL, READ_ONLY_REFUSAL, runLiveAgentOp, type LiveAgentSession } from '../liveOp';
+import { READ_ONLY_REFUSAL, runLiveAgentOp, type LiveAgentSession } from '../liveOp';
 import { resolveAgentOpCommand, runAgentOp } from '../runAction';
 import { findAgentOp } from './index';
 import { createTestCapabilities } from './testHost';
@@ -198,13 +198,6 @@ describe('comment ops, live', () => {
     await runLiveAgentOp(host.session, 'start_thread', { pageId, point: { x: 0, y: 0 }, body: 'on the map' }, pageId);
     expect(openDrawing).not.toHaveBeenCalled();
     expect(host.threadChange).toHaveBeenCalledTimes(1);
-  });
-
-  it('a host without threadChange refuses writes', async () => {
-    const host = await live({ threadChange: undefined });
-    await expect(runLiveAgentOp(host.session, 'start_thread', { point: { x: 0, y: 0 }, body: 'x' })).rejects.toThrow(NO_THREADS_REFUSAL);
-    // The refusal comes before the op resolves, so an unknown id does not hide it.
-    await expect(runLiveAgentOp(host.session, 'resolve_thread', { threadId: 'ghost' })).rejects.toThrow(NO_THREADS_REFUSAL);
   });
 
   // updateThreads runs nothing when no document is open (it closed while the op ran): that is no success.
