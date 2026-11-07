@@ -326,6 +326,63 @@ describe('draw.io connector ends and labels', () => {
   });
 });
 
+describe('draw.io containers and groups', () => {
+  const model = (cells: string) => `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${cells}</root></mxGraphModel>`;
+  const vertex = (id: string, parent: string, at: string, extra = '') =>
+    `<mxCell id="${id}" value="${id}" vertex="1" parent="${parent}" ${extra}><mxGeometry ${at} as="geometry"/></mxCell>`;
+
+  it('keeps groups inside groups, each child placed in its own parent’s space', async () => {
+    const { document } = await open(model(
+      vertex('outer', '1', 'x="100" y="100" width="400" height="300"', 'style="group"')
+      + vertex('inner', 'outer', 'x="20" y="30" width="200" height="150"', 'style="group"')
+      + vertex('leaf', 'inner', 'x="5" y="7" width="60" height="40"'),
+    ));
+    const byId = new Map(document.pages[0]!.nodes.map((node) => [node.id, node]));
+    expect(byId.get('outer')).toMatchObject({ kind: 'group', parentId: null, transform: { translation: { x: 100, y: 100 } } });
+    expect(byId.get('inner')).toMatchObject({ kind: 'group', parentId: 'outer', transform: { translation: { x: 20, y: 30 } } });
+    expect(byId.get('leaf')).toMatchObject({ parentId: 'inner', transform: { translation: { x: 5, y: 7 } } });
+  });
+
+  it('sets a sideways lane’s title up its left band instead of over its children', async () => {
+    const { document } = await open(model(
+      vertex('lane', '1', 'x="0" y="0" width="600" height="200"', 'style="swimlane;horizontal=0;startSize=30;"')
+      + vertex('task', 'lane', 'x="40" y="10" width="100" height="40"'),
+    ));
+    const byId = new Map(document.pages[0]!.nodes.map((node) => [node.id, node]));
+    expect(byId.get('lane')!.content.showHeader).toBe(false);
+    const title = byId.get('lane:label')!;
+    expect(title).toMatchObject({ kind: 'text', content: { label: 'lane' } });
+    expect(title.transform.rotationRadians).toBeCloseTo(-Math.PI / 2);
+    // Turned about its centre, the title's centre is the band's centre: (15, 100).
+    const { width, height } = title.size;
+    const angle = title.transform.rotationRadians;
+    const centre = {
+      x: title.transform.translation.x + (width / 2) * Math.cos(angle) - (height / 2) * Math.sin(angle),
+      y: title.transform.translation.y + (width / 2) * Math.sin(angle) + (height / 2) * Math.cos(angle),
+    };
+    expect(centre.x).toBeCloseTo(15);
+    expect(centre.y).toBeCloseTo(100);
+  });
+
+  it('opens a folded container at its unfolded size and says so', async () => {
+    const folded = '<mxCell id="box" value="Box" vertex="1" parent="1" collapsed="1" style="swimlane;">'
+      + '<mxGeometry x="0" y="0" width="120" height="30" as="geometry"><mxRectangle width="400" height="250" as="alternateBounds"/></mxGeometry></mxCell>'
+      + vertex('inside', 'box', 'x="20" y="60" width="80" height="40"');
+    const { document, losses } = await open(model(folded));
+    const box = document.pages[0]!.nodes.find((node) => node.id === 'box')!;
+    expect(box.size).toEqual({ width: 400, height: 250 });
+    expect(losses).toContain('“Box” was folded in draw.io, so it opens unfolded');
+  });
+
+  it('keeps the folded size when the unfolded one is missing or not a number', async () => {
+    const folded = '<mxCell id="box" value="Box" vertex="1" parent="1" collapsed="1" style="swimlane;">'
+      + '<mxGeometry x="0" y="0" width="120" height="30" as="geometry"><mxRectangle width="NaN" height="-5" as="alternateBounds"/></mxGeometry></mxCell>';
+    const { document } = await open(model(folded));
+    expect(document.pages[0]!.nodes.find((node) => node.id === 'box')!.size).toEqual({ width: 120, height: 30 });
+    expect(validateSceneDocumentV1(document).success).toBe(true);
+  });
+});
+
 describe('big and deep draw.io files', () => {
   const wrap = (cells: string[]) => `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${cells.join('')}</root></mxGraphModel>`;
   const vertex = (id: string, parent: string, style = '') =>

@@ -180,8 +180,11 @@ class PageBuilder {
     const name = drawioShapeName(style);
     const label = drawioLabel(this.valueOf(cell), style);
     const { x, y } = this.placed(cell, geometry);
-    let width = Math.max(1, geometry.width || 120);
-    let height = Math.max(1, geometry.height || 60);
+    // A folded container opens unfolded, so its children sit inside it rather than spilling out.
+    const unfolded = cell.collapsed ? geometry.unfolded : null;
+    if (unfolded) this.loss(`${label ? `“${label}”` : 'A container'} was folded in draw.io, so it opens unfolded`);
+    let width = Math.max(1, unfolded?.width ?? (geometry.width || 120));
+    let height = Math.max(1, unfolded?.height ?? (geometry.height || 60));
     const hasChildren = this.childrenOf(cell.id).some((child) => child.vertex);
     // The node factories scan `page.nodes` for the next z-index, which `base` sets anyway: an empty page keeps this one pass.
     const page: ScenePage = { id: '', name: '', diagramKind: 'flowchart', layers: this.layers, nodes: [], connectors: [], metadata: {}, extensions: {} };
@@ -202,7 +205,8 @@ class PageBuilder {
       // set) is often thinner — an entity table's 22px header over its first row, a kanban column's hairline —
       // so then ours is hidden and the title set in draw.io's band, or just above the lane when it is a hairline.
       const band = num(style.startSize, 23);
-      const thin = name === 'swimlane' && band < CONTAINER_TITLE_HEIGHT;
+      const sideways = name === 'swimlane' && style.horizontal === '0';
+      const thin = name === 'swimlane' && (sideways || band < CONTAINER_TITLE_HEIGHT);
       this.nodes.push({
         id: cell.id, kind: own(CONTAINER_KIND, name) ?? 'section', ...base,
         transform,
@@ -211,7 +215,12 @@ class PageBuilder {
         appearance: drawioNodeAppearance(style),
         ports: [], metadata: {}, extensions: {},
       });
-      if (thin && label) {
+      if (sideways && label) {
+        // A sideways lane's title reads up its left band: an upright box on the band's centre, turned a quarter.
+        const centre = { x: x + band / 2, y: y + height / 2 };
+        const upright = { ...geometry, x: centre.x - height / 2, y: centre.y - band / 2, width: height, height: band, relative: false };
+        this.addText({ ...cell, id: `${cell.id}:label`, geometry: upright, style: { ...style, align: 'center', verticalAlign: 'middle', whiteSpace: '' } }, label, { ...base, zIndex: this.nodes.length }, -Math.PI / 2);
+      } else if (thin && label) {
         const title = band < 12
           ? { geometry: { ...geometry, x, y: y - num(style.spacing, 2) - 1, width, height: 1, relative: false }, verticalAlign: 'bottom' }
           : { geometry: { ...geometry, x, y, width, height: band, relative: false }, verticalAlign: 'middle' };

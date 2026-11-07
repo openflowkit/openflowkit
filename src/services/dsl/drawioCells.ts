@@ -15,6 +15,8 @@ export interface Geometry {
   /** A vertex placed by fractions of its parent's size (x 1, y 0.5 = right edge, halfway down), then `offset`. */
   readonly relative: boolean;
   readonly offset: Point2d;
+  /** A folded container's open size (`alternateBounds`), when it is a real size. */
+  readonly unfolded: { readonly width: number; readonly height: number } | null;
 }
 
 export interface Cell {
@@ -27,6 +29,8 @@ export interface Cell {
   readonly source: string | null;
   readonly target: string | null;
   readonly visible: boolean;
+  /** Folded in draw.io: the geometry is the folded size and the children are hidden. */
+  readonly collapsed: boolean;
   /** A `<UserObject>`/`<object>` wrapper's own data (`status="New"`), which `%status%` in a label stands for. */
   readonly data: Readonly<Record<string, string>>;
   readonly placeholders: boolean;
@@ -48,6 +52,9 @@ function readGeometry(element: XmlElement | undefined): Geometry | null {
   const target = named('targetPoint');
   const points = element.children.find((child) => child.name === 'Array' && child.attributes.as === 'points');
   const offset = named('offset');
+  const open = element.children.find((child) => child.name === 'mxRectangle' && child.attributes.as === 'alternateBounds');
+  const openWidth = num(open?.attributes.width);
+  const openHeight = num(open?.attributes.height);
   return {
     x: num(attributes.x), y: num(attributes.y), width: num(attributes.width), height: num(attributes.height),
     points: points ? points.children.filter((child) => child.name === 'mxPoint').map(pointOf) : [],
@@ -55,6 +62,7 @@ function readGeometry(element: XmlElement | undefined): Geometry | null {
     targetPoint: target ? pointOf(target) : null,
     relative: attributes.relative === '1',
     offset: offset ? pointOf(offset) : { x: 0, y: 0 },
+    unfolded: openWidth > 0 && openHeight > 0 ? { width: openWidth, height: openHeight } : null,
   };
 }
 
@@ -75,6 +83,7 @@ export function readCell(element: XmlElement): Cell | null {
     source: attributes.source ?? null,
     target: attributes.target ?? null,
     visible: attributes.visible !== '0',
+    collapsed: attributes.collapsed === '1',
     data: wrapped ? element.attributes : {},
     placeholders: wrapped && element.attributes.placeholders === '1',
     geometry: readGeometry(cell.children.find((child) => child.name === 'mxGeometry')),
