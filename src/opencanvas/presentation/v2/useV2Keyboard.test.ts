@@ -1,7 +1,7 @@
 import { renderHook } from '@testing-library/react';
 import type { KeyboardEvent } from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { keyOwnedByTarget, useV2Keyboard } from './useV2Keyboard';
+import { composing, keyOwnedByTarget, useV2Keyboard } from './useV2Keyboard';
 
 function setup(onTypeToEdit = vi.fn(() => true), tool: string = 'select', onCommentHere?: () => boolean) {
   const onToolChange = vi.fn();
@@ -312,5 +312,29 @@ describe('useV2Keyboard comment tool', () => {
     const other = setup(vi.fn(() => false), 'select', vi.fn(() => true));
     other.key({ key: 'Enter' });
     expect(other.onEditPrimary).toHaveBeenCalledWith('enter');
+  });
+});
+
+describe('composing', () => {
+  it('is true while an input method composes, including Safari\'s first key (keyCode 229, isComposing false)', () => {
+    expect(composing({ nativeEvent: { isComposing: true }, keyCode: 13 })).toBe(true);
+    expect(composing({ nativeEvent: { isComposing: false }, keyCode: 229 })).toBe(true);
+    expect(composing({ nativeEvent: { isComposing: false }, keyCode: 13 })).toBe(false);
+  });
+});
+
+describe('CommentInput and the IME', () => {
+  it('Enter that ends a composition never sends the comment', async () => {
+    const { render, fireEvent, screen } = await import('@testing-library/react');
+    const { createElement } = await import('react');
+    const { CommentComposer } = await import('./V2CommentsParts');
+    const onSend = vi.fn();
+    render(createElement(CommentComposer, { pageId: 'p', onSend, onCancel: vi.fn() }));
+    const box = screen.getByRole('textbox', { name: 'Comment' });
+    fireEvent.change(box, { target: { value: 'にほん' } });
+    fireEvent.keyDown(box, { key: 'Enter', keyCode: 229 });
+    expect(onSend).not.toHaveBeenCalled();
+    fireEvent.keyDown(box, { key: 'Enter', keyCode: 13 });
+    expect(onSend).toHaveBeenCalledWith('にほん');
   });
 });

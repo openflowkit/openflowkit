@@ -5,6 +5,7 @@ import { COMMENT_BODY_MAX } from '../../domain/document/types';
 import { Button, Icon, IconButton, Menu, MenuItem, Tooltip } from '../design-system';
 import { avatarColor, relativeTime } from './v2CommentsView';
 import { CommentDrafts, draftKey } from './v2DraftGuard';
+import { composing } from './useV2Keyboard';
 
 /** Where every comment box keeps its unsent text (V2Comments owns it), so closing a box never loses what was typed. */
 export const DraftsContext = createContext(new CommentDrafts());
@@ -69,7 +70,7 @@ function CommentInput(props: {
         onKeyDown={(event) => {
           // The card around the box keeps every key from the editor and closes on an Escape this box leaves alone.
           if (event.key === 'Escape' && props.onEscape) { event.preventDefault(); props.onEscape(); return; }
-          if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+          if (event.key === 'Enter' && !event.shiftKey && !composing(event)) {
             event.preventDefault();
             if (!empty) props.onSend();
           }
