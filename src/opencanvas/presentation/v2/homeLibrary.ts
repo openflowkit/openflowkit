@@ -70,10 +70,11 @@ export function gridStep(index: number, count: number, columns: number, key: str
 /** What Import does with a file: open our .json, or draw diagram text (OpenFlow DSL, Mermaid, D2, Structurizr). */
 export function importKind(fileName: string): 'json' | 'source' | null {
   const extension = fileName.toLowerCase().split('.').pop() ?? '';
-  if (extension === 'json') return 'json';
+  // An Excalidraw drawing is JSON too; the import tells it from ours by its contents.
+  if (extension === 'json' || extension === 'excalidraw') return 'json';
   return ['mmd', 'mermaid', 'd2', 'dsl', 'ofk', 'txt'].includes(extension) ? 'source' : null;
 }
-export const IMPORT_ACCEPT = '.json,.mmd,.mermaid,.d2,.dsl,.ofk,.txt,application/json,text/plain';
+export const IMPORT_ACCEPT = '.json,.excalidraw,.mmd,.mermaid,.d2,.dsl,.ofk,.txt,application/json,text/plain';
 
 const byName = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 
