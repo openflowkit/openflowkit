@@ -22,7 +22,7 @@ export interface HomeTransfer {
 export async function importHomeFiles({ repository, toast, create, refresh, setThumbnails }: HomeTransfer, files: readonly File[]): Promise<void> {
   const usable = files.filter((file) => importKind(file.name));
   if (!usable.length) {
-    toast({ tone: 'danger', title: 'Nothing here to import', description: 'OpenFlowKit imports its own .json files, and Mermaid, D2, Structurizr or OpenFlow DSL text files.' });
+    toast({ tone: 'danger', title: 'Nothing here to import', description: 'OpenFlowKit imports its own .json files, Excalidraw drawings, and Mermaid, D2, Structurizr or OpenFlow DSL text files.' });
     return;
   }
   const report = await importDocumentFiles(usable, repository, () => mintV2Id('doc'));
@@ -37,9 +37,9 @@ export async function importHomeFiles({ repository, toast, create, refresh, setT
     }
     repository.listThumbnails().then(setThumbnails, () => undefined);
   })();
-  const description = [...(report.problems.length ? [`Couldn’t open ${report.problems.join('; ')}`.replace(/([^.])$/, '$1.')] : []), ...report.notes].join(' ');
+  const description = [...(report.problems.length ? [`Couldn’t open ${report.problems.join('; ')}`.replace(/([^.])$/, '$1.')] : []), ...report.notes, ...report.losses].join(' ');
   toast({
-    tone: report.problems.length ? (report.count ? 'warning' : 'danger') : report.notes.length ? 'warning' : 'success',
+    tone: report.problems.length ? (report.count ? 'warning' : 'danger') : report.notes.length + report.losses.length ? 'warning' : 'success',
     title: report.count ? `Imported ${plural(report.count, 'diagram')}` : 'Nothing was imported',
     ...(description ? { description } : {}),
   });

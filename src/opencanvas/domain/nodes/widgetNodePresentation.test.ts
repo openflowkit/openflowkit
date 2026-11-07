@@ -171,6 +171,9 @@ describe('widget backdrop', () => {
     expect(widgetBackdrop({ ...heading, parentId: null }, lookup, '#111111')).toBe('#111111');
     const clear = { ...phone, appearance: { ...phone.appearance, fill: 'transparent' } };
     expect(widgetBackdrop(heading, () => clear, '#111111')).toBe('#111111');
+    // A frame coloured with the custom picker (#rrggbbff) is still the opaque backdrop.
+    const picked = { ...phone, appearance: { ...phone.appearance, fill: '#ffffffff' } };
+    expect(widgetBackdrop(heading, () => picked, '#111111')).toBe('#ffffffff');
   });
 });
 
