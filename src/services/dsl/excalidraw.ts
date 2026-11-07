@@ -5,10 +5,11 @@ import {
   type ConnectorEndpoint, type ConnectorLabel, type SceneConnector, type SceneDocumentV1, type SceneNode, type ScenePage,
 } from '../../opencanvas/domain/document/types';
 import { validateSceneDocumentV1 } from '../../opencanvas/domain/document/validation';
-import type { Point2d } from '../../opencanvas/domain/geometry/types';
+import type { Bounds2d, Point2d } from '../../opencanvas/domain/geometry/types';
 import { createImageNode } from '../../opencanvas/domain/nodes/imageNode';
 import { resolveNodeStyle } from '../../opencanvas/domain/nodes/nodeStyle';
 import { createShapeNode, type ShapeKind } from '../../opencanvas/domain/nodes/shapeNode';
+import { cellRange } from '../../opencanvas/domain/scene/spatialIndex';
 import { measurePortableText } from '../../opencanvas/domain/text/measurement';
 import {
   excalidrawColor, excalidrawConnectorAppearance, excalidrawFont, excalidrawHead, excalidrawNodeAppearance,
@@ -86,6 +87,38 @@ const DARK_CANVAS = '#191b19';
 const solidOnDark = (node: SceneNode): boolean => typeof node.appearance.fill === 'string' && node.appearance.fill !== 'transparent'
   && resolveNodeStyle(node, DARK_CANVAS).fill.startsWith('#');
 
+const FILL_CELL = 256;
+/** A shape covering more cells than this (a page-sized backdrop) goes on a short list instead of into every cell. */
+const MAX_FILL_CELLS = 256;
+
+interface Fill { readonly box: Bounds2d; readonly node: SceneNode }
+
+/** Filled shapes placed so far, filed by the cells they cover in Excalidraw's own space: what lies under a word is a lookup, not a scan. */
+class FillIndex {
+  private readonly cells = new Map<string, Fill[]>();
+  private readonly wide: Fill[] = [];
+
+  add(fill: Fill): void {
+    const [minX, minY, maxX, maxY] = cellRange(fill.box, FILL_CELL);
+    if (!((maxX - minX + 1) * (maxY - minY + 1) <= MAX_FILL_CELLS)) { this.wide.push(fill); return; }
+    for (let x = minX; x <= maxX; x += 1) {
+      for (let y = minY; y <= maxY; y += 1) {
+        const cell = this.cells.get(`${x}:${y}`);
+        if (cell) cell.push(fill);
+        else this.cells.set(`${x}:${y}`, [fill]);
+      }
+    }
+  }
+
+  /** Whether a filled shape whose fill stays solid on a dark canvas covers `point`. */
+  covers(point: Point2d): boolean {
+    const under = ({ box, node }: Fill) => point.x >= box.x && point.x <= box.x + box.width
+      && point.y >= box.y && point.y <= box.y + box.height && solidOnDark(node);
+    const cell = this.cells.get(`${Math.floor(point.x / FILL_CELL)}:${Math.floor(point.y / FILL_CELL)}`) ?? [];
+    return cell.some(under) || this.wide.some(under);
+  }
+}
+
 const bindingOf = (value: unknown): string | null => {
   if (!value || typeof value !== 'object') return null;
   const id = (value as { elementId?: unknown }).elementId;
@@ -101,8 +134,12 @@ class SceneBuilder {
   private readonly labels = new Map<string, ExcalidrawElement>();
   private readonly nodeIds = new Set<string>();
   private readonly frames = new Set<string>();
+  private readonly fills = new FillIndex();
+  /** What createShapeNode and createImageNode read: no nodes, as their zIndex (a scan of every node) is replaced by ours. */
+  private readonly page: ScenePage;
 
   constructor(private readonly scene: ExcalidrawScene, private readonly layerId: string) {
+    this.page = { layers: [{ id: layerId }], nodes: [] } as unknown as ScenePage;
     const groups = new Set<string>();
     for (const element of scene.elements) {
       if (element.isDeleted === true || typeof element.id !== 'string') continue;
@@ -160,10 +197,9 @@ class SceneBuilder {
     const height = Math.max(1, finite(element.height, 1));
     const rotation = finite(element.angle);
     const base = { parentId, layerId: this.layerId, zIndex };
-    const page = { layers: [{ id: this.layerId }], nodes: this.nodes } as unknown as ScenePage;
     const bound = this.labels.get(id);
     const label = bound ? text(bound.originalText) || text(bound.text) : '';
-    const node = this.nodeFor(element, type, page, { id, at: { x, y }, size: { width, height }, label, bound });
+    const node = this.nodeFor(element, type, { id, at: { x, y }, size: { width, height }, label, bound });
     // A node drawn wider than the element (free text) grows away from the edge its words are set against,
     // keeping its 8px margin outside the element: from the centre unless aligned left or right.
     const grown = node.size.width - width;
@@ -173,20 +209,13 @@ class SceneBuilder {
       rotationRadians: rotation, scale: { x: 1, y: 1 } };
     this.nodes.push({ ...node, ...base, transform });
     this.nodeIds.add(id);
-  }
-
-  /** Whether a shape already placed, whose fill stays solid on a dark canvas, covers this box's centre. */
-  private onFill(at: Point2d, size: { width: number; height: number }): boolean {
-    const x = at.x + size.width / 2;
-    const y = at.y + size.height / 2;
-    return this.nodes.some((node) => {
-      const { transform: { translation }, size: box } = node;
-      return x >= translation.x && x <= translation.x + box.width && y >= translation.y && y <= translation.y + box.height && solidOnDark(node);
-    });
+    if (typeof node.appearance.fill === 'string' && node.appearance.fill !== 'transparent') {
+      this.fills.add({ box: { x: finite(element.x), y: finite(element.y), width, height }, node });
+    }
   }
 
   private nodeFor(
-    element: ExcalidrawElement, type: string, page: ScenePage,
+    element: ExcalidrawElement, type: string,
     at: { id: string; at: Point2d; size: { width: number; height: number }; label: string; bound: ExcalidrawElement | undefined },
   ): SceneNode {
     // Own keys only: a hand-edited "constructor" falls back to a box instead of reading Object's.
@@ -197,14 +226,15 @@ class SceneBuilder {
       if (element.fillStyle && element.fillStyle !== 'solid' && excalidrawColor(element.backgroundColor) !== 'transparent') {
         this.lose('hatched fills are drawn solid');
       }
-      const node = createShapeNode(page, { kind: rounded ? 'rounded' : circle ? 'circle' : shape, id: at.id, at: at.at, size: at.size,
+      const node = createShapeNode(this.page, { kind: rounded ? 'rounded' : circle ? 'circle' : shape, id: at.id, at: at.at, size: at.size,
         label: at.label, appearance: excalidrawNodeAppearance(element, at.bound) });
       const ink = at.bound && node.appearance.textColor === undefined ? excalidrawWordInk(at.bound.strokeColor, solidOnDark(node)) : undefined;
       return ink ? { ...node, appearance: { ...node.appearance, textColor: ink } } : node;
     }
     if (type === 'text') {
       // Default ink follows the theme, except over a fill drawn below it that stays solid on dark, where dark ink stays readable.
-      const ink = excalidrawWordInk(element.strokeColor, this.onFill(at.at, at.size));
+      const centre = { x: finite(element.x) + at.size.width / 2, y: finite(element.y) + at.size.height / 2 };
+      const ink = excalidrawWordInk(element.strokeColor, this.fills.covers(centre));
       // Excalidraw's box is exactly its words; ours keeps 8px clear each side and draws handwriting in a wider
       // face, so the box widens about the same centre. ponytail: the margin is guessed — measure the canvas face if words break.
       const label = text(element.originalText) || text(element.text);
@@ -237,7 +267,7 @@ class SceneBuilder {
     if (type === 'image') {
       const file = this.scene.files[text(element.fileId)] as { dataURL?: unknown } | undefined;
       const url = text(file?.dataURL);
-      if (/^data:image\//.test(url)) return createImageNode(page, { id: at.id, at: at.at, size: at.size, label: at.label || 'Image', url });
+      if (/^data:image\//.test(url)) return createImageNode(this.page, { id: at.id, at: at.at, size: at.size, label: at.label || 'Image', url });
       this.lose('a picture whose file isn’t in the drawing is drawn as a box');
     } else if (type === 'frame' || type === 'magicframe') {
       return {
@@ -247,12 +277,12 @@ class SceneBuilder {
       };
     } else if (type === 'embeddable' || type === 'iframe') {
       this.lose('embedded web pages are drawn as a box with their link');
-      return createShapeNode(page, { kind: 'rectangle', id: at.id, at: at.at, size: at.size, label: text(element.link) || at.label,
+      return createShapeNode(this.page, { kind: 'rectangle', id: at.id, at: at.at, size: at.size, label: text(element.link) || at.label,
         appearance: excalidrawNodeAppearance(element, at.bound) });
     } else {
       this.lose(`Excalidraw’s “${type || 'unknown'}” element is drawn as a box`);
     }
-    return createShapeNode(page, { kind: 'rectangle', id: at.id, at: at.at, size: at.size, label: at.label,
+    return createShapeNode(this.page, { kind: 'rectangle', id: at.id, at: at.at, size: at.size, label: at.label,
       appearance: excalidrawNodeAppearance(element, at.bound) });
   }
 
@@ -320,6 +350,7 @@ export function excalidrawScene(scene: ExcalidrawScene, layerId = DEFAULT_SCENE_
 }
 
 /** An Excalidraw file (or its clipboard JSON) as an OpenFlowKit document of one page under `id`. */
+// ponytail: main thread; 50 000 shapes (a 15 MB file) parse, build and validate in about 130 ms — a worker if drawings grow past that.
 export function excalidrawToDocument(source: string, id: string, now = new Date().toISOString()): ExcalidrawImport {
   const scene = readExcalidraw(source);
   if (!scene) return { error: 'It isn’t an Excalidraw drawing.' };

@@ -70,6 +70,18 @@ describe('production clipboard', () => {
       (kind) => `${kind}-1`, { offset: { x: 10, y: 20 }, keepParents: false });
     expect(applyDocumentCommand(document, result.command).document.pages[0].connectors[0]!.waypoints).toEqual([{ x: 210, y: 120 }]);
   });
+
+  it('pastes a big copy onto a big page in one pass (a whole Excalidraw drawing pastes at once)', () => {
+    const page = { ...createTestDocument({ nodes: [] }).pages[0]!,
+      nodes: Array.from({ length: 150_000 }, (_, i) => createTestNode(`on-page-${i}`, { zIndex: i })) };
+    const snapshot = { version: 1 as const, connectors: [], nodes: Array.from({ length: 20_000 }, (_, i) => createTestNode(`copied-${i}`)) };
+    const started = performance.now();
+    const { command } = buildPasteProductionSelectionCommand(page, snapshot, (kind, id) => `${kind}:${id}`);
+    // One pass: well under a second. Scanning the page per pasted shape took seconds, and spreading it overflowed the stack.
+    expect(performance.now() - started).toBeLessThan(2_000);
+    const zIndexes = command.kind === 'batch' ? command.commands.map((child) => (child.kind === 'insert-node' ? child.node.zIndex : 0)) : [];
+    expect([zIndexes[0], zIndexes.at(-1)]).toEqual([150_000, 169_999]);
+  });
 });
 
 describe('where a paste lands', () => {

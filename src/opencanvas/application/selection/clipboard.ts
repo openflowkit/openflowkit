@@ -99,9 +99,12 @@ export function buildPasteProductionSelectionCommand(
   const nodeIds = new Map<string, string>();
   for (const node of snapshot.nodes) {
     const id = createId('node', node.id);
-    if (!id || occupied.has(id) || [...nodeIds.values()].includes(id)) throw new TypeError('Paste ids must be unique.');
+    if (!id || occupied.has(id)) throw new TypeError('Paste ids must be unique.');
+    occupied.add(id);
     nodeIds.set(node.id, id);
   }
+  // Pasted shapes go on top, in their copied order: found once, not per shape (a whole drawing pastes at once).
+  const top = page.nodes.reduce((highest, { zIndex }) => Math.max(highest, zIndex), 0);
   const commands: DocumentCommand[] = snapshot.nodes.map((node, index) => {
     const pastedParent = node.parentId && nodeIds.has(node.parentId) ? nodeIds.get(node.parentId)! : null;
     // Members keep their local transform; only roots take the offset, on the canvas, then go back into the
@@ -112,7 +115,7 @@ export function buildPasteProductionSelectionCommand(
     const pasted: SceneNode = {
       ...structuredClone(node), id: nodeIds.get(node.id)!,
       parentId: pastedParent ?? (inverse ? home! : null),
-      zIndex: Math.max(0, ...page.nodes.map(({ zIndex }) => zIndex)) + index + 1,
+      zIndex: top + index + 1,
       transform: { ...node.transform, translation: pastedParent ? { ...node.transform.translation }
         : inverse ? applyMatrixToPoint(inverse, world) : world },
     };
@@ -126,6 +129,7 @@ export function buildPasteProductionSelectionCommand(
   for (const connector of snapshot.connectors) {
     const id = createId('connector', connector.id);
     if (!id || occupied.has(id)) throw new TypeError('Paste ids must be unique.');
+    occupied.add(id);
     const pasted: SceneConnector = {
       ...structuredClone(connector), id, source: end(connector.source), target: end(connector.target),
       waypoints: connector.waypoints.map((point) => ({ x: point.x + offset.x, y: point.y + offset.y })),

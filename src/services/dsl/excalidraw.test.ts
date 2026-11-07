@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { SceneDocumentV1 } from '../../opencanvas/domain/document/types';
 import { resolveNodeStyle } from '../../opencanvas/domain/nodes/nodeStyle';
 import { contrastRatio } from '../../lib/colorUtils';
-import { excalidrawToDocument, looksLikeExcalidraw, readExcalidraw } from './excalidraw';
+import { excalidrawScene, excalidrawToDocument, looksLikeExcalidraw, readExcalidraw } from './excalidraw';
 import architecture from './fixtures/excalidraw/architecture.excalidraw?raw';
 import dbSchema from './fixtures/excalidraw/db-schema.excalidraw?raw';
 import linkedList from './fixtures/excalidraw/linked-list.excalidraw?raw';
@@ -254,6 +254,23 @@ describe('excalidrawToDocument', () => {
     const frame = [...nodes.values()].find(({ kind }) => kind === 'frame')!;
     expect([...nodes.values()].filter(({ parentId }) => parentId === frame.id)).toHaveLength(3);
     expect(losses).toEqual(['hatched fills are drawn solid (2 times)']);
+  });
+
+  it('builds a big drawing in linear time: twenty-five thousand filled boxes with a word on each', () => {
+    const elements = Array.from({ length: 25_000 }, (_, i) => {
+      const x = (i % 200) * 50;
+      const y = Math.floor(i / 200) * 50;
+      return [
+        { ...base, id: `box${i}`, type: 'rectangle', x, y, width: 40, height: 40, backgroundColor: '#ffec99' },
+        { ...base, id: `word${i}`, type: 'text', x: x + 5, y: y + 10, width: 30, height: 20, text: 'n', originalText: 'n', fontSize: 16, containerId: null },
+      ];
+    }).flat();
+    const started = performance.now();
+    const { nodes } = excalidrawScene({ elements, files: {} });
+    // Linear, this takes well under half a second; scanning every placed node per shape and per word took seconds.
+    expect(performance.now() - started).toBeLessThan(2_000);
+    expect(nodes).toHaveLength(50_000);
+    expect(nodes.at(-1)!.content.customColor).toBe('#1e1e1e');
   });
 
   it('says why it can’t open something', () => {
