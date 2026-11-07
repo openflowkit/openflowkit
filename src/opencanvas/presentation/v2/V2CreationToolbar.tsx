@@ -99,10 +99,11 @@ export function V2CreationToolbar(props: {
   return (
     <FloatingRegion ref={toolsRef} slot="top-start" className="ofk-v2-tools">
       <Toolbar label="Create" orientation="vertical" onKeyDown={skipCorners}>
-        <FlyoutButton label="Select" shortcut="V / H" icon={<Icon icon={IconPointer} />}
+        {/* The button wears the tool a click arms, and its tooltip that tool's key (V, H or C). */}
+        <FlyoutButton label="Select" icon={<Icon icon={IconPointer} />}
           selected={POINTER_TOOLS.has(tool)} open={flyout === 'pointer'}
           onActivate={() => props.onToolChange(lastUsed.pointer)} variant={variants.pointer}
-          onOpenChange={setFlyoutOpen('pointer')} options={POINTER_OPTIONS} columns={2}
+          onOpenChange={setFlyoutOpen('pointer')} options={POINTER_OPTIONS} columns={3}
           selectedId={POINTER_TOOLS.has(tool) ? tool : null} onPick={props.onToolChange} />
         <span className="ofk-v2-tools-separator" aria-hidden="true" />
         <FlyoutButton label="Shapes" icon={<Icon icon={IconSquare} />}
