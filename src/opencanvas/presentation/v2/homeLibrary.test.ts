@@ -53,6 +53,7 @@ describe('homeLibrary', () => {
   it('knows which files Import can open', () => {
     expect([importKind('a.JSON'), importKind('flow.mmd'), importKind('x.d2'), importKind('w.dsl'), importKind('pic.png'), importKind('noext')])
       .toEqual(['json', 'source', 'source', 'source', null, null]);
+    expect(importKind('sketch.excalidraw')).toBe('json');
   });
 
   it('filters by view and search, keeps saved order or sorts by name naturally', () => {

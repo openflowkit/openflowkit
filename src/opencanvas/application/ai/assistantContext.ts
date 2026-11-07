@@ -2,9 +2,8 @@
 // the frames holding the selection when the scope is the selection. A frame's
 // text is its authored source while untouched, regenerated once hand-edited —
 // the same rule get_diagram follows.
-import { dslFrames, frameEdited, frameScene } from '../../../dsl/frameScene';
+import { dslFrames, frameScene, frameText } from '../../../dsl/frameScene';
 import { dslFrameMeta } from '../../../dsl/sceneMeta';
-import { serialize } from '../../../dsl/serialize';
 import type { SceneNode, ScenePage } from '../../domain/document/types';
 import type { AssistantContext, AssistantFrame } from './assistantPrompt';
 
@@ -40,7 +39,7 @@ export function assistantContext(
     const meta = dslFrameMeta(frame);
     frames.push({
       id: frame.id, title: label(frame), family: meta.family,
-      dsl: frameEdited(scene) || typeof meta.source !== 'string' ? serialize(scene) : meta.source,
+      dsl: frameText(scene),
     });
   }
   const frameIds = new Set(all.map(({ id }) => id));
