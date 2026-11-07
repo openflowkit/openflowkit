@@ -215,7 +215,8 @@ export function useV2EditActions(options: V2EditActionsOptions) {
     options.applySelection(replaceSelection(pastedNodeIds));
     options.applyConnectorSelection(loose);
     options.announce(`${pastedNodeIds.length || pastedConnectorIds.length} pasted.`);
-    if (excalidraw?.losses.length) options.notify({ id: 'paste-shapes', tone: 'info', title: 'Pasted from Excalidraw', ...note });
+    // A warning that stays until read, as the import's: a toast that leaves on its own takes the list of losses with it.
+    if (excalidraw?.losses.length) options.notify({ id: 'paste-shapes', tone: 'warning', title: 'Pasted from Excalidraw', ...note });
     return true;
   };
   const hasClipboard = () => clipboardRef.current !== null;

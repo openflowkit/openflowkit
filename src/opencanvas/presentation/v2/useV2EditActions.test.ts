@@ -106,7 +106,7 @@ describe('useV2EditActions paste from Excalidraw', () => {
     t.actions.pasteShapes(excalidraw([{ id: 'box', type: 'rectangle', x: 0, y: 0, width: 40, height: 40, isDeleted: false, groupIds: ['g'] }]));
     expect(t.commit).toHaveBeenCalledOnce();
     expect(t.notify).toHaveBeenCalledWith(expect.objectContaining({
-      title: 'Pasted from Excalidraw', description: '1 thing didn’t come across: groups come in as separate shapes.',
+      tone: 'warning', title: 'Pasted from Excalidraw', description: '1 thing didn’t come across: groups come in as separate shapes.',
     }));
   });
 });
