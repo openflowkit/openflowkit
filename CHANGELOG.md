@@ -22,10 +22,6 @@ separately; its changes are listed under *For developers* in each release.
   by the server. Off unless set.
 - **Connect agent: paste a prompt.** Step 1 can be a prompt you paste into your agent, which then adds OpenFlowKit
   itself, or the command, config or one-click link as before.
-- **`get_diagram` with `diffOnly`.** An agent that already holds the text it wrote can ask for just what changed on
-  the canvas: `dslDiff`, a unified diff of the canvas against the text it was drawn from, in place of the whole `dsl`. Both
-  sides are the canonical (re-serialized) text, so only real changes show. Line numbers refer to the canonical text
-  (what `get_diagram` returns without `diffOnly`), not your original source. Empty while the canvas matches the text.
 
 ### Changed
 
@@ -50,6 +46,16 @@ separately; its changes are listed under *For developers* in each release.
   Send to back and the step versions changed the order but the canvas kept drawing shapes in the order they were made.
   A shape in front now covers the text and images of the shapes behind it too, overlapping images keep their order
   whichever loads first, and clicks and exports agree with what you see.
+
+### For developers: MCP server and CLI, not on npm yet
+
+- **`get_diagram` with `since`.** An agent that already holds the text it wrote can ask for just what changed on the
+  canvas: `dslDiff`, a unified diff of the canvas against the text it was drawn from, in place of the whole `dsl`. Both
+  sides are the canonical (re-serialized) text, so only real changes show. Line numbers refer to the canonical text
+  (what `get_diagram` returns without `since`), not your original source. Empty while the canvas matches the text.
+- **`revision`** comes back from `create_diagram`, `update_diagram` and `get_diagram`; pass it as `since`. When the
+  diagram was redrawn from other text after it (in Edit as code, or by another agent), `get_diagram` returns the whole
+  text and says so, instead of an empty diff.
 
 ### For developers: MCP server and CLI 0.2.4 (on npm since 2026-10-13, tag `mcp-v0.2.4`)
 

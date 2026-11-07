@@ -14,7 +14,7 @@ import type { Point2d } from '../../opencanvas/domain/geometry/types';
 import type { SceneDocumentV1 } from '../../opencanvas/domain/document/types';
 import type { DocumentCommand } from '../../opencanvas/domain/commands/types';
 import { readAgentSource, type AgentSource } from '../lint';
-import { discardedEdits, frameBaseline, frameCanvasEdits, type BaselineCache, type CanvasEdit } from './canvasEdits';
+import { discardedEdits, frameBaseline, frameCanvasEdits, frameRevision, type BaselineCache, type CanvasEdit } from './canvasEdits';
 import { unifiedLineDiff } from '../../dsl/textDiff';
 import { defineOp, pointOf, pointSchema, requireFrame, requirePage, type OpContext } from './types';
 
@@ -39,6 +39,8 @@ function diagramOutput(pageId: string, frameId: string, compiled: CompileResult)
   return {
     pageId,
     frameId,
+    // Placing the frame renames ids, never its text: this is the revision get_diagram reports for it.
+    revision: frameRevision(compiled.frame),
     family: compiled.meta.family,
     title: compiled.meta.title ?? null,
     nodes: compiled.nodes.length + compiled.groups.length,
@@ -191,10 +193,15 @@ async function discardedBy(context: OpContext, command: DocumentCommand | null, 
 
 /**
  * The frame's text as the canvas regenerates it, against its authored text compiled and serialized the same way,
- * so only what the canvas changed shows. The whole text, and why, when there is no authored text to compare.
+ * so only what the canvas changed shows. The whole text, and why, when the revision the agent holds is not the
+ * frame's current one (redrawn since, or another frame's), or there is no authored text to compare.
  */
-async function dslDiff(scene: DslFrameScene, edited: boolean, context: OpContext, cache: BaselineCache, dsl: () => string) {
-  if (typeof dslFrameMeta(scene.frame).source === 'string' && !edited) return { dslDiff: '' };
+async function dslDiff(scene: DslFrameScene, edited: boolean, since: string, context: OpContext, cache: BaselineCache, dsl: () => string) {
+  const revision = frameRevision(scene.frame);
+  if (revision !== null && revision !== since) {
+    return { dsl: dsl(), dslDiffNote: `Not compared: revision ${since} is not this diagram's current revision (${revision}), so this is the whole text.` };
+  }
+  if (revision !== null && !edited) return { dslDiff: '' };
   const compiled = await frameBaseline(scene, context.capabilities, cache);
   if (compiled.baseline === null) return { dsl: dsl(), dslDiffNote: compiled.note };
   return { dslDiff: unifiedLineDiff(serialize(compiled.baseline), serialize(scene)) };
@@ -209,17 +216,20 @@ export const getDiagram = defineOp({
     + 'attributes to merge into that node\'s existing `[ … ]` list (one list per node) to keep the edit, or null when the '
     + 'language cannot say it. `canvasEdits` is null, with `canvasEditsNote` saying why, when it could not be compared. '
     + '`losses` names what the language cannot say at all. update_diagram drops anything the text you send does not carry. '
-    + 'With `diffOnly`, `dsl` is left out and `dslDiff` is a unified diff of the canvas against the text it was drawn from, both '
-    + 're-serialized the same way so only real changes show: empty while the canvas matches. Line numbers refer to the '
-    + 'canonical text (what `get_diagram` returns without `diffOnly`), not your original source. Edits the '
-    + 'text does not say, such as moves, are only in `canvasEdits`. When there is nothing to compare against, the whole '
-    + '`dsl` comes back with `dslDiffNote`.',
+    + '`revision` names the text the diagram was drawn from (create_diagram and update_diagram return it too), null '
+    + 'for a frame with no authored text; canvas edits do not change it. Pass it back as `since` and `dsl` is left out: '
+    + '`dslDiff` is a unified diff of the canvas against that text, both re-serialized the same way so only real changes '
+    + 'show, empty while the canvas matches. '
+    + 'Line numbers refer to the canonical text (what `get_diagram` returns without `since`), not your original source. '
+    + 'Edits the text does not say, such as moves, are only in `canvasEdits`. When `since` is not the current `revision` '
+    + '(the diagram was redrawn from other text since), or there is nothing to compare against, the whole `dsl` comes '
+    + 'back with `dslDiffNote` saying why.',
   schema: z.object({
     frameId: z.string().min(1).optional().describe(`${FRAME_ID} Defaults to the first diagram on the page.`),
     pageId: z.string().min(1).optional().describe('Page to read (see list_pages); defaults to the page the editor shows, or the first page in file mode.'),
-    diffOnly: z.boolean().optional().describe('Return `dslDiff`, a unified diff of the canvas against the text it was drawn from, instead of the whole `dsl`. Line numbers refer to the canonical text (what `get_diagram` returns without `diffOnly`), not your original source.'),
+    since: z.string().min(1).optional().describe('The `revision` of the text you hold, from create_diagram, update_diagram or an earlier get_diagram. Returns `dslDiff`, a unified diff of the canvas against that text, instead of the whole `dsl`; the whole `dsl` again if it is not the current `revision` (the diagram was redrawn from other text since). Line numbers refer to the canonical text (what `get_diagram` returns without `since`), not your original source.'),
   }),
-  async run({ frameId, pageId, diffOnly }, context) {
+  async run({ frameId, pageId, since }, context) {
     const page = requirePage(context.document, pageId ?? context.pageId);
     const first = frameId ? null : dslFrames(page)[0];
     if (!frameId && !first) throw new RangeError('This page has no diagram frames. Use list_diagrams.');
@@ -239,11 +249,12 @@ export const getDiagram = defineOp({
         pageId: page.id,
         family: meta.family,
         title: typeof frame.content.label === 'string' && frame.content.label ? frame.content.label : null,
+        revision: frameRevision(frame),
         edited,
         losses,
         canvasEdits: compared.edits,
         ...(compared.note ? { canvasEditsNote: compared.note } : {}),
-        ...(diffOnly ? await dslDiff(scene, edited, context, cache, dsl) : { dsl: dsl() }),
+        ...(since === undefined ? { dsl: dsl() } : await dslDiff(scene, edited, since, context, cache, dsl)),
       },
     };
   },

@@ -10,6 +10,9 @@ import { resolveAgentOpCommand } from '../runAction';
 import { AGENT_OPS } from './index';
 import type { AgentOp, OpContext } from './types';
 import type { CompileOptions } from '../../dsl/compile';
+import type { DocumentCommand } from '@/opencanvas/domain/commands/types';
+import type { DiagramPaletteName } from '@/opencanvas/domain/nodes/nodePalette';
+import { buildDslPageCommand } from '@/opencanvas/application/dsl/dslPageCommand';
 import { createTestCapabilities } from './testHost';
 import { lintDsl } from '../lint';
 import { MERMAID_COMPAT_FIXTURES } from '../../../scripts/mermaid-compat-fixtures.mjs';
@@ -37,6 +40,7 @@ async function host(document: SceneDocumentV1 = createAgentDocument('Ops fixture
     page: (): ScenePage => current.pages[0]!,
     frame: (index = 0) => current.pages[0]!.nodes.filter((node) => node.kind === 'frame')[index]!,
     dataIds: () => current.pages[0]!.nodes.filter((node) => node.kind !== 'frame').map((node) => node.id),
+    apply(command: DocumentCommand) { current = applyDocumentCommand(current, command).document; },
     async run(name: string, input: unknown) {
       const outcome = await op(name).run(op(name).schema.parse(input), context());
       if (outcome.command) current = applyDocumentCommand(current, outcome.command).document;
@@ -184,29 +188,129 @@ views { view context of Shop; view container of Shop }
     expect((kept.output as { discarded: readonly unknown[] }).discarded).toEqual([]);
   });
 
-  it('returns the canvas edits as a diff of the text with diffOnly', async () => {
+  it('returns the canvas edits as a diff of the text it was drawn from, given its revision', async () => {
     const run = await host();
-    await run.run('create_diagram', { dsl: FLOW });
-    const fresh = await run.run('get_diagram', { frameId: run.frame().id, diffOnly: true });
-    expect(fresh.output).toMatchObject({ edited: false, dslDiff: '' });
+    const created = await run.run('create_diagram', { dsl: FLOW });
+    const { revision } = created.output as { revision: string };
+    const fresh = await run.run('get_diagram', { frameId: run.frame().id, since: revision });
+    expect(fresh.output).toMatchObject({ revision, edited: false, dslDiff: '' });
     expect(fresh.output).not.toHaveProperty('dsl');
 
     const store = run.page().nodes.find((node) => node.content.label === 'Store')!;
     const client = run.page().nodes.find((node) => node.content.label === 'Client')!;
     await run.run('style', { ids: [store.id], fill: '#fde68a' });
     await run.run('move', { ids: [client.id], delta: { x: 40, y: 0 } });
-    const read = await run.run('get_diagram', { frameId: run.frame().id, diffOnly: true });
+    const read = await run.run('get_diagram', { frameId: run.frame().id, since: revision });
     // Both sides are serialized, so the palette name the author wrote (emerald) and its regenerated form (green)
     // do not show as a change; the move is not in the text at all and comes only through canvasEdits.
-    expect(read.output).toMatchObject({ edited: true, canvasEdits: expect.arrayContaining([expect.objectContaining({ id: client.id })]) });
+    expect(read.output).toMatchObject({ revision, edited: true, canvasEdits: expect.arrayContaining([expect.objectContaining({ id: client.id })]) });
     expect((read.output as { dslDiff: string }).dslDiff).toBe('@@ -4,5 +4,5 @@\n Client [blue]\n API [green]\n-Store [cylinder, red]\n+Store [cylinder, #fde68a]\n Client -> API\n API -> Store\n');
     expect(read.output).not.toHaveProperty('dsl');
 
     // No baseline to compare: the whole text, and why.
     const refusing = { ...run.capabilities, compileWorkspace: () => Promise.reject(new RangeError('layout outside the app stops at 1000 shapes')) };
-    const fallback = await resolveAgentOpCommand(op('get_diagram'), { diffOnly: true }, { ...run.context(), capabilities: refusing });
+    const fallback = await resolveAgentOpCommand(op('get_diagram'), { since: revision }, { ...run.context(), capabilities: refusing });
     expect(fallback.output).toMatchObject({ dsl: expect.stringContaining('Store [cylinder, #fde68a]'), dslDiffNote: expect.stringMatching(/Not compared: layout outside/) });
     expect(fallback.output).not.toHaveProperty('dslDiff');
+  });
+
+  // PR #94 review: the diff was taken against the frame's text as it is now, so after the person (or another agent)
+  // redrew the diagram from other text it read as "no change", and an agent editing its old copy overwrote theirs.
+  it('returns the whole text, not an empty diff, when the diagram was redrawn from other text since that revision', async () => {
+    const run = await host();
+    const created = await run.run('create_diagram', { dsl: 'flowchart\nA -> B' });
+    const { revision } = created.output as { revision: string };
+    expect(revision).toEqual(expect.any(String));
+    const updated = await run.run('update_diagram', { frameId: run.frame().id, dsl: 'flowchart\nA -> B\nB -> C [red]' });
+    const next = (updated.output as { revision: string }).revision;
+    expect(next).not.toBe(revision);
+
+    const read = await run.run('get_diagram', { frameId: run.frame().id, since: revision });
+    expect(read.output).toMatchObject({
+      revision: next, edited: false, dsl: 'flowchart\nA -> B\nB -> C [red]', dslDiffNote: expect.stringMatching(/is not this diagram's current revision/),
+    });
+    expect(read.output).not.toHaveProperty('dslDiff');
+    expect((await run.run('get_diagram', { frameId: run.frame().id, since: next })).output).toMatchObject({ revision: next, dslDiff: '' });
+  });
+
+  // PR #94 review: the revision was a 32-bit hash, so two texts could share one and a redraw read as "no change".
+  it('tells two texts apart that a 32-bit hash would not', async () => {
+    const run = await host();
+    const { revision } = (await run.run('create_diagram', { dsl: 'flowchart\nA -> B229599' })).output as { revision: string };
+    expect(revision).toMatch(/^[0-9a-f]{16}$/);
+    const next = (await run.run('update_diagram', { frameId: run.frame().id, dsl: 'flowchart\nA -> B432382' })).output as { revision: string };
+    expect(next.revision).not.toBe(revision);
+    const read = await run.run('get_diagram', { frameId: run.frame().id, since: revision });
+    expect(read.output).toMatchObject({ dsl: 'flowchart\nA -> B432382' });
+    expect(read.output).not.toHaveProperty('dslDiff');
+  });
+
+  // A revision that is not this frame's, for whatever reason (another frame's, a mistyped one), is not a redraw claim.
+  it('says the revision given is not the current one, without guessing why', async () => {
+    const run = await host();
+    const { revision } = (await run.run('create_diagram', { dsl: 'flowchart\nA -> B' })).output as { revision: string };
+    const read = await run.run('get_diagram', { frameId: run.frame().id, since: 'garbage' });
+    expect(read.output).toMatchObject({
+      revision, dsl: 'flowchart\nA -> B',
+      dslDiffNote: `Not compared: revision garbage is not this diagram's current revision (${revision}), so this is the whole text.`,
+    });
+  });
+
+  // A frame with no authored text (made before frames kept it) has no revision; `since` gets the whole text and why.
+  it('has a null revision, and returns the whole text for since, on a frame with no authored text', async () => {
+    const run = await host();
+    await run.run('create_diagram', { dsl: 'flowchart\nA -> B' });
+    const document = run.document();
+    const page = document.pages[0]!;
+    const nodes = page.nodes.map((node) => {
+      if (node.kind !== 'frame') return node;
+      const { source: _source, ...dsl } = node.metadata.dsl as Record<string, unknown>;
+      return { ...node, metadata: { ...node.metadata, dsl } } as typeof node;
+    });
+    const bare = { ...document, pages: [{ ...page, nodes }, ...document.pages.slice(1)] } as SceneDocumentV1;
+    const read = await resolveAgentOpCommand(op('get_diagram'), { since: 'anything' }, { ...run.context(), document: bare });
+    expect(read.output).toMatchObject({
+      revision: null, dsl: expect.stringContaining('A -> B'), dslDiffNote: 'Not compared: this frame has no authored text to compare the canvas against.',
+    });
+    expect(read.output).not.toHaveProperty('dslDiff');
+  });
+
+  it('keeps the revision through canvas edits and the same text drawn again', async () => {
+    const run = await host();
+    const { revision } = (await run.run('create_diagram', { dsl: FLOW })).output as { revision: string };
+    const frameId = run.frame().id;
+    const store = run.page().nodes.find((node) => node.content.label === 'Store')!;
+    await run.run('style', { ids: [store.id], fill: '#fde68a' });
+    await run.run('move', { ids: [store.id], delta: { x: 40, y: 0 } });
+    expect((await run.run('get_diagram', { frameId })).output).toMatchObject({ revision, edited: true });
+    expect((await run.run('get_diagram', { frameId })).output).toMatchObject({ revision });
+
+    // A second frame of the same text: its ids are renamed apart, which changes its scene hash but not its text.
+    expect((await run.run('create_diagram', { dsl: FLOW })).output).toMatchObject({ revision });
+    expect(run.frame(1).id).not.toBe(frameId);
+    expect((await run.run('get_diagram', { frameId: run.frame(1).id })).output).toMatchObject({ revision, edited: false });
+    expect((await run.run('update_diagram', { frameId, dsl: FLOW })).output).toMatchObject({ revision });
+    expect((await run.run('get_diagram', { frameId })).output).toMatchObject({ revision, edited: false });
+  });
+
+  // Generate in Edit as code swaps the frame for one compiled from the panel's text, with the panel's palette.
+  it('changes the revision when the code panel redraws the diagram from new text or another palette', async () => {
+    const run = await host();
+    const { revision } = (await run.run('create_diagram', { dsl: 'flowchart\ntitle: One\nA -> B' })).output as { revision: string };
+    const generate = async (text: string, palette: DiagramPaletteName) => {
+      const frame = run.frame();
+      const workspace = await run.capabilities.compileWorkspace(text, { origin: frame.transform.translation, appearance: { palette } });
+      const command = buildDslPageCommand(run.page(), workspace.views[0]!.result, frame.id);
+      if (command) run.apply(command);
+      return (await run.run('get_diagram', { frameId: frame.id, since: revision })).output as { revision: string };
+    };
+    expect(await generate('flowchart\ntitle: One\nA -> B', 'pastel')).toMatchObject({ revision, dslDiff: '' });
+    // A new title alone leaves every shape as it was: the scene hash stays, the revision must not.
+    const retitled = await generate('flowchart\ntitle: Two\nA -> B', 'pastel');
+    expect(retitled).toMatchObject({ dsl: 'flowchart\ntitle: Two\nA -> B', dslDiffNote: expect.stringMatching(/is not this diagram's current revision/) });
+    expect(retitled.revision).not.toBe(revision);
+    const repainted = await generate('flowchart\ntitle: Two\nA -> B', 'mono');
+    expect(repainted.revision).not.toBe(retitled.revision);
   });
 
   it('names canvas edits on a C4 view frame against that view', async () => {

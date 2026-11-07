@@ -1,31 +1,61 @@
 // A unified line diff of two DSL texts, so an agent can read what changed instead of the whole text again.
 
-/** Each line of `before` and `after` as kept, removed or added, in order (longest common subsequence). */
-function lineEdits(before: readonly string[], after: readonly string[]) {
-  const rows = before.length;
-  const cols = after.length;
-  // common[i][j]: the longest common run of before[i..] and after[j..].
-  const common = Array.from({ length: rows + 1 }, () => new Uint32Array(cols + 1));
-  for (let i = rows - 1; i >= 0; i -= 1) {
-    for (let j = cols - 1; j >= 0; j -= 1) {
-      common[i]![j] = before[i] === after[j] ? common[i + 1]![j + 1]! + 1 : Math.max(common[i + 1]![j]!, common[i]![j + 1]!);
+type LineEdit = { readonly op: ' ' | '-' | '+'; readonly text: string };
+
+/**
+ * Each line of `before` and `after` as kept, removed or added, in order (longest common subsequence). The lines both
+ * texts start and end with need no table: a shared start is kept line by line, and a shared end adds the same to every
+ * entry of the table, so leaving it out changes none of the choices.
+ */
+function lineEdits(before: readonly string[], after: readonly string[]): LineEdit[] {
+  let start = 0;
+  while (start < before.length && start < after.length && before[start] === after[start]) start += 1;
+  let rows = before.length;
+  let cols = after.length;
+  while (rows > start && cols > start && before[rows - 1] === after[cols - 1]) {
+    rows -= 1;
+    cols -= 1;
+  }
+  // ponytail: O(n·m) in the changed middle, bounded by the canvas-edit caps (1000 shapes) — Myers' O(ND) past them.
+  // common[i - start][j - start]: the longest common run of before[i..rows) and after[j..cols).
+  const common = Array.from({ length: rows - start + 1 }, () => new Uint32Array(cols - start + 1));
+  const at = (i: number, j: number) => common[i - start]![j - start]!;
+  for (let i = rows - 1; i >= start; i -= 1) {
+    for (let j = cols - 1; j >= start; j -= 1) {
+      common[i - start]![j - start] = before[i] === after[j] ? at(i + 1, j + 1) + 1 : Math.max(at(i + 1, j), at(i, j + 1));
     }
   }
-  const edits: { readonly op: ' ' | '-' | '+'; readonly text: string }[] = [];
+  const edits: LineEdit[] = [];
   let i = 0;
   let j = 0;
-  while (i < rows || j < cols) {
-    if (i < rows && j < cols && before[i] === after[j]) {
+  while (i < rows && j < cols) {
+    if (before[i] === after[j]) {
       edits.push({ op: ' ', text: before[i]! });
       i += 1;
       j += 1;
-    } else if (i < rows && (j === cols || common[i + 1]![j]! >= common[i]![j + 1]!)) {
+    } else if (at(i + 1, j) >= at(i, j + 1)) {
       // On a tie the removal goes first, as diff -u prints a changed line.
       edits.push({ op: '-', text: before[i]! });
       i += 1;
     } else {
       edits.push({ op: '+', text: after[j]! });
       j += 1;
+    }
+  }
+  // One side's middle is used up. The other side's rest goes out (or in), keeping a line that matches the next line
+  // of the shared end, as the walk over a table of the whole texts does.
+  const adding = i === rows;
+  while (i < before.length || j < after.length) {
+    if (i < before.length && j < after.length && before[i] === after[j]) {
+      edits.push({ op: ' ', text: before[i]! });
+      i += 1;
+      j += 1;
+    } else if (adding) {
+      edits.push({ op: '+', text: after[j]! });
+      j += 1;
+    } else {
+      edits.push({ op: '-', text: before[i]! });
+      i += 1;
     }
   }
   return edits;
