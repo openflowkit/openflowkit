@@ -165,12 +165,15 @@ export function ThreadPopover(props: {
   readonly onEditMessage: (commentId: string, body: string) => void;
   readonly onDeleteMessage: (commentId: string) => void;
   readonly now: number;
+  /** Opens asking to delete the thread (Delete on its pin). */
+  readonly askDelete?: boolean;
 }): React.JSX.Element {
   const { thread, readOnly } = props;
   const [reply, setReply] = useDraft(draftKey.reply(thread.id));
   const [menuOpen, setMenuOpen] = useState(false);
-  // Deleting the opening message asks to delete the thread.
-  const [confirming, setConfirming] = useState(false);
+  // Every delete asks first, in the card: a reply (its id), or the thread (null; deleting the opening message is deleting it).
+  // Thread changes are not undo steps, so this is the only way back.
+  const [confirming, setConfirming] = useState<{ readonly commentId: string | null } | null>(props.askDelete ? { commentId: null } : null);
   const menuAnchor = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const count = thread.comments.length;
@@ -178,12 +181,16 @@ export function ThreadPopover(props: {
   const first = thread.comments[0]?.id;
   let body: ReactNode = null;
   if (confirming) {
+    const reply = confirming.commentId;
     body = (
       <div className="ofk-comment-confirm" role="alert">
-        <p>Delete this thread{count > 1 ? ` and its ${count} messages` : ''}?</p>
+        <p>{reply ? 'Delete this reply?' : `Delete this thread${count > 1 ? ` and its ${count} messages` : ''}?`}</p>
         <div>
-          <Button variant="danger" autoFocus onClick={() => { setConfirming(false); props.onDeleteThread(); }}>Delete thread</Button>
-          <Button variant="quiet" onClick={() => setConfirming(false)}>Cancel</Button>
+          <Button variant="danger" autoFocus onClick={() => {
+            setConfirming(null);
+            if (reply) props.onDeleteMessage(reply); else props.onDeleteThread();
+          }}>{reply ? 'Delete reply' : 'Delete thread'}</Button>
+          <Button variant="quiet" onClick={() => setConfirming(null)}>Cancel</Button>
         </div>
       </div>
     );
@@ -198,7 +205,7 @@ export function ThreadPopover(props: {
             <IconButton ref={menuAnchor} variant="quiet" label="Thread actions" aria-haspopup="menu" aria-expanded={menuOpen}
               icon={<Icon icon={IconDots} />} onClick={() => setMenuOpen((open) => !open)} />
             <Menu open={menuOpen} anchorRef={menuAnchor} onClose={() => setMenuOpen(false)} label="Thread actions" placement="bottom-end" data-comment-ui>
-              <MenuItem icon={<Icon icon={IconTrash} />} danger onSelect={() => setConfirming(true)}>Delete thread…</MenuItem>
+              <MenuItem icon={<Icon icon={IconTrash} />} danger onSelect={() => setConfirming({ commentId: null })}>Delete thread…</MenuItem>
             </Menu>
             <IconButton variant="quiet" label={thread.resolved ? 'Reopen thread' : 'Resolve thread'} icon={<Icon icon={IconCheck} />} onClick={props.onResolve} />
           </>
@@ -211,7 +218,7 @@ export function ThreadPopover(props: {
           <Message key={message.id} threadId={thread.id} message={message} now={props.now}
             canEdit={!readOnly && message.author.kind === 'human'}
             onEdit={(text) => props.onEditMessage(message.id, text)}
-            onDelete={() => (message.id === first ? setConfirming(true) : props.onDeleteMessage(message.id))} />
+            onDelete={() => setConfirming({ commentId: message.id === first ? null : message.id })} />
         ))}
       </ul>
       {readOnly ? null : (

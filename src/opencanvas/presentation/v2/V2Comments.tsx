@@ -35,7 +35,8 @@ const placementFor = (cameraRef: RefObject<CanvasCamera>, hostRef: RefObject<Pix
 
 type Open =
   | { readonly kind: 'composer'; readonly world: Point2d; readonly nodeId: string | null }
-  | { readonly kind: 'thread'; readonly id: string };
+  /** `askDelete`: opened by Delete on its pin, asking to delete it. */
+  | { readonly kind: 'thread'; readonly id: string; readonly askDelete?: true };
 
 interface Props {
   readonly page: ScenePage;
@@ -122,6 +123,13 @@ function pinActions(
       setOpen(open?.kind === 'thread' && open.id === threadId ? null : { kind: 'thread', id: threadId });
     },
     key: (thread, event) => {
+      // Delete on a focused pin is about that pin, never the selected shapes: it asks to delete the thread, as its menu does.
+      if (event.key === 'Delete' || event.key === 'Backspace') {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!latest.current.readOnly) setOpen({ kind: 'thread', id: thread.id, askDelete: true });
+        return;
+      }
       const by = latest.current.readOnly ? null : pinNudge(event.key, event.altKey, event.shiftKey);
       if (!by) return;
       event.preventDefault();
@@ -278,7 +286,8 @@ export const V2Comments = memo(function V2Comments(props: Props): React.JSX.Elem
           <CommentPin key={thread.id} thread={thread} world={drag?.id === thread.id ? drag.world : riding?.get(thread.id) ?? thread.anchor.point}
             selected={selected} dragging={drag?.id === thread.id} actions={actions}>
             {selected && openThread ? (
-              <ThreadPopover thread={openThread} readOnly={readOnly} now={now}
+              <ThreadPopover key={open?.kind === 'thread' && open.askDelete ? 'ask' : 'open'} thread={openThread} readOnly={readOnly} now={now}
+                askDelete={open?.kind === 'thread' && open.askDelete}
                 onClose={close}
                 onResolve={() => { updateThreads((doc) => setThreadResolved(doc, thread.id, !thread.resolved)); setOpen(null); }}
                 onDeleteThread={() => { updateThreads((doc) => removeThread(doc, thread.id)); drafts.dropThread(thread.id); setOpen(null); }}

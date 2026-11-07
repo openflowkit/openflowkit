@@ -229,3 +229,41 @@ describe('unsent text', () => {
     expect(thread()).toBeNull();
   });
 });
+
+describe('deleting', () => {
+  const twoMessages = (): SceneDocumentV1 => {
+    const doc = withThread('opening');
+    const page = doc.pages[0]!;
+    const thread = page.threads![0]!;
+    const reply = { id: 'm2', author: human, body: 'a reply', createdAt: new Date().toISOString() };
+    return { ...doc, pages: [{ ...page, threads: [{ ...thread, comments: [...thread.comments, reply] }] }] };
+  };
+
+  it('a reply asks first, as the opening message does, and Cancel keeps it', () => {
+    let latestDoc = twoMessages();
+    render(<Harness initial={latestDoc} tool="select" onDoc={(doc) => { latestDoc = doc; }} />);
+    fireEvent.click(pinButton());
+    const deleteReply = () => {
+      fireEvent.click(screen.getAllByRole('button', { name: 'Comment actions' })[1]!);
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
+    };
+    deleteReply();
+    expect(screen.getByRole('alert')).toHaveTextContent('Delete this reply?');
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.getAllByTestId('v2-comment-message')).toHaveLength(2);
+    deleteReply();
+    fireEvent.click(screen.getByRole('button', { name: 'Delete reply' }));
+    expect(screen.getAllByTestId('v2-comment-message')).toHaveLength(1);
+    expect(latestDoc.pages[0]!.threads![0]!.comments.map((comment) => comment.body)).toEqual(['opening']);
+  });
+
+  it('Delete on a focused pin never reaches the editor (no shape is deleted); it asks to delete that thread', () => {
+    const outer = vi.fn();
+    render(<div onKeyDown={outer}><Harness initial={withThread()} tool="select" /></div>);
+    fireEvent.keyDown(pinButton(), { key: 'Delete' });
+    fireEvent.keyDown(pinButton(), { key: 'Backspace' });
+    expect(outer).not.toHaveBeenCalled();
+    expect(thread()).not.toBeNull();
+    expect(screen.getByRole('alert')).toHaveTextContent('Delete this thread?');
+  });
+});

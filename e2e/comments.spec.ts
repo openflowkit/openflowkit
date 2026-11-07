@@ -133,6 +133,38 @@ test('deleting a thread asks first, in the app and not in the browser', async ({
   expect(await threads(page)).toHaveLength(0);
 });
 
+test('a reply is deleted only after asking; Delete on a focused pin asks about its thread and leaves the shapes alone', { tag: '@gate' }, async ({ page }) => {
+  const { centre } = await start(page);
+  await comment(page, centre, 'Opening');
+  const pin = page.getByTestId('v2-comment-pin').getByRole('button');
+  const thread = page.getByTestId('v2-comment-thread');
+  await pin.click();
+  await thread.getByRole('textbox', { name: 'Reply' }).fill('A reply');
+  await thread.getByRole('textbox', { name: 'Reply' }).press('Enter');
+  await thread.getByTestId('v2-comment-message').nth(1).getByRole('button', { name: 'Comment actions' }).click();
+  await page.getByRole('menuitem', { name: 'Delete' }).click();
+  await expect(thread.getByRole('alert')).toContainText('Delete this reply?');
+  await shot(page, 'comment-delete-reply');
+  await thread.getByRole('button', { name: 'Cancel' }).click();
+  await expect(thread.getByTestId('v2-comment-message')).toHaveCount(2);
+  await thread.getByTestId('v2-comment-message').nth(1).getByRole('button', { name: 'Comment actions' }).click();
+  await page.getByRole('menuitem', { name: 'Delete' }).click();
+  await thread.getByRole('button', { name: 'Delete reply' }).click();
+  await expect(thread.getByTestId('v2-comment-message')).toHaveCount(1);
+  // The shape stays selected while a pin has focus: Delete is the pin's, and asks.
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('v');
+  await page.mouse.click(centre.x + 20, centre.y + 20);
+  await expect.poll(async () => (await api(page, (v2) => v2.getState())).nodes.length).toBe(1);
+  await pin.focus();
+  await page.keyboard.press('Delete');
+  await expect(thread.getByRole('alert')).toContainText('Delete this thread?');
+  expect((await api(page, (v2) => v2.getState())).nodes).toHaveLength(1);
+  await thread.getByRole('button', { name: 'Delete thread' }).click();
+  await expect(page.getByTestId('v2-comment-pin')).toHaveCount(0);
+  expect((await api(page, (v2) => v2.getState())).nodes).toHaveLength(1);
+});
+
 test('undo never removes a comment, and a comment adds no undo step', async ({ page }) => {
   const { centre } = await start(page);
   await comment(page, centre, 'Stays');
