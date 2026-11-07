@@ -1,6 +1,6 @@
 import type { SceneDocumentV1, ScenePage } from '../document/types';
 import { validateSceneDocumentV1 } from '../document/validation';
-import { withFreeThreadNumbers } from '../threads/threads';
+import { carryThreads, withFreeThreadNumbers } from '../threads/threads';
 import { areStructurallyEqual } from './equality';
 import type {
   AppliedDocumentCommand,
@@ -365,11 +365,16 @@ function requireValidDocument(document: SceneDocumentV1): void {
   }
 }
 
+/**
+ * Every command goes through here: undo history and the agent's file path (runAgentOp) alike. A command changes
+ * shapes, never threads, and pins follow their nodes (carryThreads).
+ */
 export function applyDocumentCommand(
   document: SceneDocumentV1,
   command: DocumentCommand
 ): AppliedDocumentCommand {
   const applied = applyUnchecked(document, command);
-  requireValidDocument(applied.document);
-  return applied;
+  const result = carryThreads(applied.document, document);
+  requireValidDocument(result);
+  return result === applied.document ? applied : { ...applied, document: result };
 }

@@ -11,11 +11,6 @@ separately; its changes are listed under *For developers* in each release.
 
 ### Added
 
-- **Comment threads in the document.** A page can now hold threads of comments (`pages[].threads`), each with a number
-  unique across the document. Threads are not part of undo history, the diagram text or the diagram's content:
-  undo and redo keep them, including on a page that is added, duplicated or deleted and brought back. JSON exports and
-  share links leave them out; a bad thread in a file is dropped with a console warning and the rest of the diagram
-  loads. Agents can write them (see Agent thread tools below).
 - **Agent thread tools.** Agents can read the threads pinned on the canvas (`list_threads`, with optional `threadId`
   and `unanswered` filters), add a comment to one (`reply_to_thread`), resolve it (`resolve_thread`) and start new ones
   (`start_thread`), live or on a file, signed with the agent's name. None of it is an undo step or part of the diagram

@@ -6,9 +6,11 @@ import { isJsonObject } from './json';
 import { validateNodeContentLayout } from '../node-layout/model';
 import { validateNodeSizingPolicy } from '../node-sizing/model';
 import {
+  COMMENT_AUTHOR_MAX,
   COMMENT_BODY_MAX,
   SCENE_DOCUMENT_FORMAT,
   SCENE_DOCUMENT_VERSION,
+  THREAD_NUMBER_MAX,
   type ConnectorEndpoint,
   type ConnectorLabel,
   type ConnectorRouteIntent,
@@ -160,6 +162,13 @@ function isConnector(value: unknown): value is SceneConnector {
   );
 }
 
+// An ISO 8601 time as toISOString writes it (an offset in place of Z is fine) that names a real instant.
+const ISO_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/;
+
+export function isIsoTimestamp(value: unknown): value is string {
+  return typeof value === 'string' && ISO_TIMESTAMP.test(value) && !Number.isNaN(Date.parse(value));
+}
+
 function isComment(value: unknown): value is SceneComment {
   return (
     isRecord(value) &&
@@ -167,10 +176,11 @@ function isComment(value: unknown): value is SceneComment {
     isRecord(value.author) &&
     (value.author.kind === 'human' || value.author.kind === 'agent') &&
     isNonEmptyString(value.author.name) &&
+    value.author.name.length <= COMMENT_AUTHOR_MAX &&
     isNonEmptyString(value.body) &&
     value.body.length <= COMMENT_BODY_MAX &&
-    isNonEmptyString(value.createdAt) &&
-    (value.editedAt === undefined || isNonEmptyString(value.editedAt))
+    isIsoTimestamp(value.createdAt) &&
+    (value.editedAt === undefined || isIsoTimestamp(value.editedAt))
   );
 }
 
@@ -181,6 +191,7 @@ function isThread(value: unknown): value is SceneThread {
     isNonEmptyString(value.id) &&
     Number.isSafeInteger(value.number) &&
     (value.number as number) > 0 &&
+    (value.number as number) <= THREAD_NUMBER_MAX &&
     isRecord(value.anchor) &&
     isNullableString(value.anchor.nodeId) &&
     (value.anchor.offset === null || isPoint2d(value.anchor.offset)) &&
@@ -216,8 +227,7 @@ function isPage(value: unknown): value is ScenePage {
     hasUniqueIds(value.connectors) &&
     isJsonObject(value.metadata) &&
     isJsonObject(value.extensions) &&
-    (value.threads === undefined ||
-      (Array.isArray(value.threads) && value.threads.every(isThread) && hasUniqueIds(value.threads)))
+    (value.threads === undefined || (Array.isArray(value.threads) && value.threads.every(isThread)))
   );
 }
 
@@ -354,8 +364,12 @@ export function validateSceneDocumentV1(value: unknown): DocumentValidationResul
   } else {
     if (!hasUniqueIds(value.pages))
       issues.push({ path: '$.pages', message: 'Page IDs must be unique.' });
-    const numbers = value.pages.flatMap((page) => (page.threads ?? []).map((thread) => thread.number));
-    if (new Set(numbers).size !== numbers.length) {
+    // Thread ids and numbers are unique across the document, not just the page (findThread, withFreeThreadNumbers).
+    const threads = value.pages.flatMap((page) => page.threads ?? []);
+    if (!hasUniqueIds(threads)) {
+      issues.push({ path: '$.pages', message: 'Thread IDs must be unique within the document.' });
+    }
+    if (new Set(threads.map((thread) => thread.number)).size !== threads.length) {
       issues.push({ path: '$.pages', message: 'Thread numbers must be unique within the document.' });
     }
     value.pages.forEach((page, index) =>

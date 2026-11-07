@@ -163,7 +163,7 @@ export function V2EditorOverlays(p: OverlaysProps): React.JSX.Element {
       ) : null}
       {panels.workspace === 'assistant' ? (
         <V2AgentPanel assistant={agents.assistant} proposal={p.proposal} aiSettings={agents.aiSettings}
-          currentRevision={session.revision} readOnly={p.docReadOnly}
+          currentRevision={session.contentRevision} readOnly={p.docReadOnly}
           diagramCount={agents.diagramCount} selectedDiagramCount={agents.selectedDiagramCount}
           onClose={panels.closeWorkspace} />
       ) : null}

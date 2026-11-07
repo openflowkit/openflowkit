@@ -3,8 +3,9 @@ import { validateSceneDocumentV1 } from '../../domain/document/validation';
 import { withoutThreads } from '../../domain/threads/threads';
 
 /**
- * The document as a file. Comment threads carry names and private conversation, so they stay out unless
- * the caller asks for them (`includeThreads`); this is the one place that decides.
+ * The document as an export: JSON export, a share link, the agent `export` op. Comment threads carry names and
+ * private conversation, so they stay out unless the caller asks for them (`includeThreads`). A diagram's own
+ * file keeps them (see withoutThreads).
  */
 export function serializeCanonicalJson(document: SceneDocumentV1, options: { readonly includeThreads?: boolean } = {}): string {
   const validation = validateSceneDocumentV1(document);
