@@ -34,7 +34,8 @@ export interface Proposal extends AiSceneProposal {
 
 interface CreateProposalInput {
   readonly document: SceneDocumentV1;
-  readonly revision: number;
+  /** The session's contentRevision the proposal is built on. */
+  readonly contentRevision: number;
   readonly source: string;
   readonly intent: string;
   readonly scope: ProposalScope;
@@ -47,7 +48,7 @@ export class StaleProposalError extends Error {
   readonly currentRevision: number;
 
   constructor(baseRevision: number, currentRevision: number) {
-    super(`Proposal built on revision ${baseRevision}; document is at ${currentRevision}.`);
+    super(`Proposal built on content revision ${baseRevision}; the diagram is at ${currentRevision}.`);
     this.name = 'StaleProposalError';
     this.baseRevision = baseRevision;
     this.currentRevision = currentRevision;
@@ -58,14 +59,14 @@ let proposalCounter = 0;
 
 export function createProposal(input: CreateProposalInput): Proposal {
   proposalCounter += 1;
-  const id = input.id ?? `proposal-${input.source}-${input.revision}-${proposalCounter}`;
+  const id = input.id ?? `proposal-${input.source}-${input.contentRevision}-${proposalCounter}`;
   const base = buildAiSceneProposal(input.document, id, input.changes);
   return {
     ...base,
     // Agent output is opt-out, like a diff review.
     changes: base.changes.map((change) => ({ ...change, status: 'accepted' })),
     source: input.source, intent: input.intent, scope: input.scope,
-    baseRevision: input.revision, status: 'pending',
+    baseRevision: input.contentRevision, status: 'pending',
   };
 }
 
@@ -78,10 +79,10 @@ export function decideChange(
 /** One flat batch of the non-rejected changes, or null when nothing survives.
  * Throws StaleProposalError before touching the document precondition. */
 export function applyCommand(
-  proposal: Proposal, currentRevision: number, currentDocument: SceneDocumentV1
+  proposal: Proposal, currentContentRevision: number, currentDocument: SceneDocumentV1
 ): BatchDocumentCommand | null {
-  if (currentRevision !== proposal.baseRevision) {
-    throw new StaleProposalError(proposal.baseRevision, currentRevision);
+  if (currentContentRevision !== proposal.baseRevision) {
+    throw new StaleProposalError(proposal.baseRevision, currentContentRevision);
   }
   const batch = acceptedAiProposalCommand(proposal, currentDocument);
   if (!batch || batch.kind !== 'batch') return null;

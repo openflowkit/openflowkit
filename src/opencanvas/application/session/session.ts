@@ -18,17 +18,11 @@ export class StaleSessionRevisionError extends Error {
 
   constructor(expectedRevision: number, actualRevision: number) {
     super(
-      `Stale session revision: expected ${expectedRevision}, session is at ${actualRevision}.`
+      `Stale content revision: expected ${expectedRevision}, the diagram is at ${actualRevision}.`
     );
     this.name = 'StaleSessionRevisionError';
     this.expectedRevision = expectedRevision;
     this.actualRevision = actualRevision;
-  }
-}
-
-function requireCurrentRevision(session: DocumentSession, expectedRevision: number): void {
-  if (expectedRevision !== session.revision) {
-    throw new StaleSessionRevisionError(expectedRevision, session.revision);
   }
 }
 
@@ -89,14 +83,13 @@ export function forgetSessionHistory(session: DocumentSession): DocumentSession 
 
 /**
  * A thread change (domain/threads): a new revision, so autosave and the agent bridge see it, but no undo
- * step and no content revision, and undo/redo of the steps around it keep it.
+ * step and no content revision, and undo/redo of the steps around it keep it. It needs no expected revision:
+ * `change` reads the session's document of now, so it can never be built on an older one.
  */
 export function updateSessionThreads(
   session: DocumentSession,
-  change: (document: SceneDocumentV1) => SceneDocumentV1,
-  expectedRevision: number
+  change: (document: SceneDocumentV1) => SceneDocumentV1
 ): DocumentSession {
-  requireCurrentRevision(session, expectedRevision);
   const document = change(session.document);
   if (document === session.document) return session;
   const valid = validateSceneDocumentV1(document);
