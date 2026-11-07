@@ -87,12 +87,12 @@ describe('revisioned document session', () => {
     const started = forgetSessionHistory(committed);
     expect(started.document).toBe(committed.document);
     expect(started.revision).toBe(committed.revision);
-    expect(undoSessionCommand(started, started.revision)).toBe(started);
+    expect(undoSessionCommand(started, started.contentRevision)).toBe(started);
   });
 
   it('keeps history when another step landed beside the template (an edit while it generated)', () => {
     const edited = commitSessionCommand(session(), renameCommand(), 0);
-    const both = commitSessionCommand(edited, renameCommand('Renamed', 'Again'), edited.revision);
+    const both = commitSessionCommand(edited, renameCommand('Renamed', 'Again'), edited.contentRevision);
     expect(forgetSessionHistory(both)).toBe(both);
   });
 });

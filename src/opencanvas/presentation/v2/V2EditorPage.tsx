@@ -271,7 +271,7 @@ export function V2EditorPage({ shared }: { readonly shared?: V2SharedView } = {}
   });
 
   const proposal = useV2Proposal({
-    document: session.document, revision: session.revision, pageId: page?.id ?? null,
+    document: session.document, contentRevision: session.contentRevision, pageId: page?.id ?? null,
     commit: commit, readOnly: docReadOnly,
     announce: setAnnouncement, compileDsl: compileDraft,
   });
@@ -286,12 +286,10 @@ export function V2EditorPage({ shared }: { readonly shared?: V2SharedView } = {}
     load, page, rendererStatus, startIntent, generating: code.generating, map, repoSource, repoStatus: repo.state.status,
   });
 
-  const revisionRef = useRef(session.revision);
-  revisionRef.current = session.revision;
   const pages = useV2Pages({
     document: session.document, pageId: page?.id ?? null, readOnly: load.readOnly || repo.broken, lockedPageId: repo.lockedPageId,
     commit: commit, onSelect: setActivePageId, mintId: mintV2Id,
-    announce: setAnnouncement, toast: pushToast, undo: () => session.undo(), revision: () => revisionRef.current,
+    announce: setAnnouncement, toast: pushToast, undo: () => session.undo(), contentRevision: session.currentContentRevision,
   });
   useV2PageFit({ camera, panels, session, page, pageRef, hostRef, fitKey, rendererStatus, mapActive: map.active, keepCameraOnPage });
 

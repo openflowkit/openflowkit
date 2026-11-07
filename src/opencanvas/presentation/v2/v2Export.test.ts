@@ -3,6 +3,7 @@ import { applyDocumentCommand } from '../../domain/commands/execute';
 import type { DocumentCommand } from '../../domain/commands/types';
 import { migrateSceneDocument } from '../../domain/document/migration';
 import type { ScenePage } from '../../domain/document/types';
+import { addThread } from '../../domain/threads/threads';
 import { createEmptyV2Document } from './v2Document';
 import {
   buildInsertConnectorCommand,
@@ -64,5 +65,23 @@ describe('slug', () => {
     expect(slug('流程图 2', 'x')).toBe('流程图-2');
     expect(slug('Диаграмма', 'x')).toBe('диаграмма');
     expect(slug('🚀', 'diagram')).toBe('diagram');
+  });
+});
+
+describe('comment threads in a JSON export', () => {
+  const base = labeledConnectedDocument();
+  const document = addThread(base, {
+    pageId: base.pages[0]!.id, threadId: 't1', nodeId: null, point: { x: 0, y: 0 },
+    comment: { id: 'm1', author: { kind: 'human', name: 'Ada' }, body: 'private note', createdAt: '2026-10-26T12:00:00.000Z' },
+  });
+  const request = { document, format: 'json' as const, scope: 'document' as const, pageId: base.pages[0]!.id };
+
+  it('are left out by default and put in on request', async () => {
+    const [plain] = await buildV2Export(request);
+    expect(plain!.text).not.toContain('private note');
+    const [included] = await buildV2Export({ ...request, includeThreads: true });
+    expect(included!.text).toContain('private note');
+    expect(buildV2JsonExport(request.document).json).not.toContain('private note');
+    expect(buildV2JsonExport(request.document, { includeThreads: true }).json).toContain('private note');
   });
 });

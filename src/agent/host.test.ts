@@ -10,6 +10,7 @@ import type { IconMatch } from './ops/types';
 
 const MANIFEST = JSON.parse(manifestText) as IconMatch[];
 import { findAgentOp } from './ops';
+import { addThread } from '../opencanvas/domain/threads/threads';
 
 const GRAMMAR = `# OpenFlow DSL
 
@@ -113,6 +114,13 @@ describe('file host', () => {
 
     const json = await host.exportFiles!({ document: documentWithFrame, format: 'json', scope: 'document', pageId: 'doc-host:page-1' });
     expect(JSON.parse(json[0]!.text!)).toMatchObject({ id: 'doc-host' });
+    // Comment threads are private conversation: the host never writes them into a file.
+    const commented = addThread(documentWithFrame, {
+      pageId: 'doc-host:page-1', threadId: 't1', nodeId: null, point: { x: 0, y: 0 },
+      comment: { id: 'm1', author: { kind: 'human', name: 'Ada' }, body: 'private note', createdAt: '2026-10-26T12:00:00.000Z' },
+    });
+    const withThread = await host.exportFiles!({ document: commented, format: 'json', scope: 'document', pageId: 'doc-host:page-1' });
+    expect(withThread[0]!.text).not.toContain('private note');
 
     const pdf = await host.exportFiles!({ document: documentWithFrame, format: 'pdf', scope: 'page', pageId: 'doc-host:page-1' });
     expect(pdf[0]?.mime).toBe('text/html');

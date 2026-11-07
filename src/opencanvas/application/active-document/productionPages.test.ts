@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { applyDocumentCommand } from '../../domain/commands/execute';
+import { validateSceneDocumentV1 } from '../../domain/document/validation';
 import { createTestDocument } from '../../testing/builders/documentBuilder';
 import {
   buildProductionDuplicatePageCommand,
@@ -30,6 +31,16 @@ describe('production page organization', () => {
     expect(removed.document.pages.map((page) => page.id)).toEqual(['page-1', 'page-3']);
     expect(applyDocumentCommand(removed.document, removed.inverse).document)
       .toEqual(duplicated.document);
+  });
+
+  it('duplicating a page copies the diagram, not its comment threads', () => {
+    const base = createTestDocument();
+    const thread = { id: 't1', number: 1, anchor: { nodeId: null, offset: null, point: { x: 0, y: 0 } }, resolved: false, comments: [{ id: 'm1', author: { kind: 'human' as const, name: 'Ada' }, body: 'hi', createdAt: '2026-10-26T12:00:00.000Z' }] };
+    const document = { ...base, pages: [{ ...base.pages[0]!, threads: [thread] }] };
+    const duplicated = applyDocumentCommand(document, buildProductionDuplicatePageCommand(document, 'page-1', 'page-2'));
+    expect(duplicated.document.pages[0]!.threads).toEqual([thread]);
+    expect(duplicated.document.pages[1]!.threads).toBeUndefined();
+    expect(validateSceneDocumentV1(duplicated.document).success).toBe(true);
   });
 
   it('rejects deleting the only page and detects rename no-ops', () => {
