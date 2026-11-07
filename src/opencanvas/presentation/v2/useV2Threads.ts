@@ -40,7 +40,6 @@ export function useV2Threads(input: ThreadsInput) {
   const { page, setActivePageId, panels, camera, rendererReady, lockedMapPageId, preferences, updatePreferences, pushToast, readOnly } = input;
   const { document, updateThreads } = input.session;
   const mapActive = input.map.active;
-  const leaveMap = useCallback(() => input.map.choose('canvas'), [input.map]);
   const [query, setQuery] = useState('');
   // The panel opened by itself (a link): it leaves focus where it was. Picking the comment tool never opens or closes a panel.
   const [quiet, setQuiet] = useState(false);
@@ -51,11 +50,15 @@ export function useV2Threads(input: ThreadsInput) {
   const [pending, setPending] = useState<OpenThreadRequest | null>(null);
   const [request, setRequest] = useState<OpenThreadRequest | null>(null);
   const seq = useRef(0);
+  // The request whose way out of Map has been asked for.
+  const leftMapFor = useRef(0);
   const filters = useMemo(() => ({ showResolved: preferences.threadsShowResolved, unansweredOnly: preferences.threadsUnansweredOnly }), [preferences.threadsShowResolved, preferences.threadsUnansweredOnly]);
   const reads = preferences.threadReads;
   const latest = useRef({ reads, document, updatePreferences });
   const revealPin = useRef(camera.revealPin);
-  useEffect(() => { latest.current = { reads, document, updatePreferences }; revealPin.current = camera.revealPin; });
+  // `map` is a new object every render: the effects read the way out of Map as it is now, and never depend on it.
+  const chooseMode = useRef(input.map.choose);
+  useEffect(() => { latest.current = { reads, document, updatePreferences }; revealPin.current = camera.revealPin; chooseMode.current = input.map.choose; });
 
   const entries = useMemo(() => (document ? selectThreads(document, query, filters) : []), [document, query, filters]);
   const total = useMemo(() => (document ? collectThreads(document).length : 0), [document]);
@@ -96,20 +99,24 @@ export function useV2Threads(input: ThreadsInput) {
       pushToast({ id: 'thread-on-map', tone: 'info', title: `Thread #${found.thread.number} is on the map page`, description: 'Pins are not drawn in Map.' });
       return false;
     }
-    if (mapActive) leaveMap();
     if (page?.id !== found.page.id) setActivePageId(found.page.id);
     seq.current += 1;
+    if (mapActive) { chooseMode.current('canvas'); leftMapFor.current = seq.current; }
     setPending({ threadId, seq: seq.current });
     return true;
-  }, [document, page?.id, openPanel, mapActive, lockedMapPageId, leaveMap, setActivePageId, pushToast]);
+  }, [document, page?.id, openPanel, mapActive, lockedMapPageId, setActivePageId, pushToast]);
 
   // The page and renderer are ready: open the popover, then (after the panel has its width) bring the pin into view.
   useEffect(() => {
     if (!pending || !document) return;
     const found = findThread(document, pending.threadId);
     if (!found) { setPending(null); return; }
-    // The page switch can land in Map again (a page that opens in Map): leave it once the thread's page is the one shown.
-    if (page?.id === found.page.id && mapActive && found.page.id !== lockedMapPageId) { leaveMap(); return; }
+    // The page switch can land in Map again (a page that opens in Map): leave it once the thread's page is the one shown. Asked
+    // once per request, however often the editor renders while Map is still on its way out.
+    if (page?.id === found.page.id && mapActive && found.page.id !== lockedMapPageId) {
+      if (leftMapFor.current !== pending.seq) { leftMapFor.current = pending.seq; chooseMode.current('canvas'); }
+      return;
+    }
     if (page?.id !== found.page.id || mapActive || !rendererReady) return;
     setPending(null);
     setRequest(pending);
@@ -121,7 +128,15 @@ export function useV2Threads(input: ThreadsInput) {
       revealPin.current(point);
     };
     requestAnimationFrame(settle);
-  }, [pending, document, page?.id, mapActive, rendererReady, leaveMap, lockedMapPageId]);
+  }, [pending, document, page?.id, mapActive, rendererReady, lockedMapPageId]);
+
+  // Map entered after this request already took the editor out of it is the user's choice: the request is over.
+  const wasMap = useRef(mapActive);
+  const pendingSeq = pending?.seq;
+  useEffect(() => {
+    if (mapActive && !wasMap.current && pendingSeq !== undefined && leftMapFor.current === pendingSeq) setPending(null);
+    wasMap.current = mapActive;
+  }, [mapActive, pendingSeq]);
 
   // `#/d/<id>?thread=<threadId>`: open it once the document is up, then take the param off the address.
   const location = useLocation();
