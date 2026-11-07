@@ -217,3 +217,30 @@ describe('drawioToDocument', () => {
       .toEqual({ error: 'It has no shapes or connectors in it.' });
   });
 });
+
+describe('broken draw.io input', () => {
+  const page = (cells: string) => `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${cells}</root></mxGraphModel>`;
+  const box = (id: string, parent = '1') =>
+    `<mxCell id="${id}" value="${id}" style="rounded=1;" vertex="1" parent="${parent}"><mxGeometry x="10" y="10" width="80" height="40" as="geometry"/></mxCell>`;
+
+  it('never throws: a parent loop, a self-parent and a missing parent each say what was left out', async () => {
+    const loop = page(`${box('a', 'b')}${box('b', 'a')}${box('ok')}`);
+    const self = page(`${box('s', 's')}${box('ok')}`);
+    const missing = page(`${box('m', 'nowhere')}${box('ok')}`);
+    expect(await open(loop)).toMatchObject({ losses: ['2 shapes or connectors sit in a parent loop or under a missing parent, so they were left out'] });
+    expect(await open(self)).toMatchObject({ losses: ['1 shape or connector sits in a parent loop or under a missing parent, so it was left out'] });
+    expect(await open(missing)).toMatchObject({ losses: ['1 shape or connector sits in a parent loop or under a missing parent, so it was left out'] });
+  });
+
+  it('says when two cells share an id and keeps the first', async () => {
+    const { document, losses } = await open(page(`${box('dup')}${box('dup')}`));
+    expect(document.pages[0]!.nodes.map((node) => node.id)).toEqual(['dup']);
+    expect(losses).toEqual(['two cells share the id “dup”, so the later one was left out']);
+  });
+
+  it('refuses an empty file, text that is not XML, and XML that is not draw.io, each with a reason', async () => {
+    expect(await drawioToDocument('', 'doc', NOW)).toHaveProperty('error');
+    expect(await drawioToDocument('just some text', 'doc', NOW)).toHaveProperty('error');
+    expect(await drawioToDocument('<svg xmlns="http://www.w3.org/2000/svg"/>', 'doc', NOW)).toEqual({ error: 'It has no draw.io pages in it.' });
+  });
+});

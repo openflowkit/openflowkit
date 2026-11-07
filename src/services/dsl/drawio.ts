@@ -175,11 +175,30 @@ class PageBuilder {
   private libraryImages = 0;
 
   constructor(cells: readonly Cell[], private readonly loss: (message: string) => void) {
-    for (const cell of cells) this.cells.set(cell.id, cell);
+    for (const cell of cells) {
+      if (this.cells.has(cell.id)) { loss(`two cells share the id “${cell.id}”, so the later one was left out`); continue; }
+      this.cells.set(cell.id, cell);
+    }
   }
 
   build(): void {
-    const root = [...this.cells.values()].find((cell) => cell.parent === null || !this.cells.has(cell.parent));
+    const root = [...this.cells.values()].find((cell) => cell.parent === null) ?? [...this.cells.values()].find((cell) => !this.cells.has(cell.parent ?? ''));
+    // Only cells whose parent chain ends at the page's root are drawn; a loop or a missing parent never reaches it.
+    const reachesRoot = (cell: Cell): boolean => {
+      const seen = new Set<string>();
+      for (let at: Cell | undefined = cell; at && !seen.has(at.id); ) {
+        seen.add(at.id);
+        if (at.parent === root?.id) return true;
+        at = at.parent ? this.cells.get(at.parent) : undefined;
+      }
+      return false;
+    };
+    const stranded = [...this.cells.values()].filter((cell) => cell !== root && !reachesRoot(cell)).length;
+    if (stranded) {
+      this.loss(stranded === 1
+        ? '1 shape or connector sits in a parent loop or under a missing parent, so it was left out'
+        : `${stranded} shapes or connectors sit in a parent loop or under a missing parent, so they were left out`);
+    }
     const layerCells = [...this.cells.values()].filter((cell) => cell !== root && cell.parent === root?.id && !cell.vertex && !cell.edge);
     for (const [index, cell] of layerCells.entries()) {
       this.layers.push({
@@ -189,7 +208,7 @@ class PageBuilder {
     }
     if (!this.layers.length) this.layers.push({ id: 'layer:default', name: 'Default', visible: true, locked: false });
     for (const layer of layerCells) this.addChildren(layer.id, null, `layer:${layer.id}`);
-    for (const cell of this.cells.values()) if (cell.edge) this.addConnector(cell);
+    for (const cell of this.cells.values()) if (cell.edge && reachesRoot(cell)) this.addConnector(cell);
     if (this.rerouted) this.loss(this.rerouted === 1 ? '1 right-angle connector is re-routed, so its bends may move' : `${this.rerouted} right-angle connectors are re-routed, so their bends may move`);
     if (this.libraryImages) {
       this.loss(`${this.libraryImages === 1 ? '1 picture comes' : `${this.libraryImages} pictures come`} from draw.io’s own image library, so ${this.libraryImages === 1 ? 'it is' : 'they are'} drawn as a box`);
