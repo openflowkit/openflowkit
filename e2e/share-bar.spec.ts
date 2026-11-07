@@ -61,6 +61,30 @@ test('an editable link carries the diagram’s code and opens as a new copy @gat
   await expect(copy.getByRole('textbox', { name: 'Diagram source' })).toHaveValue(/Cart -> Payment -> Receipt/);
 });
 
+test('an editable link keeps the palette picked in the code panel @gate', async ({ page, context, browser }) => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+  type Api = { getNodeDebugSnapshot(): readonly { readonly fill: number }[] | undefined };
+  const fills = (target: typeof page) => target.evaluate(() => ((window as unknown as { __V2__?: Api }).__V2__?.getNodeDebugSnapshot() ?? []).map((node) => node.fill));
+  await page.getByRole('toolbar', { name: 'Workspace', exact: true }).getByRole('button', { name: 'Diagram as code' }).click();
+  const source = page.getByRole('textbox', { name: 'Diagram source' });
+  await source.fill('flowchart right\nCart [blue] -> Payment [emerald]');
+  await page.getByRole('radio', { name: 'Mono', exact: true }).check();
+  await page.getByRole('button', { name: /^Generate diagram/ }).click();
+  await expect.poll(async () => (await fills(page)).length).toBe(3);
+  const drawn = await fills(page);
+  await bar(page).getByRole('button', { name: 'Share', exact: true }).click();
+  const share = page.getByRole('dialog', { name: 'Share' });
+  await share.getByRole('radio', { name: /Editable copy/ }).check();
+  await share.getByRole('button', { name: 'Copy editable link' }).click();
+  await expect(page.getByText('Editable link copied')).toBeVisible();
+  // Someone else's browser: the picker's remembered palette is the sender's, not theirs.
+  const copy = await (await browser.newContext()).newPage();
+  await copy.goto(await page.evaluate(() => navigator.clipboard.readText()));
+  await expect.poll(() => copy.url(), { timeout: 20_000 }).toContain('#/d/');
+  await expect.poll(async () => (await fills(copy)).length).toBe(3);
+  expect(await fills(copy)).toEqual(drawn);
+});
+
 test('a right panel keeps the bar and the rail to its left @gate', async ({ page }) => {
   await page.getByRole('toolbar', { name: 'Workspace', exact: true }).getByRole('button', { name: 'Diagram as code' }).click();
   const panel = await box(page.getByRole('complementary').first());

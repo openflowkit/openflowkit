@@ -9,7 +9,7 @@ place as OpenFlow DSL. Mermaid pasted straight onto the canvas (`⌘V`) is conve
 in place, with the code panel open on the converted text. On Home, **Import** takes the same
 languages as files (`.mmd`, `.mermaid`, `.d2`, `.dsl`), one at a time, and draws the file as a
 new diagram; the
-editor's **Open file…** reads only `.json`. Agents skip the panel: `create_diagram`, `update_diagram` and
+editor's **Open file…** takes the same files. Agents skip the panel: `create_diagram`, `update_diagram` and
 `validate_openflow_dsl` take the same text and answer with `converted.dsl` and
 `converted.losses` ([MCP Server](/mcp-server/)).
 

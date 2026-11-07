@@ -25,7 +25,7 @@ export function buildHomeCommands({ documents, dark, fileRef, create, navigate, 
   ...STARTS.filter(({ intent }) => intent).map(({ kind, title, intent }) => ({
     id: `start-${kind}`, group: 'Create', label: title, icon: <Icon icon={CHIP_ICON[kind]} />, run: () => create(intent),
   })),
-  { id: 'import', group: 'Create', label: 'Import a file…', icon: <Icon icon={IconUpload} />, keywords: ['open', 'json', 'mermaid', 'd2'], run: () => fileRef.current?.click() },
+  { id: 'import', group: 'Create', label: 'Import a file…', icon: <Icon icon={IconUpload} />, keywords: ['open', 'json', 'excalidraw', 'mermaid', 'd2'], run: () => fileRef.current?.click() },
   ...VIEWS.map(({ view: target, title, icon }) => ({
     id: `view-${target}`, group: 'Go to', label: title, icon: <Icon icon={icon} />, run: () => navigate(viewLink(target)),
   })),

@@ -3,7 +3,7 @@
 // serves both entry points — the canvas menu's Export… and an element's
 // context menu — so scope always matches what the user pointed at.
 import { useState } from 'react';
-import { dslFrames, frameScene, frameSource } from '../../../dsl/frameScene';
+import { dslFrames, frameScene, frameText } from '../../../dsl/frameScene';
 import { diagramToMermaid, mermaidLossSummary } from '../../../dsl/mermaid/toMermaid';
 import { dslFrameMeta } from '../../../dsl/sceneMeta';
 import { IconChevronRight, IconCode, IconCopy, IconDownload, IconLink, IconLinkOff, IconLock, IconMovie, IconPhoto } from '@tabler/icons-react';
@@ -215,7 +215,7 @@ export function V2ExportMenu({
     if (!mermaidTarget || !scene) return;
     setSharing('code');
     try {
-      const url = await dslLink(frameSource(scene), appBaseUrl(window.location.href), whole.name);
+      const url = await dslLink(frameText(scene), appBaseUrl(window.location.href), whole.name);
       if (!url) {
         onToast('Too long for an editable link', 'danger', { description: canShare ? 'Share a view-only link instead, or send the file.' : 'Send the file instead.' });
         return;

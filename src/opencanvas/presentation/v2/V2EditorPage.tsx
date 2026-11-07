@@ -253,7 +253,7 @@ export function V2EditorPage({ shared }: { readonly shared?: V2SharedView } = {}
   useEffect(() => { readOnlyRef.current = editLocked; }, [editLocked]);
   const { labelEditing, openEditor, connectorLabel, editActions } = useV2EditorEditing({
     session, page, pageRef, hostRef, camera, selectionRef, selectedConnectorId, selectedConnectorIds, applySelection, applyConnectorSelection, selectNodes,
-    commit, writable, editLocked, focusCanvas, setAnnouncement, architectureActionsRef,
+    commit, writable, editLocked, focusCanvas, setAnnouncement, pushToast, architectureActionsRef,
   });
   useV2VisibleSelection(page, selection, applySelection);
   useV2StartIntent({

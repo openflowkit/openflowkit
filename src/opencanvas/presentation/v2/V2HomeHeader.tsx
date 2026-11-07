@@ -45,7 +45,7 @@ export function V2HomeHeader({
           ]} />
         </div>
       ) : null}
-      <Tooltip content="Import .json, Mermaid, D2 or Structurizr — or drop files anywhere">
+      <Tooltip content="Import .json, Excalidraw, Mermaid, D2 or Structurizr — or drop files anywhere">
         <Button variant="quiet" className="ofk-home-import" onClick={() => fileRef.current?.click()}>
           <Icon icon={IconFileImport} /> <span>Import</span>
         </Button>

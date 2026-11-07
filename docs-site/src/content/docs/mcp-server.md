@@ -118,6 +118,7 @@ Read diagram — mirrors **Edit as code** in the context bar; read-only.
 | --- | --- |
 | `frameId` | string *(optional)* |
 | `pageId` | string *(optional)* |
+| `since` | string *(optional)* |
 
 ### `list_diagrams`
 
