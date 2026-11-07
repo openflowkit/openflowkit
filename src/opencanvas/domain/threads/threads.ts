@@ -45,8 +45,9 @@ function commentBody(body: string): string {
 }
 
 /**
- * Where a node-anchored pin sits, given its node's world matrix: `offset` is in the node's own frame, so the pin moves,
- * turns and flips with the node, like a mark painted on it. The canvas uses it too, to draw a pin on a shape being dragged.
+ * Where a node-anchored pin sits, given its node's world matrix: `offset` is in the node's own frame, so the pin moves
+ * and turns with the node, like a mark painted on it (a flip moves and turns the node but does not mirror it,
+ * so the pin stays on the same spot of the shape). The canvas uses it too, to draw a pin on a shape being dragged.
  */
 export function pinOnNode(matrix: Matrix2d, offset: Point2d): Point2d {
   return applyMatrixToPoint(matrix, offset);

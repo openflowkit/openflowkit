@@ -140,11 +140,11 @@ export function useV2Threads(input: ThreadsInput) {
 
   const toggleResolved = useCallback((threadId: string) => {
     const found = document ? findThread(document, threadId) : undefined;
-    if (found && !readOnly) updateThreads(unlessGone((doc) => setThreadResolved(doc, threadId, !found.thread.resolved)));
+    if (found && !readOnly) updateThreads(unlessGone({ thread: threadId }, (doc) => setThreadResolved(doc, threadId, !found.thread.resolved), () => undefined));
   }, [document, readOnly, updateThreads]);
   const remove = useCallback((threadId: string) => {
     // An agent may have removed it while the confirmation was up.
-    if (!readOnly) updateThreads(unlessGone((doc) => removeThread(doc, threadId)));
+    if (!readOnly) updateThreads(unlessGone({ thread: threadId }, (doc) => removeThread(doc, threadId), () => undefined));
   }, [readOnly, updateThreads]);
 
   const copyLink = useCallback((threadId: string) => {

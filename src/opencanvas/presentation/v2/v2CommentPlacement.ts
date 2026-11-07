@@ -61,10 +61,15 @@ export class Placement {
 
   /** The element every pin sits in: the camera's pan moves it. */
   setLayer(layer: HTMLElement | null): void {
+    this.layer?.removeEventListener('focusout', this.onFocusOut);
     this.layer = layer;
     this.layerKey = '';
+    layer?.addEventListener('focusout', this.onFocusOut);
     this.kick();
   }
+
+  // Focus left a pin: if it is off screen it may be hidden now (paint keeps the focused one), a frame later, when focus has settled.
+  private readonly onFocusOut = (): void => this.kick();
 
   /** The card open on this pin (null when none): placed beside it, and re-placed when it grows. */
   setCard(el: HTMLElement, card: HTMLElement | null): void {
@@ -103,9 +108,11 @@ export class Placement {
     const y = entry.world.y * camera.zoom;
     const left = x + camera.x;
     const top = y + camera.y;
-    // An open card is never culled (it holds focus and typed text); an unmeasured canvas culls nothing.
+    // An open card is never culled (it holds typed text), nor the pin that has focus (hiding it would drop focus to the page: after
+    // Alt+Arrow, a pan, or Escape closing a card whose pin is off screen); an unmeasured canvas culls nothing.
     const off = !entry.card && viewport.width > 0
-      && (left < -CULL_PX || top < -CULL_PX || left > viewport.width + CULL_PX || top > viewport.height + CULL_PX);
+      && (left < -CULL_PX || top < -CULL_PX || left > viewport.width + CULL_PX || top > viewport.height + CULL_PX)
+      && !el.contains(document.activeElement);
     const spot = card && free ? cardSpot({ x: left, y: top }, card, free) : null;
     const key = off ? 'off' : spot ? `${x}|${y}|${spot.side}|${spot.top}` : `${x}|${y}`;
     if (key === entry.key) return false;

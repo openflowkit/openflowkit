@@ -1461,6 +1461,9 @@
 /* Comments: pins over the canvas, and the card a pin or a new thread opens. The card is a panel of the editor, on its surface and accent. */
 /* One composited layer for every pin: the camera's pan moves it (v2CommentPlacement), the pins inside move only on zoom. */
 .ofk-comment-layer { position: absolute; top: 0; left: 0; width: 0; height: 0; z-index: calc(var(--ofk-layer-toolbar, 10) - 1); pointer-events: none; will-change: transform; }
+/* Pins sit under the toolbars; while a card is open the layer rises to the selection bar's level, so the card is never cut by it
+   (the card is placed clear of panels and toolbars, which the bar, floating over the selection, is not). */
+.ofk-comment-layer:has([data-comment-open]) { z-index: var(--ofk-layer-context, 35); }
 .ofk-comment-anchor { position: absolute; top: 0; left: 0; width: 0; height: 0; pointer-events: none; }
 .ofk-comment-anchor:has([data-comment-open]) { z-index: 1; }
 .ofk-comment-pin {

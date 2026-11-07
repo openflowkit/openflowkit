@@ -14,7 +14,8 @@ separately; its changes are listed under *For developers* in each release.
 - **Comments on the canvas.** Press **C** and click to pin a thread, or press **Enter** to put it on the selected
   shape. A pin follows its shape and opens its thread to reply, edit, resolve or delete; undo and redo never touch
   comments, and unsent text is kept. Image exports never show pins; JSON exports and share links leave comments out
-  (**Include comments** puts them in a JSON export), and a bad thread in a file is dropped when it loads.
+  (**Include comments** puts them in a JSON export). A file with a damaged thread still opens: a repeated number or
+  id is fixed, and only a thread that cannot be repaired is dropped.
 - **Threads panel.** The **Threads** button on the rail, with the number of open threads, lists every thread in the
   document. Search comments, page names or `#3`; show resolved or only unanswered threads; resolve, delete, mark read
   or unread, or copy a link that opens the thread in this browser. Click a thread to open it on the canvas, on its

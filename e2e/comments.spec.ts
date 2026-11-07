@@ -377,3 +377,57 @@ test('a thread is placed, written and sent with the keyboard alone', async ({ pa
   await page.keyboard.press('Enter');
   await expect(page.getByTestId('v2-comment-thread')).toBeVisible();
 });
+
+test('Delete on the pin of an open thread asks in a card that is still whole near the bottom', { tag: '@gate' }, async ({ page }) => {
+  await start(page);
+  await comment(page, { x: 400, y: 740 }, 'Low on the page');
+  await page.keyboard.press('v');
+  const pin = page.locator('.ofk-comment-pin[data-thread-id]');
+  await pin.click();
+  await expect(page.getByTestId('v2-comment-thread')).toBeVisible();
+  // The confirm card is taller than the thread card it replaces: it must be placed by its own size.
+  await pin.press('Delete');
+  await expect(page.getByRole('alert')).toContainText('Delete this thread');
+  await expect(async () => {
+    const box = (await page.getByTestId('v2-comment-thread').boundingBox())!;
+    expect(box.y + box.height).toBeLessThanOrEqual(800);
+  }).toPass();
+});
+
+test('a pin that holds focus stays when the canvas is panned away; Escape closes its card and focus stays on the pin', { tag: '@gate' }, async ({ page }) => {
+  const { centre } = await start(page);
+  await comment(page, centre, 'Pinned on the shape');
+  await page.keyboard.press('v');
+  const pin = page.locator('.ofk-comment-pin[data-thread-id]');
+  await pin.click();
+  await expect(page.getByTestId('v2-comment-thread')).toBeVisible();
+  // Far enough that the pin is well off the screen.
+  await page.mouse.move(700, 500);
+  await page.mouse.wheel(3000, 0);
+  await expect(async () => expect((await pin.boundingBox())!.x).toBeLessThan(-100)).toPass();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('v2-comment-thread')).toHaveCount(0);
+  // Two frames: hiding the pin, if it were hidden, drops focus to the page.
+  await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+  await expect(pin).toBeFocused();
+});
+
+test('a card opened beside the selection bar is not cut by it', { tag: '@gate' }, async ({ page }) => {
+  const { id } = await start(page);
+  const rect = (await page.evaluate((nodeId) => window.__V2__!.getNodeRect(nodeId), id))!;
+  // Level with the selection bar and just left of it: the card opens to the right of the pin, across the bar's row.
+  await comment(page, { x: rect.x - 240, y: rect.y - 35 }, 'Beside the bar');
+  await page.keyboard.press('v');
+  await page.mouse.click(rect.x + rect.width / 2, rect.y + rect.height / 2);
+  const bar = page.locator('[data-context-bar]');
+  await expect(bar).toBeVisible();
+  await page.locator('.ofk-comment-pin[data-thread-id]').click();
+  const card = page.getByTestId('v2-comment-thread');
+  await expect(card).toBeVisible();
+  const [a, b] = [(await card.boundingBox())!, (await bar.boundingBox())!];
+  const [x, y] = [Math.max(a.x, b.x) + 8, Math.max(a.y, b.y) + 4];
+  // The test only means something where they overlap.
+  expect(x).toBeLessThan(Math.min(a.x + a.width, b.x + b.width));
+  expect(y).toBeLessThan(Math.min(a.y + a.height, b.y + b.height));
+  expect(await page.evaluate(([px, py]) => !!document.elementFromPoint(px!, py!)?.closest('[data-comment-open]'), [x, y])).toBe(true);
+});

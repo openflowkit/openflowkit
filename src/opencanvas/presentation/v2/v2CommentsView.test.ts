@@ -1,8 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { keyboardSpot, pinLabel, unlessGone, pinNudge, pinsOnPreview, PIN_STEP, relativeTime } from './v2CommentsView';
 import { createTestDocument, createTestNode } from '../../testing/builders/documentBuilder';
-import { addThread, ThreadError } from '../../domain/threads/threads';
-import type { SceneNode } from '../../domain/document/types';
+import { addComment, addThread, ThreadError } from '../../domain/threads/threads';
+import type { SceneDocumentV1, SceneNode } from '../../domain/document/types';
 
 const NOW = Date.parse('2026-10-26T12:00:00.000Z');
 const ago = (ms: number) => new Date(NOW - ms).toISOString();
@@ -114,10 +114,32 @@ describe('pinLabel', () => {
 });
 
 describe('unlessGone', () => {
-  it('turns a change to a thread or message someone else already removed into no change; other errors still throw', () => {
-    const document = createTestDocument();
-    expect(unlessGone(() => { throw new ThreadError('Unknown comment "m9".'); })(document)).toBe(document);
-    expect(() => unlessGone(() => { throw new Error('boom'); })(document)).toThrow('boom');
-    expect(unlessGone((doc) => ({ ...doc, name: 'changed' }))(document).name).toBe('changed');
+  const base = createTestDocument();
+  const human = { kind: 'human' as const, name: 'User' };
+  const withReply = () => {
+    const first = addThread(base, { pageId: base.pages[0]!.id, threadId: 't1', nodeId: null, point: { x: 1, y: 1 },
+      comment: { id: 'm1', author: human, body: 'one', createdAt: '2026-10-26T12:00:00.000Z' } });
+    return addComment(first, 't1', { id: 'm2', author: human, body: 'two', createdAt: '2026-10-26T12:00:00.000Z' });
+  };
+  const rename = (doc: SceneDocumentV1) => ({ ...doc, name: 'changed' });
+
+  it('applies the change while the thread and message are there', () => {
+    const gone = vi.fn();
+    expect(unlessGone({ thread: 't1', comment: 'm2' }, rename, gone)(withReply()).name).toBe('changed');
+    expect(gone).not.toHaveBeenCalled();
+  });
+
+  it('makes a change to a thread or message someone else removed first no change, and says so', () => {
+    const doc = withReply();
+    const gone = vi.fn();
+    expect(unlessGone({ thread: 't9' }, rename, gone)(doc)).toBe(doc);
+    expect(unlessGone({ thread: 't1', comment: 'm9' }, rename, gone)(doc)).toBe(doc);
+    expect(gone).toHaveBeenCalledTimes(2);
+  });
+
+  it('lets every other error through', () => {
+    const doc = withReply();
+    expect(() => unlessGone({ thread: 't1' }, () => { throw new ThreadError('A comment cannot be empty.'); }, vi.fn())(doc)).toThrow('empty');
+    expect(() => unlessGone({ thread: 't1' }, () => { throw new Error('boom'); }, vi.fn())(doc)).toThrow('boom');
   });
 });

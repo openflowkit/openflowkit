@@ -424,7 +424,7 @@ export function V2EditorPage({ shared }: { readonly shared?: V2SharedView } = {}
               exportPanel={exportPanel} commit={commit} leaveStart={leaveStart} setTool={setTool} pickShape={pickShape} pickConnector={pickConnector}
               gestureApiRef={gestureApiRef} input={input} fitAll={fitAll} />
             <V2EditorCanvas
-              comments={{ apiRef: commentApiRef, updateThreads: session.updateThreads, readOnly: docReadOnly, ...threads.commentProps }}
+              comments={{ apiRef: commentApiRef, updateThreads: session.updateThreads, readOnly: docReadOnly, toast: pushToast, ...threads.commentProps }}
               agentCursor={<AgentCursor ref={agents.presence.cursorRef} name={agents.agentShown} working={agents.agentBridge.activity?.doing === 'drawing'} data-testid="v2-agent-cursor" />}
               page={page} viewPage={viewPage ?? page} hostRef={hostRef} sectionRef={sectionRef} pageRef={pageRef} selectionRef={selectionRef}
               selectedConnectorIdsRef={selectedConnectorIdsRef} toolRef={toolRef} spacePanRef={spacePanRef} toolConfigRef={toolConfigRef}
