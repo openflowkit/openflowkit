@@ -1,6 +1,8 @@
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { DocumentCommand } from '../../domain/commands/types';
+import { useDocumentSession } from '../../application/session/useDocumentSession';
+import { addThread } from '../../domain/threads/threads';
 import { createTestDocument, createTestNode } from '../../testing/builders/documentBuilder';
 import { useV2Pages } from './useV2Pages';
 
@@ -33,7 +35,7 @@ function setup() {
       document, pageId: props.pageId, readOnly: false, commit,
       onSelect: (pageId) => selected.push(pageId),
       mintId: (prefix) => `${prefix}-new-${++counter}`,
-      announce, toast, undo, revision: () => 0,
+      announce, toast, undo, contentRevision: () => 0,
     }),
     { initialProps: { pageId: document.pages[0]!.id } },
   );
@@ -88,7 +90,7 @@ describe('useV2Pages', () => {
     const pages = { ...withContent, pages: [withContent.pages[0]!, { ...withContent.pages[0]!, id: 'second', name: 'Second' }] };
     const hook = renderHook(() => useV2Pages({
       document: pages, pageId: 'second', readOnly: false, commit,
-      onSelect: (id) => selected.push(id), mintId: (prefix) => `${prefix}-x`, announce: vi.fn(), toast, undo, revision: () => revision,
+      onSelect: (id) => selected.push(id), mintId: (prefix) => `${prefix}-x`, announce: vi.fn(), toast, undo, contentRevision: () => revision,
     }));
     act(() => hook.result.current.remove('second'));
     expect(toast).toHaveBeenCalledWith(expect.objectContaining({ title: 'Deleted Second', action: expect.objectContaining({ label: 'Undo' }) }));
@@ -106,12 +108,37 @@ describe('useV2Pages', () => {
     const undo = vi.fn();
     const hook = renderHook(() => useV2Pages({
       document: pages, pageId: 'second', readOnly: false, commit: () => { revision += 1; },
-      onSelect: vi.fn(), mintId: (prefix) => `${prefix}-x`, announce: vi.fn(), toast, undo, revision: () => revision,
+      onSelect: vi.fn(), mintId: (prefix) => `${prefix}-x`, announce: vi.fn(), toast, undo, contentRevision: () => revision,
     }));
     act(() => hook.result.current.remove('second'));
     revision += 1; // the user moved a shape while the toast was up
     toast.mock.calls[0]![0].action.onClick();
     expect(undo).not.toHaveBeenCalled();
+  });
+
+  // As the editor wires it: a comment is no diagram change, so the delete is still the step Undo undoes.
+  it('the delete toast still undoes the delete after a comment', () => {
+    const withContent = createTestDocument({ nodes: [createTestNode('n1')] });
+    const pages = { ...withContent, pages: [withContent.pages[0]!, { ...withContent.pages[0]!, id: 'second', name: 'Second' }] };
+    const toast = vi.fn();
+    const { result } = renderHook(() => {
+      const session = useDocumentSession({ onStaleRevision: vi.fn() });
+      const bar = useV2Pages({
+        document: session.document, pageId: 'second', readOnly: false, commit: session.commit,
+        onSelect: vi.fn(), mintId: (prefix) => `${prefix}-x`, announce: vi.fn(), toast,
+        undo: session.undo, contentRevision: session.currentContentRevision,
+      });
+      return { session, bar };
+    });
+    act(() => result.current.session.openDocument(pages));
+    act(() => result.current.bar.remove('second'));
+    act(() => result.current.session.updateThreads((document) => addThread(document, {
+      pageId: 'page-1', threadId: 't1', nodeId: null, point: { x: 0, y: 0 },
+      comment: { id: 'm1', author: { kind: 'human', name: 'Ada' }, body: 'Where did it go?', createdAt: '2026-10-26T12:00:00.000Z' },
+    })));
+    act(() => toast.mock.calls[0]![0].action.onClick());
+    expect(result.current.session.document!.pages.map(({ id }) => id)).toEqual(['page-1', 'second']);
+    expect(result.current.session.document!.pages[0]!.threads!.map(({ id }) => id)).toEqual(['t1']);
   });
 
   it('never removes the last page and says why', () => {
@@ -127,7 +154,7 @@ describe('useV2Pages', () => {
     const commit = vi.fn();
     const hook = renderHook(() => useV2Pages({
       document, pageId: document.pages[0]!.id, readOnly: true, commit,
-      onSelect: vi.fn(), mintId: (prefix) => `${prefix}-new-1`, announce: vi.fn(), toast: vi.fn(), undo: vi.fn(), revision: () => 0,
+      onSelect: vi.fn(), mintId: (prefix) => `${prefix}-new-1`, announce: vi.fn(), toast: vi.fn(), undo: vi.fn(), contentRevision: () => 0,
     }));
     act(() => hook.result.current.add());
     act(() => hook.result.current.rename(document.pages[0]!.id, 'Nope'));
@@ -141,7 +168,7 @@ describe('useV2Pages', () => {
     const locked = document.pages[0]!.id;
     const hook = renderHook(() => useV2Pages({
       document, pageId: 'pinned', readOnly: false, lockedPageId: locked, commit,
-      onSelect: vi.fn(), mintId: (prefix) => `${prefix}-new-1`, announce: vi.fn(), toast: vi.fn(), undo: vi.fn(), revision: () => 0,
+      onSelect: vi.fn(), mintId: (prefix) => `${prefix}-new-1`, announce: vi.fn(), toast: vi.fn(), undo: vi.fn(), contentRevision: () => 0,
     }));
     const api = hook.result.current;
     expect(api.isLocked(locked)).toBe(true);

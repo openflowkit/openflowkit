@@ -28,11 +28,11 @@ interface V2PagesOptions {
   readonly toast: (toast: ToastItem) => void;
   readonly undo: () => void;
   /** The session's contentRevision now: the toast's Undo only runs while the delete is still the latest diagram change. */
-  readonly revision: () => number;
+  readonly contentRevision: () => number;
 }
 
 export function useV2Pages(options: V2PagesOptions) {
-  const { document, pageId, readOnly, lockedPageId = null, commit, onSelect, mintId, announce, toast, undo, revision } = options;
+  const { document, pageId, readOnly, lockedPageId = null, commit, onSelect, mintId, announce, toast, undo, contentRevision } = options;
   const isLocked = useCallback((id: string) => lockedPageId !== null && id === lockedPageId, [lockedPageId]);
   const pages: readonly ScenePage[] = document?.pages ?? [];
   const activePage = pages.find((page) => page.id === pageId) ?? pages[0] ?? null;
@@ -76,13 +76,13 @@ export function useV2Pages(options: V2PagesOptions) {
     const next = document.pages[index + 1] ?? document.pages[index - 1] ?? null;
     const removed = document.pages[index];
     const name = removed?.name ?? 'page';
-    const afterDelete = revision() + 1;
+    const afterDelete = contentRevision() + 1;
     run(() => buildProductionRemovePageCommand(document, targetId), () => `Deleted ${name}.`);
     if (pageId === targetId && next) onSelect(next.id);
     if (removed && document.pages.length > 1 && (removed.nodes.length > 0 || removed.connectors.length > 0)) {
-      toast({ id: `page-removed-${targetId}`, title: `Deleted ${name}`, action: { label: 'Undo', onClick: () => { if (revision() !== afterDelete) return; undo(); onSelect(targetId); } } });
+      toast({ id: `page-removed-${targetId}`, title: `Deleted ${name}`, action: { label: 'Undo', onClick: () => { if (contentRevision() !== afterDelete) return; undo(); onSelect(targetId); } } });
     }
-  }, [document, run, pageId, onSelect, isLocked, toast, undo, revision]);
+  }, [document, run, pageId, onSelect, isLocked, toast, undo, contentRevision]);
 
   const move = useCallback((targetId: string, direction: 'left' | 'right') => {
     if (!document) return;
