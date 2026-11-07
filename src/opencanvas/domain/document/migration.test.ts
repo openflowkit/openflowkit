@@ -115,6 +115,16 @@ describe('migrateSceneDocument', () => {
       expect(warn).toHaveBeenCalledTimes(1);
     });
 
+    it('drops a thread whose comment has no real timestamp, or an author name past the cap', () => {
+      const document = createDocument();
+      const badTime = thread('bad-time', 2, { comments: [{ ...comment('m'), createdAt: 'last week' }] });
+      const longName = thread('long-name', 3, { comments: [{ ...comment('n'), author: { kind: 'agent', name: 'x'.repeat(41) } }] });
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const result = migrateSceneDocument({ ...document, pages: [{ ...document.pages[0]!, threads: [thread('good', 1), badTime, longName] }] });
+      expect(result.success && result.document.pages[0]!.threads!.map(({ id }) => id)).toEqual(['good']);
+      expect(warn).toHaveBeenCalledTimes(2);
+    });
+
     it('leaves a page with no valid thread without the key', () => {
       const document = createDocument();
       vi.spyOn(console, 'warn').mockImplementation(() => undefined);

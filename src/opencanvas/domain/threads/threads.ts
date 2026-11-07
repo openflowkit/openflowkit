@@ -3,8 +3,11 @@
 // change goes through these functions and carryThreads keeps them across every command (applyDocumentCommand).
 import type { Point2d } from '../geometry/types';
 import { buildNodeWorldMatrices } from '../scene/worldGeometry';
+import { isIsoTimestamp } from '../document/validation';
 import {
+  COMMENT_AUTHOR_MAX,
   COMMENT_BODY_MAX,
+  THREAD_NUMBER_MAX,
   type SceneThreadAnchor,
   type SceneCommentAuthor,
   type SceneComment,
@@ -113,21 +116,34 @@ export function withoutThreads(document: SceneDocumentV1): SceneDocumentV1 {
  * can carry a number given out again since. Returns `page` itself when nothing clashes.
  */
 export function withFreeThreadNumbers(document: SceneDocumentV1, page: ScenePage): ScenePage {
-  const taken = new Set<number>();
-  for (const other of document.pages) for (const thread of pageThreads(other)) taken.add(thread.number);
-  if (!page.threads?.some((thread) => taken.has(thread.number))) return page;
-  let highest = nextThreadNumber(document) - 1;
+  const taken = takenNumbers(document);
+  const clashes = new Set(page.threads?.filter((thread) => taken.has(thread.number)));
+  if (!page.threads || clashes.size === 0) return page;
+  // The page's other numbers stay, so a clash never takes one of them.
+  for (const thread of page.threads) if (!clashes.has(thread)) taken.add(thread.number);
   const threads = page.threads.map((thread) => {
-    if (!taken.has(thread.number)) {
-      taken.add(thread.number);
-      highest = Math.max(highest, thread.number);
-      return thread;
-    }
-    highest += 1;
-    taken.add(highest);
-    return { ...thread, number: highest };
+    if (!clashes.has(thread)) return thread;
+    const number = freeNumber(taken);
+    taken.add(number);
+    return { ...thread, number };
   });
   return { ...page, threads };
+}
+
+function takenNumbers(document: SceneDocumentV1): Set<number> {
+  const taken = new Set<number>();
+  for (const page of document.pages) for (const thread of pageThreads(page)) taken.add(thread.number);
+  return taken;
+}
+
+/** One past the highest number taken; once that would pass THREAD_NUMBER_MAX, the lowest free one. */
+function freeNumber(taken: ReadonlySet<number>): number {
+  let highest = 0;
+  for (const number of taken) highest = Math.max(highest, number);
+  if (highest < THREAD_NUMBER_MAX) return highest + 1;
+  let lowest = 1;
+  while (taken.has(lowest)) lowest += 1;
+  return lowest;
 }
 
 /** `document` with `update` applied to one page's threads. An empty result drops the key. */
@@ -186,11 +202,12 @@ function replaceThread(
   );
 }
 
-/** The number the next thread gets: one past the highest on any page (a deleted thread's number is only reused when it was the highest). */
+/**
+ * The number the next thread gets: one past the highest on any page (a deleted thread's number is only reused
+ * when it was the highest), or the lowest free one past THREAD_NUMBER_MAX.
+ */
 export function nextThreadNumber(document: SceneDocumentV1): number {
-  let highest = 0;
-  for (const page of document.pages) for (const thread of pageThreads(page)) highest = Math.max(highest, thread.number);
-  return highest + 1;
+  return freeNumber(takenNumbers(document));
 }
 
 export interface NewComment {
@@ -201,7 +218,16 @@ export interface NewComment {
 }
 
 function comment(input: NewComment): SceneComment {
-  return { id: input.id, author: input.author, body: commentBody(input.body), createdAt: input.createdAt };
+  const { name } = input.author;
+  if (!name.trim() || name.length > COMMENT_AUTHOR_MAX) {
+    throw new ThreadError(`An author's name is 1 to ${COMMENT_AUTHOR_MAX} characters.`);
+  }
+  return { id: input.id, author: input.author, body: commentBody(input.body), createdAt: timestamp(input.createdAt) };
+}
+
+function timestamp(value: string): string {
+  if (!isIsoTimestamp(value)) throw new ThreadError(`"${value}" is not an ISO 8601 timestamp.`);
+  return value;
 }
 
 export function addThread(
@@ -248,9 +274,10 @@ export function editComment(
     const edited = requireComment(thread, commentId);
     const next = commentBody(body);
     if (next === edited.body) return thread;
+    const at = timestamp(editedAt);
     return {
       ...thread,
-      comments: thread.comments.map((candidate) => (candidate === edited ? { ...candidate, body: next, editedAt } : candidate)),
+      comments: thread.comments.map((candidate) => (candidate === edited ? { ...candidate, body: next, editedAt: at } : candidate)),
     };
   });
 }

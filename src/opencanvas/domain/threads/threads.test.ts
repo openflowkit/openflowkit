@@ -3,7 +3,7 @@ import { StaleSessionRevisionError, commitSessionCommand, createDocumentSession,
 import { createTestDocument, createTestNode } from '../../testing/builders/documentBuilder';
 import { applyDocumentCommand } from '../commands/execute';
 import type { DocumentCommand } from '../commands/types';
-import { COMMENT_BODY_MAX, type SceneDocumentV1, type SceneNode } from '../document/types';
+import { COMMENT_AUTHOR_MAX, COMMENT_BODY_MAX, THREAD_NUMBER_MAX, type SceneDocumentV1, type SceneNode } from '../document/types';
 import { validateSceneDocumentV1 } from '../document/validation';
 import { buildProductionDuplicatePageCommand } from '../../application/active-document/productionPages';
 import {
@@ -101,6 +101,9 @@ describe('comment threads', () => {
   it('refuses empty, too long, unknown and duplicate input', () => {
     const document = withThread(createTestDocument({ nodes: [node('a')] }));
     expect(() => removeComment(document, 't1', 'nope')).toThrow(ThreadError);
+    expect(() => addComment(document, 't1', { id: 'x', author: { kind: 'agent', name: 'x'.repeat(COMMENT_AUTHOR_MAX + 1) }, body: 'hi', createdAt: at })).toThrow(ThreadError);
+    expect(() => addComment(document, 't1', { id: 'x', author: human, body: 'hi', createdAt: 'now' })).toThrow(ThreadError);
+    expect(() => editComment(document, 't1', 't1-m1', 'Better', 'later')).toThrow(ThreadError);
     expect(() => addComment(document, 't1', { id: 'x', author: human, body: '   ', createdAt: at })).toThrow(ThreadError);
     expect(() => addComment(document, 't1', { id: 'x', author: human, body: 'x'.repeat(COMMENT_BODY_MAX + 1), createdAt: at })).toThrow(ThreadError);
     expect(() => addComment(document, 'nope', { id: 'x', author: human, body: 'hi', createdAt: at })).toThrow(ThreadError);
@@ -132,6 +135,10 @@ describe('comment validation', () => {
     ['a negative number', { number: -2 }],
     ['a fractional number', { number: 1.5 }],
     ['a string number', { number: '1' }],
+    ['a number past the cap', { number: THREAD_NUMBER_MAX + 1 }],
+    ['an author name over the cap', { comments: [{ id: 'm', author: { kind: 'human', name: 'x'.repeat(COMMENT_AUTHOR_MAX + 1) }, body: 'hi', createdAt: at }] }],
+    ['a createdAt that is not a timestamp', { comments: [{ id: 'm', author: human, body: 'hi', createdAt: 'yesterday' }] }],
+    ['an editedAt that is not a timestamp', { comments: [{ id: 'm', author: human, body: 'hi', createdAt: at, editedAt: '2026-10-26' }] }],
   ])('rejects %s', (_name, patch) => {
     expect(validateSceneDocumentV1(threadAt(patch)).success).toBe(false);
   });
@@ -167,6 +174,18 @@ describe('thread numbers', () => {
     expect(numbers(start(removeThread(three, 'b'), 'd'))).toContainEqual(['d', 4]);
     expect(numbers(start(removeThread(three, 'c'), 'd'))).toContainEqual(['d', 3]);
     expect(nextThreadNumber(removeThread(removeThread(removeThread(three, 'a'), 'b'), 'c'))).toBe(1);
+  });
+
+  // A file can hold any number up to the cap: past it, a new thread takes the lowest free number instead of none.
+  it('takes the lowest free number once the next would pass the cap', () => {
+    const document = start(start(TWO_PAGES, 'a'), 'b', 'page-2');
+    const [one, two] = document.pages;
+    const full = { ...document, pages: [one!, { ...two!, threads: [{ ...two!.threads![0]!, number: THREAD_NUMBER_MAX }] }] };
+    expect(validateSceneDocumentV1(full).success).toBe(true);
+    expect(nextThreadNumber(full)).toBe(2);
+    expect(numbers(start(full, 'c'))).toContainEqual(['c', 2]);
+    const clash = { ...two!, id: 'page-3', threads: [{ ...two!.threads![0]!, id: 'b2', number: 1 }] };
+    expect(withFreeThreadNumbers(full, clash).threads!.map(({ number }) => number)).toEqual([2]);
   });
 
   it('rejects two threads with one number, even on different pages', () => {
