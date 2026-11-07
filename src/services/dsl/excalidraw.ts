@@ -79,6 +79,12 @@ function extent(points: readonly Point2d[]): { readonly min: Point2d; readonly m
 
 const lowest = (points: readonly Point2d[]): Point2d => extent(points).min;
 
+/** A name from the file, fit for a toast: no control or direction characters, at most 24 characters. */
+function shortName(value: string): string {
+  const chars = [...value.replace(/[\p{Cc}\p{Cf}]/gu, '')];
+  return chars.length > 24 ? `${chars.slice(0, 23).join('')}…` : chars.join('');
+}
+
 /** Excalidraw fills a line or stroke that closes on itself (its ends within 8 px), or a line it calls a polygon. */
 function filledLoop(element: ExcalidrawElement, points: readonly Point2d[]): boolean {
   const fill = excalidrawColor(element.backgroundColor);
@@ -328,7 +334,7 @@ class SceneBuilder {
       return createShapeNode(this.page, { kind: 'rectangle', id: at.id, at: at.at, size: at.size, label: text(element.link) || at.label,
         appearance: excalidrawNodeAppearance(element, at.bound) });
     } else {
-      this.lose(`Excalidraw’s “${type || 'unknown'}” element is drawn as a box`);
+      this.lose(`Excalidraw’s “${shortName(type) || 'unknown'}” element is drawn as a box`);
     }
     return createShapeNode(this.page, { kind: 'rectangle', id: at.id, at: at.at, size: at.size, label: at.label,
       appearance: excalidrawNodeAppearance(element, at.bound) });
@@ -356,7 +362,7 @@ class SceneBuilder {
     for (const [key, value] of [['markerStart', element.startArrowhead], ['markerEnd', element.endArrowhead]] as const) {
       const head = arrow ? excalidrawHead(value) : null;
       if (typeof head === 'string') appearance[key] = head;
-      else if (head) this.lose(`the “${head.lost}” arrowhead is drawn as a plain end`);
+      else if (head) this.lose(`the “${shortName(head.lost)}” arrowhead is drawn as a plain end`);
     }
     const elbowed = element.elbowed === true;
     // A curved arrow passes through its points; ours bends at them.

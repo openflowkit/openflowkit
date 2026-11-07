@@ -232,6 +232,16 @@ describe('excalidrawToDocument', () => {
     expect(losses).toContain('the “toString” arrowhead is drawn as a plain end');
   });
 
+  it('names an unknown type or head in at most 24 characters, without control characters', () => {
+    const { losses } = open(file([
+      { ...base, id: 'odd', type: `\u202e${'x'.repeat(300)}`, x: 0, y: 0, width: 40, height: 40 },
+      { ...base, id: 'go', type: 'arrow', x: 0, y: 100, width: 50, height: 0, points: [[0, 0], [50, 0]], endArrowhead: 'y'.repeat(300) },
+    ]));
+    expect(losses).toEqual([
+      `Excalidraw’s “${'x'.repeat(23)}…” element is drawn as a box`, `the “${'y'.repeat(23)}…” arrowhead is drawn as a plain end`,
+    ]);
+  });
+
   it('names what it drops: groups, links, a second bound text, a repeated id', () => {
     const { document, losses } = open(file([
       { ...base, id: 'a', type: 'rectangle', x: 0, y: 0, width: 50, height: 50, groupIds: ['g1'], link: 'https://example.com' },
