@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { projectLegacyDocument } from './legacyProjection';
 import { migrateSceneDocument } from './migration';
+import { THREAD_NUMBER_MAX } from './types';
+import { withoutInvalidThreads } from './validation';
 
 function createDocument() {
   return projectLegacyDocument(
@@ -93,29 +95,50 @@ describe('migrateSceneDocument', () => {
       id, number, anchor: { nodeId: null, offset: null, point: { x: 0, y: 0 } }, resolved: false, comments: [comment(`${id}-m`)], ...overrides,
     });
 
-    it('drops a bad thread with a warning and loads the rest', () => {
+    const loadThreads = (pages: readonly (readonly unknown[])[]) => {
       const document = createDocument();
-      const input = {
+      const result = migrateSceneDocument({
         ...document,
-        pages: [{ ...document.pages[0]!, threads: [thread('good', 1), thread('empty', 2, { comments: [] }), thread('twin', 1), thread('same-id', 3, { id: 'good' })] }],
-      };
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-      const result = migrateSceneDocument(input);
+        pages: pages.map((threads, index) => ({ ...document.pages[0]!, id: `page-${index + 1}`, name: `Page ${index + 1}`, threads })),
+      });
       expect(result.success).toBe(true);
-      if (result.success) expect(result.document.pages[0]!.threads!.map(({ id }) => id)).toEqual(['good']);
+      return result.success ? result.document.pages.map((page) => page.threads?.map(({ id, number }) => [id, number])) : [];
+    };
+
+    it('drops a broken thread with a warning and loads the rest', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      expect(loadThreads([[thread('good', 1), thread('empty', 2, { comments: [] }), thread('no-pin', 3, { anchor: null })]])).toEqual([[['good', 1]]]);
+      expect(warn).toHaveBeenCalledTimes(2);
+      const fine = { ...createDocument(), pages: [{ ...createDocument().pages[0]!, threads: [thread('good', 1)] }] };
+      expect(withoutInvalidThreads(fine)).toBe(fine);
+    });
+
+    // A save after loading makes a dropped thread lost for good: a clash or a number out of range costs nothing to repair.
+    it('renumbers a thread whose number is taken or out of range, to the lowest free one', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      expect(loadThreads([
+        [thread('a', 1), thread('twin', 1), thread('huge', THREAD_NUMBER_MAX + 1)],
+        [thread('b', 2), thread('zero', 0)],
+      ])).toEqual([[['a', 1], ['twin', 3], ['huge', 4]], [['b', 2], ['zero', 5]]]);
       expect(warn).toHaveBeenCalledTimes(3);
     });
 
-    it('drops the second of two threads with one id on different pages', () => {
-      const document = createDocument();
-      const second = { ...document.pages[0]!, id: 'page-2', name: 'Page 2', threads: [thread('same', 2)] };
+    it('gives a thread whose id another thread has, on any page, a free one', () => {
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-      const result = migrateSceneDocument({ ...document, pages: [{ ...document.pages[0]!, threads: [thread('same', 1)] }, second] });
-      expect(result.success && result.document.pages.map((page) => page.threads?.map(({ number }) => number))).toEqual([[1], undefined]);
+      expect(loadThreads([[thread('same', 1)], [thread('same', 2), thread('same', 3)]])).toEqual([[['same', 1]], [['same-2', 2], ['same-3', 3]]]);
+      expect(warn).toHaveBeenCalledTimes(2);
+    });
+
+    it('drops only the bad reply, and gives a reply whose id is taken a free one', () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const replies = thread('t', 1, { comments: [comment('m1'), { ...comment('m2'), createdAt: 'last week' }, comment('m1'), comment('m3')] });
+      const document = createDocument();
+      const result = migrateSceneDocument({ ...document, pages: [{ ...document.pages[0]!, threads: [replies] }] });
+      expect(result.success && result.document.pages[0]!.threads![0]!.comments.map(({ id }) => id)).toEqual(['m1', 'm1-2', 'm3']);
       expect(warn).toHaveBeenCalledTimes(1);
     });
 
-    it('drops a thread whose comment has no real timestamp, or an author name past the cap', () => {
+    it('drops a thread whose opening comment has no real timestamp, or an author name past the cap', () => {
       const document = createDocument();
       const badTime = thread('bad-time', 2, { comments: [{ ...comment('m'), createdAt: 'last week' }] });
       const longName = thread('long-name', 3, { comments: [{ ...comment('n'), author: { kind: 'agent', name: 'x'.repeat(41) } }] });
@@ -128,7 +151,7 @@ describe('migrateSceneDocument', () => {
     it('leaves a page with no valid thread without the key', () => {
       const document = createDocument();
       vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-      const result = migrateSceneDocument({ ...document, pages: [{ ...document.pages[0]!, threads: [thread('bad', 0)] }] });
+      const result = migrateSceneDocument({ ...document, pages: [{ ...document.pages[0]!, threads: [thread('bad', 1, { comments: [] })] }] });
       expect(result.success && 'threads' in result.document.pages[0]!).toBe(false);
       expect(result.success).toBe(true);
     });

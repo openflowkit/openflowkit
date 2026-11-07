@@ -5,6 +5,7 @@ import { isTransform2d } from '../geometry/transform';
 import { isJsonObject } from './json';
 import { validateNodeContentLayout } from '../node-layout/model';
 import { validateNodeSizingPolicy } from '../node-sizing/model';
+import { freeThreadId, lowestFreeThreadNumber } from '../threads/threadKeys';
 import {
   COMMENT_AUTHOR_MAX,
   COMMENT_BODY_MAX,
@@ -184,21 +185,30 @@ function isComment(value: unknown): value is SceneComment {
   );
 }
 
+function isThreadNumber(value: unknown): value is number {
+  return Number.isSafeInteger(value) && (value as number) > 0 && (value as number) <= THREAD_NUMBER_MAX;
+}
+
+/** A thread's id, pin and state; its number and comments are checked apart, since loading can repair those. */
 // A missing anchor node is not an issue: the node may have been deleted, and the pin stays at `point`.
-function isThread(value: unknown): value is SceneThread {
+function isThreadFrame(value: unknown): value is RecordValue & { id: string; comments: unknown[] } {
   return (
     isRecord(value) &&
     isNonEmptyString(value.id) &&
-    Number.isSafeInteger(value.number) &&
-    (value.number as number) > 0 &&
-    (value.number as number) <= THREAD_NUMBER_MAX &&
     isRecord(value.anchor) &&
     isNullableString(value.anchor.nodeId) &&
     (value.anchor.offset === null || isPoint2d(value.anchor.offset)) &&
     (value.anchor.nodeId === null) === (value.anchor.offset === null) &&
     isPoint2d(value.anchor.point) &&
     typeof value.resolved === 'boolean' &&
-    Array.isArray(value.comments) &&
+    Array.isArray(value.comments)
+  );
+}
+
+function isThread(value: unknown): value is SceneThread {
+  return (
+    isThreadFrame(value) &&
+    isThreadNumber(value.number) &&
     value.comments.length > 0 &&
     value.comments.every(isComment) &&
     hasUniqueIds(value.comments)
@@ -310,34 +320,78 @@ function collectPageReferenceIssues(page: ScenePage, path: string): DocumentVali
 }
 
 /**
- * `value` for loading: a thread that is invalid, or whose id or number another thread already has, is dropped
- * with a console warning, so one bad thread cannot lock someone out of their diagram. Returns `value` itself
- * when every thread is fine.
+ * `value` for loading. One bad thread must not lock anyone out of a diagram, and what loading leaves out the next
+ * autosave makes permanent, so it keeps all it can, with a console warning for each repair:
+ * - a thread with no id, pin or state, or whose opening comment is invalid, is dropped;
+ * - an invalid reply is dropped, and a reply whose id the thread already has gets a free one;
+ * - a thread whose id another thread has gets a free one;
+ * - a thread whose number is out of range or taken gets the lowest free one.
+ * Returns `value` itself when every thread is fine.
  */
 export function withoutInvalidThreads(value: unknown): unknown {
   if (!isRecord(value) || !Array.isArray(value.pages)) return value;
+  let changed = false;
+  const warn = (message: string, page: RecordValue): void => {
+    changed = true;
+    console.warn(`${message} on page "${String(page.id)}".`);
+  };
   const ids = new Set<string>();
   const numbers = new Set<number>();
-  let changed = false;
+  const unnumbered = new Set<RecordValue>();
   const pages = value.pages.map((page: unknown) => {
     if (!isRecord(page) || page.threads === undefined) return page;
     const threads: unknown[] = Array.isArray(page.threads) ? page.threads : [];
-    const kept = threads.filter((thread) => {
-      const fine = isThread(thread) && !ids.has(thread.id) && !numbers.has(thread.number);
-      if (fine) {
-        ids.add(thread.id);
-        numbers.add(thread.number);
-      } else {
-        console.warn(`Dropped an invalid comment thread on page "${String(page.id)}".`);
+    if (!Array.isArray(page.threads)) changed = true;
+    const kept = threads.flatMap((thread) => {
+      if (!isThreadFrame(thread) || !isComment(thread.comments[0])) {
+        warn('Dropped an invalid comment thread', page);
+        return [];
       }
-      return fine;
+      const comments = repairedComments(thread.comments, () => warn(`Dropped an invalid reply in comment thread "${thread.id}"`, page));
+      const id = freeThreadId(ids, thread.id);
+      if (id !== thread.id) warn(`Gave comment thread "${thread.id}" the free id "${id}"`, page);
+      ids.add(id);
+      const repaired = comments === thread.comments && id === thread.id ? thread : { ...thread, id, comments };
+      if (isThreadNumber(thread.number) && !numbers.has(thread.number)) numbers.add(thread.number);
+      else unnumbered.add(repaired);
+      return [repaired];
     });
-    if (kept.length === threads.length && Array.isArray(page.threads)) return page;
-    changed = true;
+    if (kept.length === threads.length && kept.every((thread, index) => thread === threads[index])) return page;
     const { threads: _dropped, ...rest } = page;
     return kept.length ? { ...rest, threads: kept } : rest;
   });
-  return changed ? { ...value, pages } : value;
+  // Numbers last, once every thread that keeps its own is known, so a renumbered one never takes a later one's.
+  const numbered = unnumbered.size === 0 ? pages : pages.map((page: unknown) => {
+    if (!isRecord(page) || !Array.isArray(page.threads)) return page;
+    const threads = (page.threads as RecordValue[]).map((thread) => {
+      if (!unnumbered.has(thread)) return thread;
+      const number = lowestFreeThreadNumber(numbers);
+      numbers.add(number);
+      warn(`Renumbered comment thread "${String(thread.id)}" to ${number}`, page);
+      return { ...thread, number };
+    });
+    return { ...page, threads };
+  });
+  return changed ? { ...value, pages: numbered } : value;
+}
+
+/** `comments` (the opening one valid) without invalid replies, and with a free id for a reply whose id is taken. */
+function repairedComments(comments: readonly unknown[], dropped: () => void): unknown[] {
+  const ids = new Set<string>();
+  let changed = false;
+  const kept = comments.flatMap((comment) => {
+    if (!isComment(comment)) {
+      dropped();
+      changed = true;
+      return [];
+    }
+    const id = freeThreadId(ids, comment.id);
+    ids.add(id);
+    if (id === comment.id) return [comment];
+    changed = true;
+    return [{ ...comment, id }];
+  });
+  return changed ? kept : (comments as unknown[]);
 }
 
 export function validateSceneDocumentV1(value: unknown): DocumentValidationResult {
