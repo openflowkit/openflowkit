@@ -67,6 +67,27 @@ describe('excalidrawToDocument', () => {
     expect(node.transform.translation.x + node.size.width / 2).toBeCloseTo(74);
   });
 
+  it('keeps Excalidraw’s own lines where it wrapped the words and we would not: fixed-width text, a label in a diamond', () => {
+    const { document } = open(file([
+      { ...base, id: 'wrap', type: 'text', x: 0, y: 0, width: 120, height: 125, fontSize: 20, fontFamily: 5, autoResize: false,
+        textAlign: 'left', containerId: null, originalText: 'The quick brown fox jumps over the lazy dog again',
+        text: 'The quick\nbrown fox\njumps over\nthe lazy dog\nagain' },
+      { ...base, id: 'gem', type: 'diamond', x: 300, y: 0, width: 120, height: 120 },
+      { ...base, id: 'gem-label', type: 'text', x: 330, y: 35, width: 60, height: 50, fontSize: 20, containerId: 'gem',
+        originalText: 'Approve the order', text: 'Approve\nthe order' },
+      // A rectangle wraps its own label to its width, so it keeps the words as typed and rewraps when resized.
+      { ...base, id: 'box', type: 'rectangle', x: 500, y: 0, width: 100, height: 80 },
+      { ...base, id: 'box-label', type: 'text', x: 510, y: 15, width: 80, height: 50, fontSize: 20, containerId: 'box',
+        originalText: 'Ship the order', text: 'Ship the\norder' },
+    ]));
+    const [wrap, gem, box] = document.pages[0]!.nodes;
+    expect(wrap!.content.label).toBe('The quick\nbrown fox\njumps over\nthe lazy dog\nagain');
+    // About Excalidraw's 120 px (ours keeps a margin and a wider handwriting face), not one 600 px line.
+    expect(wrap!.size.width).toBeLessThan(240);
+    expect(gem!.content.label).toBe('Approve\nthe order');
+    expect(box!.content.label).toBe('Ship the order');
+  });
+
   it('keeps free text’s alignment, growing away from the edge it is set against', () => {
     const words = { ...base, type: 'text', y: 0, width: 100, height: 25, text: 'id: uuid', originalText: 'id: uuid', fontSize: 20, containerId: null };
     const { document } = open(file([

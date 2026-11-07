@@ -119,6 +119,10 @@ class FillIndex {
   }
 }
 
+/** The words as typed, or as Excalidraw broke them into lines (`text`) where it wraps them and we would not. */
+const wordsOf = (element: ExcalidrawElement, asWrapped: boolean): string =>
+  asWrapped ? text(element.text) || text(element.originalText) : text(element.originalText) || text(element.text);
+
 const bindingOf = (value: unknown): string | null => {
   if (!value || typeof value !== 'object') return null;
   const id = (value as { elementId?: unknown }).elementId;
@@ -198,7 +202,8 @@ class SceneBuilder {
     const rotation = finite(element.angle);
     const base = { parentId, layerId: this.layerId, zIndex };
     const bound = this.labels.get(id);
-    const label = bound ? text(bound.originalText) || text(bound.text) : '';
+    // A rectangle wraps its own label to its width; a diamond or an ellipse draws it on one line, so it keeps Excalidraw's lines.
+    const label = bound ? wordsOf(bound, type === 'diamond' || type === 'ellipse') : '';
     const node = this.nodeFor(element, type, { id, at: { x, y }, size: { width, height }, label, bound });
     // A node drawn wider than the element (free text) grows away from the edge its words are set against,
     // keeping its 8px margin outside the element: from the centre unless aligned left or right.
@@ -237,7 +242,8 @@ class SceneBuilder {
       const ink = excalidrawWordInk(element.strokeColor, this.fills.covers(centre));
       // Excalidraw's box is exactly its words; ours keeps 8px clear each side and draws handwriting in a wider
       // face, so the box widens about the same centre. ponytail: the margin is guessed — measure the canvas face if words break.
-      const label = text(element.originalText) || text(element.text);
+      // Fixed-width text (autoResize false) is wrapped by Excalidraw to its box: those lines, not one long one.
+      const label = wordsOf(element, element.autoResize === false);
       const fontSize = finite(element.fontSize, 20);
       const widest = Math.max(0, ...label.split('\n').map((line) => measurePortableText(line, { fontSize, fontWeight: 400 }).width));
       const width = Math.max(at.size.width + 16, Math.ceil(widest * (excalidrawFont(element.fontFamily) === 'hand' ? 1.25 : 1.05)) + 20);
@@ -314,7 +320,7 @@ class SceneBuilder {
     if (!elbowed && points.length > 2 && element.roundness) this.lose('curved arrows are drawn with straight segments');
     const waypoints = elbowed ? [] : points.slice(1, -1).map((point) => ({ x: x + point.x, y: y + point.y }));
     const labels: ConnectorLabel[] = label
-      ? [{ id: `${id}:label`, text: text(label.originalText) || text(label.text), pathRatio: 0.5, offset: { x: 0, y: 0 }, metadata: {} }]
+      ? [{ id: `${id}:label`, text: wordsOf(label, false), pathRatio: 0.5, offset: { x: 0, y: 0 }, metadata: {} }]
       : [];
     this.connectors.push({
       id, source: endpoint(startId, points[0]!), target: endpoint(endId, points[points.length - 1]!),

@@ -23,6 +23,7 @@ export interface ExcalidrawElement {
   readonly roundness?: unknown;
   readonly text?: unknown;
   readonly originalText?: unknown;
+  readonly autoResize?: unknown;
   readonly fontSize?: unknown;
   readonly fontFamily?: unknown;
   readonly textAlign?: unknown;
