@@ -114,6 +114,31 @@ describe('thread ops, file mode', () => {
     await expect(file(document, 'list_threads', { threadId: 'ghost' })).rejects.toThrow(/Unknown thread "ghost"/);
   });
 
+  // A blank page first, the drawing second: the ops run on the first page unless told otherwise.
+  const behindABlankPage = async (): Promise<SceneDocumentV1> => {
+    const document = await drawn();
+    const drawing = document.pages[0]!;
+    return { ...document, pages: [{ ...drawing, id: 'blank', name: 'Blank', nodes: [], connectors: [] }, drawing] };
+  };
+
+  it('start_thread pins to a node on another page, on that page, as frames find theirs', async () => {
+    const document = await behindABlankPage();
+    const node = document.pages[1]!.nodes.find((candidate) => candidate.kind !== 'frame')!;
+    const { document: next, output } = await file(document, 'start_thread', { nodeId: node.id, body: 'Over here' });
+    expect(pageThreads(next.pages[1]!)[0]!.anchor.nodeId).toBe(node.id);
+    expect(output).toMatchObject({ pageId: document.pages[1]!.id });
+  });
+
+  it('list_threads finds a thread by id on any page, and says so when pageId names another', async () => {
+    let document = await behindABlankPage();
+    const drawingId = document.pages[1]!.id;
+    document = (await runAgentOp(op('start_thread'), { point: { x: 0, y: 0 }, body: 'here' }, { ...contextOf(document), pageId: drawingId })).document;
+    const threadId = pageThreads(document.pages[1]!)[0]!.id;
+    const listed = (await file(document, 'list_threads', { threadId, pageId: drawingId })).output as { threads: { id: string }[] };
+    expect(listed.threads.map(({ id }) => id)).toEqual([threadId]);
+    await expect(file(document, 'list_threads', { threadId, pageId: 'blank' })).rejects.toThrow(`Thread "${threadId}" is on page "${drawingId}", not "blank".`);
+  });
+
   it('get_document and list_pages count open threads', async () => {
     let document = await drawn();
     document = (await file(document, 'start_thread', { point: { x: 0, y: 0 }, body: 'a' })).document;

@@ -16,12 +16,18 @@ export async function resolveAgentOpCommand<Input, Output>(
   return op.run(input, { ...context, pageId: pageHolding(context, input) });
 }
 
-/** Frame ids are unique across pages: an op that names a frame runs on the page holding it (a C4 view's own page). */
+/**
+ * Frame ids are unique across pages: an op that names a frame runs on the page holding it (a C4 view's own page).
+ * An op that names a node (start_thread) does the same when the page it was given lacks the node and one other page
+ * holds it; C4 views share element ids, so with several it stays on its page and the op says which hold it.
+ */
 export function pageHolding({ document, pageId }: OpContext, input: unknown): string {
-  const frameId = (input as { frameId?: unknown } | null)?.frameId;
-  if (typeof frameId !== 'string') return pageId;
-  const holds = (page: SceneDocumentV1['pages'][number]) => page.nodes.some((node) => node.id === frameId);
-  return document.pages.some((page) => page.id === pageId && holds(page)) ? pageId : document.pages.find(holds)?.id ?? pageId;
+  const { frameId, nodeId } = (input ?? {}) as { frameId?: unknown; nodeId?: unknown };
+  const id = typeof frameId === 'string' ? frameId : typeof nodeId === 'string' ? nodeId : null;
+  if (id === null) return pageId;
+  const holders = document.pages.filter((page) => page.nodes.some((node) => node.id === id));
+  if (holders.some((page) => page.id === pageId)) return pageId;
+  return (typeof frameId === 'string' || holders.length === 1 ? holders[0]?.id : undefined) ?? pageId;
 }
 
 export interface RunOpResult {

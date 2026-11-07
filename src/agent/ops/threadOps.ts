@@ -19,13 +19,17 @@ export const listThreads = defineOp({
     + 'Threads never appear in get_diagram or exports.',
   schema: z.object({
     pageId: z.string().min(1).optional().describe('Only this page (see list_pages); default every page.'),
-    threadId: z.string().min(1).optional().describe('Only this thread, whatever its page or state; an unknown id is an error.'),
+    threadId: z.string().min(1).optional().describe('Only this thread, whatever its page or state; an unknown id is an error, and so is a pageId it is not on.'),
     unanswered: z.boolean().default(false).describe('Only threads whose last comment is from a person, so still waiting for an answer.'),
     includeResolved: z.boolean().default(false).describe('Also list resolved threads.'),
   }),
   async run({ pageId, threadId, unanswered, includeResolved }, context) {
-    if (threadId && !findThread(context.document, threadId)) throw new ThreadError(`Unknown thread "${threadId}".`);
-    const pages = pageId ? [requirePage(context.document, pageId)] : context.document.pages;
+    const found = threadId ? findThread(context.document, threadId) : undefined;
+    if (threadId && !found) throw new ThreadError(`Unknown thread "${threadId}".`);
+    if (found && pageId && found.page.id !== pageId) {
+      throw new ThreadError(`Thread "${threadId}" is on page "${found.page.id}", not "${pageId}".`);
+    }
+    const pages = found ? [found.page] : pageId ? [requirePage(context.document, pageId)] : context.document.pages;
     const threads = pages.flatMap((page) => {
       const nodes = new Map(page.nodes.map((node) => [node.id, node]));
       return pageThreads(page)
@@ -85,7 +89,7 @@ export const startThread = defineOp({
   description: 'Start a thread with its first comment. Pin it to a node (nodeId: the pin sits at its top-right corner and follows the node) '
     + 'or to a world point; one of the two is required. Signed with your agent name. Takes no undo step.',
   schema: z.object({
-    nodeId: z.string().min(1).optional().describe('Node to pin to (see get_document).'),
+    nodeId: z.string().min(1).optional().describe('Node to pin to (see get_document); the thread goes on the page holding it.'),
     point: pointSchema().optional().describe('World position of the pin; wins over the node corner when both are given.'),
     body: body(),
   }),
@@ -96,7 +100,12 @@ export const startThread = defineOp({
     if (nodeId) {
       const node = page.nodes.find((candidate) => candidate.id === nodeId);
       const origin = node ? buildNodeWorldMatrices(page).get(nodeId) : undefined;
-      if (!node || !origin) throw new ThreadError(`Node "${nodeId}" is not on page "${page.id}" (get_document lists them).`);
+      if (!node || !origin) {
+        const holders = context.document.pages.filter((other) => other.nodes.some((candidate) => candidate.id === nodeId));
+        throw new ThreadError(holders.length > 1
+          ? `Node "${nodeId}" is on pages ${holders.map(({ id }) => `"${id}"`).join(', ')}: pass pageId to say which.`
+          : `Node "${nodeId}" is not on page "${page.id}" (get_document lists them).`);
+      }
       pin ??= { x: origin.tx + node.size.width, y: origin.ty };
     }
     const threadId = crypto.randomUUID();
