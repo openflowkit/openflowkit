@@ -1,5 +1,4 @@
 import type { JsonObject } from '../../opencanvas/domain/document/json';
-import { normalizeHex } from '../../lib/colorUtils';
 
 // Excalidraw's element paint (strokeColor, backgroundColor, strokeStyle, opacity…) and arrowheads,
 // read into the appearance keys OpenFlowKit draws. What has no counterpart is named for the importer.
@@ -53,7 +52,9 @@ export const text = (value: unknown): string => (typeof value === 'string' ? val
 /** `#1E1E1E` / `#abc` as our six-digit lower-case hex (so `#fff` is the white our dark theme washes); `transparent` stays; anything else is unset. */
 export function excalidrawColor(value: unknown): string | undefined {
   if (value === 'transparent') return 'transparent';
-  return typeof value === 'string' && /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(value) ? normalizeHex(value) ?? undefined : undefined;
+  if (typeof value !== 'string' || !/^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(value)) return undefined;
+  const hex = value.toLowerCase();
+  return hex.length === 4 ? `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}` : hex;
 }
 
 /** Line and text ink: Excalidraw's default black is left unset, so it follows our theme as it follows Excalidraw's. */
