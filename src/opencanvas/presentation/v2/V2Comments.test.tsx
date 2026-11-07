@@ -14,7 +14,7 @@ vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect()
 const host = {
   screenToWorld: (point: { x: number; y: number }) => point,
   worldToScreen: (point: { x: number; y: number }) => point,
-  pickNode: () => null,
+  pickNode: vi.fn((_point: { x: number; y: number }): string | null => null),
   getNodeScreenBounds: () => null,
   getViewportSize: () => ({ width: 1000, height: 800 }),
 };
@@ -288,5 +288,19 @@ describe('the thread card', () => {
       return svg;
     };
     expect(icon(true)).not.toBe(icon(false));
+  });
+});
+
+describe('moving a pin with the keyboard', () => {
+  it('Alt+Arrow lands the pin like a drop: on the shape under its tip, else on the page', () => {
+    let latestDoc = withThread();
+    render(<Harness initial={latestDoc} tool="select" onDoc={(doc) => { latestDoc = doc; }} />);
+    const anchor = () => latestDoc.pages[0]!.threads![0]!.anchor;
+    host.pickNode.mockImplementation((point) => (point.x > 15 ? 'a' : null));
+    fireEvent.keyDown(pinButton(), { key: 'ArrowRight', altKey: true });
+    expect(anchor()).toMatchObject({ nodeId: 'a', point: { x: 18, y: 10 } });
+    fireEvent.keyDown(pinButton(), { key: 'ArrowLeft', altKey: true, shiftKey: true });
+    expect(anchor()).toMatchObject({ nodeId: null, point: { x: -62, y: 10 } });
+    host.pickNode.mockImplementation(() => null);
   });
 });

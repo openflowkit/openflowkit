@@ -131,10 +131,12 @@ function pinActions(
         return;
       }
       const by = latest.current.readOnly ? null : pinNudge(event.key, event.altKey, event.shiftKey);
-      if (!by) return;
+      const host = hostRef.current;
+      if (!by || !host) return;
       event.preventDefault();
-      const { nodeId, point } = thread.anchor;
-      latest.current.updateThreads((doc) => moveThread(doc, thread.id, nodeId, { x: point.x + by.x, y: point.y + by.y }));
+      // As a drop would: onto the shape under the tip, or the page. So the keyboard can move a pin from shape to shape.
+      const next = { x: thread.anchor.point.x + by.x, y: thread.anchor.point.y + by.y };
+      latest.current.updateThreads((doc) => moveThread(doc, thread.id, host.pickNode(host.worldToScreen(next)), next));
     },
   };
 }
