@@ -45,6 +45,16 @@ separately; its changes are listed under *For developers* in each release.
   A shape in front now covers the text and images of the shapes behind it too, overlapping images keep their order
   whichever loads first, and clicks and exports agree with what you see.
 
+### For developers: MCP server and CLI, not on npm yet
+
+- **`get_diagram` with `since`.** An agent that already holds the text it wrote can ask for just what changed on the
+  canvas: `dslDiff`, a unified diff of the canvas against the text it was drawn from, in place of the whole `dsl`. Both
+  sides are the canonical (re-serialized) text, so only real changes show. Line numbers refer to the canonical text
+  (what `get_diagram` returns without `since`), not your original source. Empty while the canvas matches the text.
+- **`revision`** comes back from `create_diagram`, `update_diagram` and `get_diagram`; pass it as `since`. When the
+  diagram was redrawn from other text after it (in Edit as code, or by another agent), `get_diagram` returns the whole
+  text and says so, instead of an empty diff.
+
 ### For developers: MCP server and CLI 0.2.4 (on npm since 2026-10-13, tag `mcp-v0.2.4`)
 
 - **MCP server and CLI 0.2.4.** Drawn diagrams now show as a card in chat apps that support MCP Apps (Claude, Claude
