@@ -1,9 +1,7 @@
 import { isJsonObject } from '../../../opencanvas/domain/document/json';
-import { lossNote } from '../../dsl/lossNote';
 import { UNTITLED_DOCUMENT_NAME } from '../../../opencanvas/domain/document/defaults';
 import type { SceneDocumentV1 } from '../../../opencanvas/domain/document/types';
-import { drawioToDocument, looksLikeDrawio } from '../../dsl/drawio';
-import { drawioFromPng, drawioFromSvg } from '../../dsl/drawioFile';
+import { lossNote } from '../../dsl/lossNote';
 import { documentFromFileText } from './openDocumentFile';
 import { isV1Backup, openV1Backup } from './v1Import';
 import type { V2DocumentRepository } from './v2Repository';
@@ -69,6 +67,8 @@ const IMAGE = /\.(png|svg)$/i;
 
 /** The draw.io XML in a file — the file itself, or what a draw.io PNG or SVG export carries — else null. */
 async function drawioIn(file: File, text: string): Promise<string | null> {
+  // Loaded on first use, like the Excalidraw importer: Home's list doesn't wait on it.
+  const [{ looksLikeDrawio }, { drawioFromPng, drawioFromSvg }] = await Promise.all([import('../../dsl/drawio'), import('../../dsl/drawioFile')]);
   if (/\.png$/i.test(file.name)) return drawioFromPng(new Uint8Array(await file.arrayBuffer()));
   return looksLikeDrawio(text) ? text : drawioFromSvg(text);
 }
@@ -110,6 +110,7 @@ export async function importFiles(files: readonly File[], repository: V2Document
       const drawio = await drawioIn(file, text);
       if (drawio === null && IMAGE.test(file.name)) { problems.push(`${file.name}: It’s an image with no draw.io diagram in it.`); continue; }
       if (drawio !== null) {
+        const { drawioToDocument } = await import('../../dsl/drawio');
         const imported = await drawioToDocument(drawio, mintId());
         if ('error' in imported) { problems.push(`${file.name}: ${imported.error}`); continue; }
         if (imported.losses.length) losses.push(`${file.name}: ${lossNote(imported.losses)}`);
