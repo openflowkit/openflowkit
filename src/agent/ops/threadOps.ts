@@ -126,7 +126,7 @@ export const startThread = defineOp({
   description: 'Start a thread with its first comment. Pin it to a node (nodeId: the pin sits at its top-right corner and follows the node) '
     + 'or to a world point; one of the two is required. Signed with your agent name. Takes no undo step.',
   schema: z.object({
-    nodeId: z.string().min(1).optional().describe('Node to pin to (see get_document); the thread goes on the page holding it.'),
+    nodeId: z.string().min(1).optional().describe('Node to pin to (see get_document); without pageId the thread goes on the page holding it.'),
     point: pointSchema().optional().describe('World position of the pin; wins over the node corner when both are given.'),
     body: body(),
   }),
@@ -141,7 +141,9 @@ export const startThread = defineOp({
         const holders = context.document.pages.filter((other) => other.nodes.some((candidate) => candidate.id === nodeId));
         throw new ThreadError(holders.length > 1
           ? `Node "${nodeId}" is on pages ${holders.map(({ id }) => `"${id}"`).join(', ')}: pass pageId to say which.`
-          : `Node "${nodeId}" is not on page "${page.id}" (get_document lists them).`);
+          : holders.length === 1
+            ? `Node "${nodeId}" is on page "${holders[0]!.id}", not "${page.id}".`
+            : `Node "${nodeId}" is not on page "${page.id}" (get_document lists them).`);
       }
       pin ??= { x: origin.tx + node.size.width, y: origin.ty };
     }

@@ -146,6 +146,17 @@ describe('thread ops, file mode', () => {
     expect(output).toMatchObject({ pageId: document.pages[1]!.id });
   });
 
+  // PR #103 review: with a pageId that lacks the node, start_thread moved to the page holding it; list_threads refuses.
+  it('start_thread with a pageId that lacks the node refuses and names the page that holds it', async () => {
+    const document = await behindABlankPage();
+    const node = document.pages[1]!.nodes.find((candidate) => candidate.kind !== 'frame')!;
+    const input = { nodeId: node.id, pageId: 'blank', body: 'Over here' };
+    const message = `Node "${node.id}" is on page "${document.pages[1]!.id}", not "blank".`;
+    await expect(runAgentOp(op('start_thread'), input, { ...contextOf(document), pageId: 'blank' })).rejects.toThrow(message);
+    const session = (): LiveAgentSession => ({ document, pageId: 'blank', capabilities, commit: vi.fn(), threadChange: vi.fn() });
+    await expect(runLiveAgentOp(session, 'start_thread', input, 'blank')).rejects.toThrow(message);
+  });
+
   it('list_threads finds a thread by id on any page, and says so when pageId names another', async () => {
     let document = await behindABlankPage();
     const drawingId = document.pages[1]!.id;
