@@ -43,19 +43,24 @@ export function isUnanswered(thread: SceneThread): boolean {
   return thread.comments[thread.comments.length - 1]?.author.kind === 'human';
 }
 
-/** Case-insensitive substring over every comment body; an empty (or blank) query matches everything. */
-export function matchesQuery(thread: SceneThread, query: string): boolean {
+/**
+ * Case-insensitive substring over every comment body and the page's name; "#3" is thread number 3, as people say it. An
+ * empty (or blank) query matches everything.
+ */
+export function matchesQuery(thread: SceneThread, query: string, pageName = ''): boolean {
   const needle = query.trim().toLowerCase();
   if (!needle) return true;
-  return thread.comments.some((comment) => comment.body.toLowerCase().includes(needle));
+  const number = /^#(\d+)$/.exec(needle);
+  if (number) return thread.number === Number(number[1]);
+  return pageName.toLowerCase().includes(needle) || thread.comments.some((comment) => comment.body.toLowerCase().includes(needle));
 }
 
 /** What the panel lists: filtered, searched, and newest activity first (ties keep document order, so the order is stable). */
 export function selectThreads(document: SceneDocumentV1, query: string, filters: ThreadFilters): ThreadEntry[] {
   return collectThreads(document)
-    .filter(({ thread }) => (filters.showResolved || !thread.resolved)
+    .filter(({ thread, pageName }) => (filters.showResolved || !thread.resolved)
       && (!filters.unansweredOnly || isUnanswered(thread))
-      && matchesQuery(thread, query))
+      && matchesQuery(thread, query, pageName))
     .map((entry, index) => ({ entry, index, at: lastActivity(entry.thread) }))
     .sort((a, b) => b.at - a.at || a.index - b.index)
     .map(({ entry }) => entry);
@@ -147,7 +152,7 @@ export function threadLinkText(document: SceneDocumentV1, entry: ThreadEntry, ba
   const page = document.pages.find((candidate) => candidate.id === entry.pageId);
   const label = nodeLabelText(page, entry.thread.anchor.nodeId);
   const where = label ? ` · on "${label}"` : '';
-  return `#${entry.thread.number} · ${entry.pageName}${where} — ${threadUrl(base, document.id, entry.thread.id)}`;
+  return `#${entry.thread.number} · ${entry.pageName}${where}: ${threadUrl(base, document.id, entry.thread.id)}`;
 }
 
 /** The thread a deep link names (`?thread=<id>`), or null. */

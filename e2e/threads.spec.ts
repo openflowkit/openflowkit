@@ -157,7 +157,7 @@ test('the toolbar button shows how many threads are open, and the panel lists th
   await expect(card(page, 4)).not.toContainText('repl');
 });
 
-test('search reads every comment of every thread on every page', async ({ page }) => {
+test('search reads every comment of every thread on every page, a thread\'s #number and a page\'s name', async ({ page }) => {
   await open(page);
   await openPanel(page);
   const search = panel(page).getByRole('searchbox', { name: 'Search threads' });
@@ -166,6 +166,10 @@ test('search reads every comment of every thread on every page', async ({ page }
   expect(await order(page)).toEqual(['thread-1']);
   await search.fill('retry');
   expect(await order(page)).toEqual(['thread-4']);
+  await search.fill('#2');
+  await expect.poll(() => order(page)).toEqual(['thread-2']);
+  await search.fill('page 2');
+  await expect.poll(() => order(page)).toEqual(['thread-4']);
   await search.fill('zzz');
   await expect(panel(page).getByTestId('v2-threads-empty')).toContainText('Nothing matches');
   await panel(page).getByRole('button', { name: 'Clear search and filters' }).click();
@@ -318,12 +322,12 @@ test('Copy link puts #n · page · node and a link on the clipboard', async ({ p
   const pinnedNode = (await doc(page)).pages[0]!.nodes[0]!.content.label;
   expect(pinnedNode).toBe(NODE_LABEL);
   const text = await page.evaluate(() => navigator.clipboard.readText());
-  expect(text).toBe(`#1 · Page 1 · on "${NODE_LABEL}" — ${baseURL}/#/d/${id}?thread=thread-1`);
+  expect(text).toBe(`#1 · Page 1 · on "${NODE_LABEL}": ${baseURL}/#/d/${id}?thread=thread-1`);
 
   // A page pin has no "on …".
   await card(page, 4).getByRole('button', { name: 'Thread actions' }).click();
   await page.getByRole('menuitem', { name: 'Copy link' }).click();
-  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(`#4 · Page 2 — ${baseURL}/#/d/${id}?thread=thread-4`);
+  await expect.poll(() => page.evaluate(() => navigator.clipboard.readText())).toBe(`#4 · Page 2: ${baseURL}/#/d/${id}?thread=thread-4`);
 });
 
 test('a deep link opens the panel and the thread, and takes the param off the address', async ({ page, baseURL }) => {

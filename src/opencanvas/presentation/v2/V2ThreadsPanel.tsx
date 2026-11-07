@@ -122,7 +122,7 @@ export function V2ThreadsPanel(props: Props): React.JSX.Element {
           <label className="ofk-threads-search">
             <Icon icon={IconSearch} />
             <span className="ofk-visually-hidden">Search threads</span>
-            <input type="search" value={query} placeholder="Search comments" autoComplete="off"
+            <input type="search" value={query} placeholder="Search comments, pages or #1" autoComplete="off"
               onChange={(event) => props.onQuery(event.target.value)}
               onKeyDown={(event) => {
                 // Esc empties the box first; the panel closes on the next one.

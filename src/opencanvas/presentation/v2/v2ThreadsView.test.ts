@@ -85,6 +85,14 @@ describe('search', () => {
     expect(matchesQuery(thread('x', 1, [comment(me, 'cost (usd)? $5', 0)]), '(usd)? $5')).toBe(true);
   });
 
+  it('finds a thread by its number, as people say it ("#3"), and by its page\'s name', () => {
+    expect(ids(selectThreads(fixture(), '#2', filters()))).toEqual(['b']);
+    expect(ids(selectThreads(fixture(), ' #4 ', filters()))).toEqual(['d']);
+    expect(selectThreads(fixture(), '#9', filters())).toEqual([]);
+    expect(ids(selectThreads(fixture(), 'page 2', filters()))).toEqual(['d']);
+    expect(ids(selectThreads(fixture(), 'Page', filters()))).toEqual(expect.arrayContaining(['a', 'b', 'd']));
+  });
+
   it('finds nothing when nothing matches', () => {
     expect(selectThreads(fixture(), 'zzz', filters({ showResolved: true }))).toEqual([]);
   });
@@ -244,21 +252,21 @@ describe('links', () => {
     const [entry] = collectThreads(document);
     const pinned = { ...entry!, thread: { ...entry!.thread, anchor: { nodeId: 'n1', offset: { x: 0, y: 0 }, point: { x: 0, y: 0 } } } };
     expect(threadLinkText(document, pinned, base))
-      .toBe('#1 · Page 1 · on "Session updateComments" — http://localhost:3000/#/d/document-1?thread=a');
+      .toBe('#1 · Page 1 · on "Session updateComments": http://localhost:3000/#/d/document-1?thread=a');
   });
 
   it('drops the node part for a page pin or a node that is gone', () => {
     const document = fixture();
     const [entry] = collectThreads(document);
-    expect(threadLinkText(document, entry!, base)).toBe('#1 · Page 1 — http://localhost:3000/#/d/document-1?thread=a');
+    expect(threadLinkText(document, entry!, base)).toBe('#1 · Page 1: http://localhost:3000/#/d/document-1?thread=a');
     const gone = { ...entry!, thread: { ...entry!.thread, anchor: { nodeId: 'deleted', offset: { x: 0, y: 0 }, point: { x: 0, y: 0 } } } };
-    expect(threadLinkText(document, gone, base)).toBe('#1 · Page 1 — http://localhost:3000/#/d/document-1?thread=a');
+    expect(threadLinkText(document, gone, base)).toBe('#1 · Page 1: http://localhost:3000/#/d/document-1?thread=a');
   });
 
   it('uses the page name of a thread on another page', () => {
     const document = fixture();
     const d = collectThreads(document).find(({ thread: t }) => t.id === 'd')!;
-    expect(threadLinkText(document, d, base)).toMatch(/^#4 · Page 2 — /);
+    expect(threadLinkText(document, d, base)).toMatch(/^#4 · Page 2: /);
   });
 
   it('flattens and cuts a long or multi-line label, and ignores a blank one', () => {
