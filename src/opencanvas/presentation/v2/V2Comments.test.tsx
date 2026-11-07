@@ -1,16 +1,22 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { useRef, useState } from 'react';
+import { Profiler, useRef, useState } from 'react';
 import { createTestDocument, createTestNode } from '../../testing/builders/documentBuilder';
 import { addThread } from '../../domain/threads/threads';
 import type { SceneDocumentV1 } from '../../domain/document/types';
 import { V2Comments, type V2CommentApi } from './V2Comments';
+import { Placement } from './v2CommentPlacement';
+import { CommentDrafts } from './v2DraftGuard';
 import { ThreadPopover } from './V2CommentsParts';
 import type { V2Tool } from './v2ToolCatalog';
 
 // jsdom: no layout, no scrolling, no ResizeObserver (menus place themselves with one).
 Element.prototype.scrollTo = function scrollTo() {} as never;
-vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} });
+const toast = vi.fn();
+// What the ResizeObserver watches now: Placement watches an open card, so a card that is replaced must be swapped.
+const watched = new Set<Element>();
+vi.stubGlobal('ResizeObserver', class { observe(el: Element) { watched.add(el); } unobserve(el: Element) { watched.delete(el); } disconnect() {} });
+afterEach(() => { watched.clear(); toast.mockClear(); });
 const host = {
   screenToWorld: (point: { x: number; y: number }) => point,
   worldToScreen: (point: { x: number; y: number }) => point,
@@ -21,19 +27,40 @@ const host = {
 
 const api: { current: V2CommentApi | null } = { current: null };
 
-function Harness(props: { readonly initial: SceneDocumentV1; readonly tool: V2Tool; readonly pageIndex?: number; readonly onDoc?: (doc: SceneDocumentV1) => void }) {
+interface HarnessProps {
+  readonly initial: SceneDocumentV1;
+  readonly tool: V2Tool;
+  readonly pageIndex?: number;
+  readonly onDoc?: (doc: SceneDocumentV1) => void;
+  /** The document the session holds when it differs from the one rendered: a change another writer made a moment ago. */
+  readonly live?: { current: SceneDocumentV1 | null };
+  readonly onRender?: () => void;
+}
+
+function Harness(props: HarnessProps) {
   const [doc, setDoc] = useState(props.initial);
+  const docRef = useRef(props.initial);
   const sectionRef = useRef<HTMLElement | null>(null);
   const hostRef = useRef(host as never);
   const cameraRef = useRef({ x: 0, y: 0, zoom: 1 });
   const page = doc.pages[props.pageIndex ?? 0]!;
+  // As the session does: the change runs at once, on the document of now.
+  const updateThreads = (change: (document: SceneDocumentV1) => SceneDocumentV1) => {
+    const next = change(props.live?.current ?? docRef.current);
+    if (props.live?.current) return;
+    docRef.current = next;
+    setDoc(next);
+    props.onDoc?.(next);
+  };
   return (
-    <section ref={sectionRef} tabIndex={-1} data-testid="section">
-      <button type="button" data-testid="context-bar-button">Fill colour</button>
-      <V2Comments page={page} sectionRef={sectionRef} hostRef={hostRef} cameraRef={cameraRef} subscribeCamera={() => () => undefined}
-        selectedNodeId={() => null} apiRef={api} tool={props.tool} readOnly={false} hidden={false} panelsKey=""
-        updateThreads={(change) => setDoc((current) => { const next = change(current); props.onDoc?.(next); return next; })} />
-    </section>
+    <Profiler id="comments" onRender={() => props.onRender?.()}>
+      <section ref={sectionRef} tabIndex={-1} data-testid="section">
+        <button type="button" data-testid="context-bar-button">Fill colour</button>
+        <V2Comments page={page} sectionRef={sectionRef} hostRef={hostRef} cameraRef={cameraRef} subscribeCamera={() => () => undefined}
+          selectedNodeId={() => null} apiRef={api} tool={props.tool} readOnly={false} hidden={false} panelsKey=""
+          toast={toast} updateThreads={updateThreads} />
+      </section>
+    </Profiler>
   );
 }
 
@@ -51,6 +78,27 @@ const thread = () => screen.queryByTestId('v2-comment-thread');
 const canvasClick = (at = { x: 50, y: 50 }) => act(() => { api.current!.click(at); });
 
 describe('Escape', () => {
+  it('while an input method composes (keyCode 229) is the method\'s: it closes no card and cancels no edit', () => {
+    render(<Harness initial={withThread()} tool="select" />);
+    fireEvent.click(pinButton());
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Reply' }), { key: 'Escape', keyCode: 229 });
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Reply' }), { key: 'Escape', isComposing: true });
+    expect(thread()).not.toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Comment actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Edit' }));
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Edit comment' }), { key: 'Escape', keyCode: 229 });
+    expect(screen.getByRole('textbox', { name: 'Edit comment' })).not.toBeNull();
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Edit comment' }), { key: 'Escape' });
+    expect(screen.queryByRole('textbox', { name: 'Edit comment' })).toBeNull();
+  });
+
+  it('while an input method composes in the composer does not close it', () => {
+    render(<Harness initial={blank()} tool="comment" />);
+    canvasClick();
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Comment' }), { key: 'Escape', keyCode: 229 });
+    expect(composer()).not.toBeNull();
+  });
+
   it('closes a thread opened with the mouse, whatever has focus, and gives focus back to its pin', () => {
     render(<Harness initial={withThread()} tool="select" />);
     fireEvent.click(pinButton());
@@ -302,5 +350,133 @@ describe('moving a pin with the keyboard', () => {
     fireEvent.keyDown(pinButton(), { key: 'ArrowLeft', altKey: true, shiftKey: true });
     expect(anchor()).toMatchObject({ nodeId: null, point: { x: -62, y: 10 } });
     host.pickNode.mockImplementation(() => null);
+  });
+});
+
+describe('the card and its placement', () => {
+  const card = () => document.querySelector('[data-comment-open]')!;
+  const cards = () => [...watched].filter((el) => el.matches('[data-comment-open]'));
+
+  it('Delete on the pin of an open thread swaps the card for the confirm card: placement watches the live one', () => {
+    render(<Harness initial={withThread()} tool="select" />);
+    fireEvent.click(pinButton());
+    const first = card();
+    expect(cards()).toEqual([first]);
+    fireEvent.keyDown(pinButton(), { key: 'Delete' });
+    expect(screen.getByRole('alert')).toHaveTextContent('Delete this thread?');
+    expect(card()).not.toBe(first);
+    expect(cards()).toEqual([card()]);
+  });
+
+  it('the pins\' layer is handed over once, not on every render', () => {
+    const setLayer = vi.spyOn(Placement.prototype, 'setLayer');
+    render(<Harness initial={withThread()} tool="select" />);
+    fireEvent.click(pinButton());
+    fireEvent.click(pinButton());
+    expect(setLayer.mock.calls.filter(([layer]) => layer !== null)).toHaveLength(1);
+    setLayer.mockRestore();
+  });
+
+  it('a shape preview re-renders the pins only when a pin is on a shape', () => {
+    const renders = vi.fn();
+    const preview = { nodes: [createTestNode('a')] } as never;
+    const free = render(<Harness initial={withThread()} tool="select" onRender={renders} />);
+    renders.mockClear();
+    act(() => api.current!.preview(preview, false));
+    expect(renders).not.toHaveBeenCalled();
+    free.unmount();
+    const base = blank();
+    const onShape = addThread(base, { pageId: base.pages[0]!.id, threadId: 't1', nodeId: 'a', point: { x: 10, y: 10 },
+      comment: { id: 'm1', author: human, body: 'on a', createdAt: new Date().toISOString() } });
+    render(<Harness initial={onShape} tool="select" onRender={renders} />);
+    renders.mockClear();
+    act(() => api.current!.preview(preview, false));
+    expect(renders).toHaveBeenCalled();
+  });
+});
+
+describe('a change to something that is gone, or that fails', () => {
+  const type = (name: string, value: string) => fireEvent.change(screen.getByRole('textbox', { name }), { target: { value } });
+  const box = (name: string) => (screen.getByRole('textbox', { name }) as HTMLTextAreaElement).value;
+  const twoMessages = (): SceneDocumentV1 => {
+    const doc = withThread('opening');
+    const page = doc.pages[0]!;
+    const only = page.threads![0]!;
+    const reply = { id: 'm2', author: human, body: 'a reply', createdAt: new Date().toISOString() };
+    return { ...doc, pages: [{ ...page, threads: [{ ...only, comments: [...only.comments, reply] }] }] };
+  };
+  const without = (doc: SceneDocumentV1): SceneDocumentV1 => ({ ...doc, pages: [{ ...doc.pages[0]!, threads: undefined }] });
+
+  it('a reply to a thread that was removed a moment ago is not sent, keeps its text, and tells the user', () => {
+    const live: { current: SceneDocumentV1 | null } = { current: null };
+    render(<Harness initial={withThread()} tool="select" live={live} />);
+    fireEvent.click(pinButton());
+    type('Reply', 'still worth saying');
+    live.current = without(withThread());
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Reply' }), { key: 'Enter' });
+    expect(box('Reply')).toBe('still worth saying');
+    expect(toast).toHaveBeenCalledTimes(1);
+    expect(toast.mock.calls[0]![0]).toMatchObject({ title: 'Reply not sent', description: expect.stringContaining('still worth saying') });
+  });
+
+  it('an edit of a message that was removed a moment ago stays open with its text and tells the user', () => {
+    const live: { current: SceneDocumentV1 | null } = { current: null };
+    render(<Harness initial={twoMessages()} tool="select" live={live} />);
+    fireEvent.click(pinButton());
+    fireEvent.click(screen.getAllByRole('button', { name: 'Comment actions' })[1]!);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Edit' }));
+    type('Edit comment', 'better wording');
+    live.current = withThread('opening');
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Edit comment' }), { key: 'Enter' });
+    expect(box('Edit comment')).toBe('better wording');
+    expect(toast.mock.calls[0]![0]).toMatchObject({ title: 'Edit not saved' });
+  });
+
+  it('deleting, resolving or moving what is already gone is quiet', () => {
+    const live: { current: SceneDocumentV1 | null } = { current: null };
+    render(<Harness initial={twoMessages()} tool="select" live={live} />);
+    fireEvent.click(pinButton());
+    fireEvent.click(screen.getAllByRole('button', { name: 'Comment actions' })[1]!);
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete' }));
+    live.current = without(withThread());
+    fireEvent.click(screen.getByRole('button', { name: 'Delete reply' }));
+    fireEvent.keyDown(pinButton(), { key: 'ArrowRight', altKey: true });
+    expect(toast).not.toHaveBeenCalled();
+  });
+
+  it('any other failure shows its message, and the composer keeps what was typed', () => {
+    const live: { current: SceneDocumentV1 | null } = { current: null };
+    render(<Harness initial={blank()} tool="comment" live={live} />);
+    canvasClick();
+    type('Comment', 'for a page that went away');
+    live.current = { ...blank(), pages: [] };
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Comment' }), { key: 'Enter' });
+    expect(composer()).not.toBeNull();
+    expect(box('Comment')).toBe('for a page that went away');
+    expect(toast.mock.calls[0]![0]).toMatchObject({ tone: 'danger', title: 'Comment not saved', description: expect.stringContaining('Unknown page') });
+  });
+});
+
+describe('what a sent or deleted box leaves behind', () => {
+  it('the composer is empty again after Send', () => {
+    render(<Harness initial={blank()} tool="comment" />);
+    canvasClick();
+    fireEvent.change(screen.getByRole('textbox', { name: 'Comment' }), { target: { value: 'sent' } });
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Comment' }), { key: 'Enter' });
+    expect(composer()).toBeNull();
+    canvasClick({ x: 200, y: 200 });
+    expect((screen.getByRole('textbox', { name: 'Comment' }) as HTMLTextAreaElement).value).toBe('');
+  });
+
+  it('a deleted thread\'s unsent boxes go with it', () => {
+    const drop = vi.spyOn(CommentDrafts.prototype, 'dropThread');
+    render(<Harness initial={withThread()} tool="select" />);
+    fireEvent.click(pinButton());
+    fireEvent.change(screen.getByRole('textbox', { name: 'Reply' }), { target: { value: 'unsent' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Thread actions' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete thread…' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete thread' }));
+    expect(drop).toHaveBeenCalledWith('t1');
+    drop.mockRestore();
   });
 });

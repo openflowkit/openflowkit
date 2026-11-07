@@ -25,6 +25,8 @@ const keep = (event: KeyboardEvent): void => event.stopPropagation();
 function cardKeys(onClose: () => void) {
   return (event: KeyboardEvent) => {
     keep(event);
+    // Escape while an input method composes cancels the composition, not the card.
+    if (composing(event)) return;
     if (event.key === 'Escape' && !event.defaultPrevented && !(event.target as Element).closest('[role="menu"]')) {
       event.preventDefault();
       onClose();
@@ -72,8 +74,9 @@ function CommentInput(props: {
         onChange={(event) => props.onChange(event.target.value)}
         onKeyDown={(event) => {
           // The card around the box keeps every key from the editor and closes on an Escape this box leaves alone.
+          if (composing(event)) return;
           if (event.key === 'Escape' && props.onEscape) { event.preventDefault(); props.onEscape(); return; }
-          if (event.key === 'Enter' && !event.shiftKey && !composing(event)) {
+          if (event.key === 'Enter' && !event.shiftKey) {
             event.preventDefault();
             if (!empty) props.onSend();
           }
@@ -91,14 +94,15 @@ function CommentInput(props: {
 export function CommentComposer(props: {
   /** The page it is on: a new thread's unsent text is kept per page (draftKey.compose). */
   readonly pageId: string;
-  readonly onSend: (body: string) => void;
+  /** True when the comment was saved: only then is the box emptied. */
+  readonly onSend: (body: string) => boolean;
   readonly onCancel: () => void;
 }): React.JSX.Element {
   const [body, setBody] = useDraft(draftKey.compose(props.pageId));
   return (
     <div className="ofk-comment-card ofk-comment-composer" role="dialog" aria-label="New comment" data-comment-ui data-comment-open
       onKeyDown={cardKeys(props.onCancel)}>
-      <CommentInput value={body} onChange={setBody} onSend={() => { props.onSend(body); setBody(''); }}
+      <CommentInput value={body} onChange={setBody} onSend={() => { if (props.onSend(body)) setBody(''); }}
         placeholder="Add a comment" label="Comment" autoFocus />
     </div>
   );
@@ -126,7 +130,7 @@ function Message(props: {
   readonly message: SceneComment;
   readonly canEdit: boolean;
   readonly now: number;
-  readonly onEdit: (body: string) => void;
+  readonly onEdit: (body: string) => boolean;
   readonly onDelete: () => void;
 }): React.JSX.Element {
   const { message } = props;
@@ -136,7 +140,7 @@ function Message(props: {
   const [editing, setEditing] = useState(() => drafts.has(key));
   const [draft, setDraft] = useDraft(key, message.body);
   const stop = () => { setDraft(message.body); setEditing(false); };
-  const commit = () => { if (draft.trim()) { props.onEdit(draft); stop(); } };
+  const commit = () => { if (draft.trim() && props.onEdit(draft)) stop(); };
   return (
     <li className="ofk-comment-message" data-testid="v2-comment-message">
       <Avatar kind={message.author.kind} />
@@ -167,8 +171,9 @@ export function ThreadPopover(props: {
   readonly onClose: () => void;
   readonly onResolve: () => void;
   readonly onDeleteThread: () => void;
-  readonly onReply: (body: string) => void;
-  readonly onEditMessage: (commentId: string, body: string) => void;
+  /** `onReply` and `onEditMessage` return true when the change was saved: only then is the box emptied or closed. */
+  readonly onReply: (body: string) => boolean;
+  readonly onEditMessage: (commentId: string, body: string) => boolean;
   readonly onDeleteMessage: (commentId: string) => void;
   readonly now: number;
   /** Opens asking to delete the thread (Delete on its pin). */
@@ -237,7 +242,7 @@ export function ThreadPopover(props: {
       {readOnly ? null : (
         <footer>
           <CommentInput value={reply} onChange={setReply} placeholder="Reply" label="Reply" sendLabel="Send reply"
-            onSend={() => { props.onReply(reply); setReply(''); }} />
+            onSend={() => { if (props.onReply(reply)) setReply(''); }} />
         </footer>
       )}
     </div>

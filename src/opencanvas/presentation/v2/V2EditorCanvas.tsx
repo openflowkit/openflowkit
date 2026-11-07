@@ -5,7 +5,7 @@ import type { CanvasSelection } from '../../application/selection/selection';
 import type { DocumentCommand } from '../../domain/commands/types';
 import type { SceneDocumentV1, ScenePage } from '../../domain/document/types';
 import type { PixiRendererHost, PixiRendererStatus } from '../../infrastructure/pixi/PixiRendererHost';
-import { EmptyState, Button, ErrorState } from '../design-system';
+import { EmptyState, Button, ErrorState, type ToastItem } from '../design-system';
 import { V2CanvasHost } from './V2CanvasHost';
 import { V2Comments, type V2CommentApi } from './V2Comments';
 import type { V2Tool } from './V2CreationToolbar';
@@ -56,6 +56,7 @@ interface EditorCanvasProps {
     readonly apiRef: RefObject<V2CommentApi | null>;
     readonly updateThreads: (change: (document: SceneDocumentV1) => SceneDocumentV1) => void;
     readonly readOnly: boolean;
+    readonly toast: (toast: ToastItem) => void;
   };
   readonly labelEditing: ReturnType<typeof useV2LabelEditing>;
   readonly connectorLabel: ReturnType<typeof useV2ConnectorLabelEditing>;
@@ -122,7 +123,7 @@ export function V2EditorCanvas(p: EditorCanvasProps): React.JSX.Element {
       <V2Comments page={p.page} sectionRef={p.sectionRef} hostRef={p.hostRef} cameraRef={p.camera.cameraRef} subscribeCamera={p.camera.subscribe}
         selectedNodeId={selectedNodeId} apiRef={commentApi} tool={p.tool} readOnly={p.comments.readOnly} hidden={map.active}
         panelsKey={[panels.workspace, panels.shortcutsOpen, panels.chartId, panels.treeOpen, panels.motionOpen].join()}
-        updateThreads={p.comments.updateThreads} />
+        toast={p.comments.toast} updateThreads={p.comments.updateThreads} />
       {p.agentCursor}
       {map.start ? (
         <V2MapStart busy={code.generating} onStartModel={() => { void code.startFrom(C4_STARTER, { openPanel: false }).then(counted('created_template')); p.setModelPanelOnStart(true); }}

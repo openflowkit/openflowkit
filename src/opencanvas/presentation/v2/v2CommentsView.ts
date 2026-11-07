@@ -1,7 +1,7 @@
 // Pure helpers for the comment overlays: how a message's age reads, what a pin is called, where a pin is drawn mid-drag.
 import type { Point2d } from '../../domain/geometry/types';
 import type { SceneDocumentV1, SceneNode, ScenePage, SceneThread } from '../../domain/document/types';
-import { pageThreads, pinOnNode, ThreadError } from '../../domain/threads/threads';
+import { findThread, pageThreads, pinOnNode } from '../../domain/threads/threads';
 import { buildNodeWorldMatrices } from '../../domain/scene/worldGeometry';
 
 /** Every human comment is written by this name until named commenters exist; the data model already carries it. */
@@ -89,17 +89,23 @@ export function pinLabel(thread: SceneThread): string {
   return `Comment #${thread.number} by ${lead.author.name}: ${cut}${count}`;
 }
 
+/** What a thread change is about: a thread, and the message in it when the change is to one message. */
+export interface ThreadTarget { readonly thread: string; readonly comment?: string }
+
 /**
- * `change`, except that a thread or message someone else removed first (an agent, another tab) makes it no change: the card
- * that asked closes with its thread, instead of the error reaching the page.
+ * `change`, except that a target someone else removed first (an agent, another tab) makes it no change and calls `onGone`.
+ * It looks the target up in the document the change is applied to, so only "gone" is quiet: any other error from `change`
+ * (an empty body, a bad document) still throws, for the caller to show.
  */
-export function unlessGone(change: (document: SceneDocumentV1) => SceneDocumentV1): (document: SceneDocumentV1) => SceneDocumentV1 {
+export function unlessGone(
+  target: ThreadTarget, change: (document: SceneDocumentV1) => SceneDocumentV1, onGone: () => void,
+): (document: SceneDocumentV1) => SceneDocumentV1 {
   return (document) => {
-    try {
-      return change(document);
-    } catch (error) {
-      if (error instanceof ThreadError) return document;
-      throw error;
+    const found = findThread(document, target.thread);
+    if (!found || (target.comment !== undefined && !found.thread.comments.some((comment) => comment.id === target.comment))) {
+      onGone();
+      return document;
     }
+    return change(document);
   };
 }

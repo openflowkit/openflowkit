@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import type { CanvasCamera } from '../../domain/camera/types';
 import {
-  addComment, addThread, editComment, moveThread, pageThreads, removeComment, removeThread, setThreadResolved,
+  addComment, addThread, editComment, moveThread, pageThreads, removeComment, removeThread, setThreadResolved, ThreadError,
 } from '../../domain/threads/threads';
 import type { Point2d } from '../../domain/geometry/types';
 import type { SceneNode, SceneThread, SceneDocumentV1, ScenePage } from '../../domain/document/types';
@@ -10,9 +10,10 @@ import type { PixiRendererHost } from '../../infrastructure/pixi/PixiRendererHos
 import { Avatar, CommentComposer, DraftsContext, ThreadPopover } from './V2CommentsParts';
 import { Anchored, CommentPin, PlacementContext, type PinActions } from './V2CommentPin';
 import { mintV2Id } from './v2Document';
-import { HUMAN_AUTHOR_NAME, keyboardSpot, pinNudge, pinsOnPreview, unlessGone } from './v2CommentsView';
+import { HUMAN_AUTHOR_NAME, keyboardSpot, pinNudge, pinsOnPreview, unlessGone, type ThreadTarget } from './v2CommentsView';
 import { Placement } from './v2CommentPlacement';
 import { clearance } from './map/mapMode';
+import type { ToastItem } from '../design-system';
 import type { V2Tool } from './v2ToolCatalog';
 import { CommentDrafts, draftKey, FRESH_GUARD, outsideClick, typed, type DraftGuard } from './v2DraftGuard';
 
@@ -56,6 +57,8 @@ interface Props {
   /** Changes when a side panel opens or closes: the free canvas an open card stays inside changed. */
   readonly panelsKey: string;
   readonly updateThreads: (change: (document: SceneDocumentV1) => SceneDocumentV1) => void;
+  /** Tells the user what could not be saved. */
+  readonly toast: (toast: ToastItem) => void;
 }
 
 /** A press on a pin that moves less than this is a click. */
@@ -75,7 +78,13 @@ function shake(section: HTMLElement): void {
   requestAnimationFrame(() => card.querySelector<HTMLElement>('textarea')?.focus({ preventScroll: true }));
 }
 
-type Latest = RefObject<{ readonly open: Open | null; readonly readOnly: boolean; readonly updateThreads: Props['updateThreads'] }>;
+/**
+ * Applies a change to threads. False when it did not apply: `target` was removed first (quiet, unless `lost` says what that
+ * costs the user), or it failed (shown in a toast). The change runs at once, on the session's document of now.
+ */
+type WriteThreads = (target: ThreadTarget | null, change: (document: SceneDocumentV1) => SceneDocumentV1, lost?: { readonly title: string; readonly text?: string }) => boolean;
+
+type Latest = RefObject<{ readonly open: Open | null; readonly readOnly: boolean; readonly updateThreads: WriteThreads }>;
 
 /** The pins' shared handlers: press and drag a pin to move it, click to open its thread, Alt+Arrow to nudge it. */
 function pinActions(
@@ -114,7 +123,7 @@ function pinActions(
       window.setTimeout(() => { justDragged = false; }, 0);
       setDrag(null);
       const at = worldAt(event);
-      if (at) latest.current.updateThreads((doc) => moveThread(doc, threadId, hostRef.current?.pickNode(at.screen) ?? null, at.world));
+      if (at) latest.current.updateThreads({ thread: threadId }, (doc) => moveThread(doc, threadId, hostRef.current?.pickNode(at.screen) ?? null, at.world));
     },
     cancel: () => { pressed = null; setDrag(null); },
     toggle: (threadId) => {
@@ -136,7 +145,7 @@ function pinActions(
       event.preventDefault();
       // As a drop would: onto the shape under the tip, or the page. So the keyboard can move a pin from shape to shape.
       const next = { x: thread.anchor.point.x + by.x, y: thread.anchor.point.y + by.y };
-      latest.current.updateThreads((doc) => moveThread(doc, thread.id, host.pickNode(host.worldToScreen(next)), next));
+      latest.current.updateThreads({ thread: thread.id }, (doc) => moveThread(doc, thread.id, host.pickNode(host.worldToScreen(next)), next));
     },
   };
 }
@@ -144,8 +153,22 @@ function pinActions(
 /** Comment pins over the canvas, the composer a click with the comment tool opens, and a pin's thread. DOM, so no export ever draws them. */
 export const V2Comments = memo(function V2Comments(props: Props): React.JSX.Element | null {
   const { page, hidden, readOnly, tool, sectionRef, hostRef, cameraRef, subscribeCamera, apiRef, selectedNodeId } = props;
-  const write = props.updateThreads;
-  const updateThreads = useCallback((change: (document: SceneDocumentV1) => SceneDocumentV1) => write(unlessGone(change)), [write]);
+  const { updateThreads: write, toast } = props;
+  const updateThreads = useCallback<WriteThreads>((target, change, lost) => {
+    let gone = false;
+    try {
+      write(target ? unlessGone(target, change, () => { gone = true; }) : change);
+    } catch (error) {
+      if (!(error instanceof ThreadError)) throw error;
+      toast({ id: `comment-${Date.now()}`, tone: 'danger', title: 'Comment not saved', description: error.message });
+      return false;
+    }
+    if (gone && lost) {
+      toast({ id: `comment-${Date.now()}`, tone: 'warning', title: lost.title,
+        description: `It was deleted before this was saved.${lost.text ? ` Your text: ${lost.text.length > 200 ? `${lost.text.slice(0, 200)}…` : lost.text}` : ''}` });
+    }
+    return !gone;
+  }, [write, toast]);
   const [open, setOpen] = useState<Open | null>(null);
   const [now, setNow] = useState(() => Date.now());
   // The loop reads the refs when a frame runs, never during render.
@@ -182,8 +205,10 @@ export const V2Comments = memo(function V2Comments(props: Props): React.JSX.Elem
     return () => clearInterval(timer);
   }, [open]);
 
-  const latest = useRef({ open, tool, readOnly, hidden, updateThreads });
-  useEffect(() => { latest.current = { open, tool, readOnly, hidden, updateThreads }; });
+  // Whether any drawn pin is on a shape: only then does a shape being moved or turned have pins to carry.
+  const anchored = useMemo(() => threads.some((thread) => thread.anchor.nodeId !== null), [threads]);
+  const latest = useRef({ open, tool, readOnly, hidden, updateThreads, anchored });
+  useEffect(() => { latest.current = { open, tool, readOnly, hidden, updateThreads, anchored }; });
   // Unsent text by box, kept for the editor's life; whether a click away has already warned about the open box's.
   const guard = useRef<DraftGuard>(FRESH_GUARD);
   // eslint-disable-next-line react-hooks/refs -- only handed over here; a later keystroke writes it
@@ -250,7 +275,7 @@ export const V2Comments = memo(function V2Comments(props: Props): React.JSX.Elem
         if (pressFoundOpen.current || latest.current.open || !canAdd()) return;
         compose(point, hostRef.current?.pickNode(point) ?? null);
       },
-      preview: (result, copy) => setPreview(result && !copy ? result.nodes : null),
+      preview: (result, copy) => setPreview(result && !copy && latest.current.anchored ? result.nodes : null),
     };
     return () => { apiRef.current = null; };
   }, [apiRef, hostRef, sectionRef, selectedNodeId, close]);
@@ -265,25 +290,28 @@ export const V2Comments = memo(function V2Comments(props: Props): React.JSX.Elem
   const [actions] = useState(() => pinActions(latest, sectionRef, hostRef, setDrag, setOpen));
 
   const message = useCallback((body: string) => ({ id: mintV2Id('msg'), author: HUMAN_AUTHOR, body, createdAt: new Date().toISOString() }), []);
+  // One ref function for the layer's life: a new one each render would hand the layer over again (and repaint it).
+  const layerRef = useCallback((layer: HTMLElement | null) => placement.setLayer(layer), [placement]);
   if (hidden) return null;
 
-  const create = (body: string) => {
-    if (open?.kind !== 'composer') return;
+  const create = (body: string): boolean => {
+    if (open?.kind !== 'composer') return false;
     const threadId = mintV2Id('thread');
     const next = message(body);
-    updateThreads((doc) => addThread(doc, { pageId: page.id, threadId, nodeId: open.nodeId, point: open.world, comment: next }));
+    if (!updateThreads(null, (doc) => addThread(doc, { pageId: page.id, threadId, nodeId: open.nodeId, point: open.world, comment: next }))) return false;
     // The comment tool stays active: the next click starts the next thread. Esc or another tool leaves it.
     close();
+    return true;
   };
-  const reply = (thread: SceneThread, body: string) => {
+  const reply = (thread: SceneThread, body: string): boolean => {
     const next = message(body);
-    updateThreads((doc) => addComment(doc, thread.id, next));
+    return updateThreads({ thread: thread.id }, (doc) => addComment(doc, thread.id, next), { title: 'Reply not sent', text: body });
   };
 
   return (
     <DraftsContext.Provider value={drafts}>
     <PlacementContext.Provider value={placement}>
-    <div className="ofk-comment-layer" ref={(layer) => placement.setLayer(layer)}>
+    <div className="ofk-comment-layer" ref={layerRef}>
       {threads.map((thread) => {
         const selected = open?.kind === 'thread' && open.id === thread.id;
         return (
@@ -293,11 +321,12 @@ export const V2Comments = memo(function V2Comments(props: Props): React.JSX.Elem
               <ThreadPopover key={open?.kind === 'thread' && open.askDelete ? 'ask' : 'open'} thread={openThread} readOnly={readOnly} now={now}
                 askDelete={open?.kind === 'thread' && open.askDelete}
                 onClose={close}
-                onResolve={() => { updateThreads((doc) => setThreadResolved(doc, thread.id, !thread.resolved)); setOpen(null); }}
-                onDeleteThread={() => { updateThreads((doc) => removeThread(doc, thread.id)); drafts.dropThread(thread.id); setOpen(null); }}
+                onResolve={() => { updateThreads({ thread: thread.id }, (doc) => setThreadResolved(doc, thread.id, !thread.resolved)); setOpen(null); }}
+                onDeleteThread={() => { updateThreads({ thread: thread.id }, (doc) => removeThread(doc, thread.id)); drafts.dropThread(thread.id); setOpen(null); }}
                 onReply={(body) => reply(thread, body)}
-                onEditMessage={(commentId, body) => updateThreads((doc) => editComment(doc, thread.id, commentId, body, new Date().toISOString()))}
-                onDeleteMessage={(commentId) => updateThreads((doc) => removeComment(doc, thread.id, commentId))} />
+                onEditMessage={(commentId, body) => updateThreads({ thread: thread.id, comment: commentId },
+                  (doc) => editComment(doc, thread.id, commentId, body, new Date().toISOString()), { title: 'Edit not saved', text: body })}
+                onDeleteMessage={(commentId) => { updateThreads({ thread: thread.id, comment: commentId }, (doc) => removeComment(doc, thread.id, commentId)); }} />
             ) : null}
           </CommentPin>
         );
