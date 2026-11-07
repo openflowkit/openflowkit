@@ -859,7 +859,6 @@
 .ofk-v2-export .ofk-segmented-caption { font-size: 12px; }
 .ofk-v2-export .ofk-v2-export-caption { margin-top: -6px; padding-inline-start: calc(var(--ofk-row-label, 72px) + var(--ofk-space-md)); }
 .ofk-v2-export-actions { display: flex; gap: 8px; }
-.ofk-v2-export-option { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ofk-text); }
 .ofk-v2-export-copies { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 8px; }
 .ofk-v2-export-copies .ofk-button, .ofk-v2-export-copies > * { width: 100%; white-space: nowrap; }
 /* Share: two jobs, like a whiteboard's session vs link — pick one, then one action.

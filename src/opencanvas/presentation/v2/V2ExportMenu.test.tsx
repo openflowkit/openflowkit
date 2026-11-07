@@ -87,6 +87,8 @@ describe('Include comments', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'JSON' }));
     const box = screen.getByRole('checkbox', { name: 'Include comments' }) as HTMLInputElement;
     expect(box.checked).toBe(false);
+    // The design system's checkbox, not a bare native one.
+    expect(box.closest('.ofk-check')).not.toBeNull();
     if (tick) fireEvent.click(box);
     fireEvent.click(screen.getByRole('button', { name: 'Download' }));
     await waitFor(() => expect(exporter.download).toHaveBeenCalledTimes(1));
