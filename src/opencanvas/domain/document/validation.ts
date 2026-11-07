@@ -193,8 +193,10 @@ function isThreadNumber(value: unknown): value is number {
   return Number.isSafeInteger(value) && (value as number) > 0 && (value as number) <= THREAD_NUMBER_MAX;
 }
 
-/** A thread's id, pin and state; its number and comments are checked apart, since loading can repair those. */
-// A missing anchor node is not an issue: the node may have been deleted, and the pin stays at `point`.
+/**
+ * A thread's id, pin and state; its number and comments are checked apart, since loading can repair those. A missing
+ * anchor node is not an issue: the node may have been deleted, and the pin stays at `point`.
+ */
 function isThreadFrame(value: unknown): value is RecordValue & { id: string; comments: unknown[] } {
   return (
     isRecord(value) &&
@@ -344,8 +346,9 @@ export function withoutInvalidThreads(value: unknown): unknown {
   const unnumbered = new Set<RecordValue>();
   const pages = value.pages.map((page: unknown) => {
     if (!isRecord(page) || page.threads === undefined) return page;
-    const threads: unknown[] = Array.isArray(page.threads) ? page.threads : [];
-    if (!Array.isArray(page.threads)) changed = true;
+    const listed = Array.isArray(page.threads);
+    const threads: unknown[] = listed ? (page.threads as unknown[]) : [];
+    if (!listed) changed = true;
     const kept = threads.flatMap((thread) => {
       if (!isThreadFrame(thread) || !isComment(thread.comments[0])) {
         warn('Dropped an invalid comment thread', page);
@@ -360,7 +363,7 @@ export function withoutInvalidThreads(value: unknown): unknown {
       else unnumbered.add(repaired);
       return [repaired];
     });
-    if (kept.length === threads.length && kept.every((thread, index) => thread === threads[index])) return page;
+    if (listed && kept.length === threads.length && kept.every((thread, index) => thread === threads[index])) return page;
     const { threads: _dropped, ...rest } = page;
     return kept.length ? { ...rest, threads: kept } : rest;
   });

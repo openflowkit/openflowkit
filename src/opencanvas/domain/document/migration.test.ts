@@ -154,6 +154,9 @@ describe('migrateSceneDocument', () => {
       const result = migrateSceneDocument({ ...document, pages: [{ ...document.pages[0]!, threads: [thread('bad', 1, { comments: [] })] }] });
       expect(result.success && 'threads' in result.document.pages[0]!).toBe(false);
       expect(result.success).toBe(true);
+      const notAList = migrateSceneDocument({ ...document, pages: [{ ...document.pages[0]!, threads: 'none' }] });
+      expect(notAList.success).toBe(true);
+      expect(notAList.success && 'threads' in notAList.document.pages[0]!).toBe(false);
     });
   });
 });
