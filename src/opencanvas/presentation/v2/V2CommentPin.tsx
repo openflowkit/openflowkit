@@ -22,10 +22,12 @@ export function Anchored(props: { readonly world: Point2d; readonly card?: boole
   useLayoutEffect(() => {
     if (ref.current) placement?.move(ref.current, props.world);
   }, [placement, props.world]);
+  // After every commit, not only when `card` changes: a card that is replaced (its thread asking to delete) is a new element,
+  // and placement must measure that one. setCard does nothing when the element is the same.
   useLayoutEffect(() => {
     const el = ref.current;
     if (el) placement?.setCard(el, props.card ? el.querySelector<HTMLElement>('[data-comment-open]') : null);
-  }, [placement, props.card]);
+  });
   return <div ref={ref} className={`ofk-comment-anchor ${props.className ?? ''}`} data-testid={props.testId}>{props.children}</div>;
 }
 

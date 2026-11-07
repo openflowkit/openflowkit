@@ -101,6 +101,51 @@ describe('Placement', () => {
     expect(layer.style.transform).toBe('translate(0px, 0px)');
   });
 
+  it('never hides the pin that holds focus, and hides it once focus has left and a frame has run', () => {
+    const { camera, placement, pins, layer } = setup();
+    for (const pin of pins) { pin.tabIndex = 0; layer.append(pin); }
+    document.body.append(layer);
+    runFrame(); runFrame();
+    pins[0]!.focus();
+    camera.x = -2000;
+    placement.kick();
+    runFrame();
+    expect(pins.map((pin) => pin.hidden)).toEqual([false, true, true]);
+    expect(document.activeElement).toBe(pins[0]);
+    // Focus leaves: the layer hears it, and the next frame hides the pin.
+    pins[0]!.blur();
+    layer.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+    runFrame();
+    expect(pins[0]!.hidden).toBe(true);
+    layer.remove();
+  });
+
+  it('never hides a pin whose card is open', () => {
+    const { camera, placement, pins } = setup();
+    const card = document.createElement('div');
+    Object.defineProperties(card, { offsetWidth: { value: 320 }, offsetHeight: { value: 200 } });
+    placement.setCard(pins[0]!, card);
+    runFrame(); runFrame();
+    camera.x = -2000;
+    placement.kick();
+    runFrame();
+    expect(pins.map((pin) => pin.hidden)).toEqual([false, true, true]);
+  });
+
+  it('measures the card that replaced the first one, not the one that left', () => {
+    const { placement, pins } = setup();
+    const sized = (height: number) => {
+      const card = document.createElement('div');
+      Object.defineProperties(card, { offsetWidth: { value: 320 }, offsetHeight: { value: height } });
+      return card;
+    };
+    const first = sized(100);
+    placement.setCard(pins[0]!, first);
+    placement.setCard(pins[0]!, sized(900));
+    // 900px does not fit the 800px canvas: it starts at the top, so it is slid up by the pin's own y.
+    expect(pins[0]!.style.getPropertyValue('--ofk-card-top')).toBe('-5px');
+  });
+
   it('repaints a pin whose anchor moved even when the camera did not', () => {
     const { placement, pins } = setup();
     runFrame(); runFrame();
@@ -120,6 +165,13 @@ describe('cardSpot', () => {
 
   it('opens on the left when the right would run under a panel or past the rail', () => {
     expect(cardSpot({ x: 700, y: 300 }, card, free).side).toBe('left');
+  });
+
+  it('counts a left panel: the side it measures starts where the free canvas does', () => {
+    const wide = { width: 300, height: 100 };
+    // Neither side fits a 300px card. With nothing at the left the left side is the roomier; a panel up to 200 leaves it only 92px.
+    expect(cardSpot({ x: 300, y: 300 }, wide, { left: 0, top: 60, width: 450, height: 700 }).side).toBe('left');
+    expect(cardSpot({ x: 300, y: 300 }, wide, { left: 200, top: 60, width: 250, height: 700 }).side).toBe('right');
   });
 
   it('takes the roomier side when neither fits', () => {
