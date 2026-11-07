@@ -158,6 +158,17 @@ describe('useV2WebMcp', () => {
     unmount();
   });
 
+  // PR #103 review: the comment was in, but the message sent the agent to get_document (no threads there) and a retry posted twice.
+  it('a thread change that never reaches the screen says to check list_threads before posting again', async () => {
+    const { tools } = installModelContext();
+    const { result, unmount } = renderHook(() => useV2WebMcp(options({ threadChange: (change) => { change(testDocument); } })));
+    await ready(result);
+    const outcome = await tools.get('start_thread')!.execute({ point: { x: 0, y: 0 }, body: 'hi' }) as { error: string };
+    expect(outcome.error).toMatch(/list_threads/);
+    expect(outcome.error).not.toMatch(/get_document/);
+    unmount();
+  });
+
   it('a read-only document registers the reads only, and they still answer', async () => {
     const { tools } = installModelContext();
     const commit = vi.fn();

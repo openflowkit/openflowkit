@@ -45,16 +45,20 @@ function eitherSignal(closed: AbortSignal, call: AbortSignal | undefined): Abort
   return both.signal;
 }
 
+const UNSHOWN_EDIT = 'The editor did not show this change. Call get_document to see what the page holds before trying again.';
+// The session took the thread change already: a blind retry would post it twice, and get_document shows no threads.
+const UNSHOWN_THREAD = 'The editor took this thread change but did not show it. Call list_threads to see whether it is there before trying again.';
+
 /**
  * A commit or a thread change reaches the editor's state on the next render; the next call must read the document it made. An edit
  * the session took that never shows up (a reload over it) is reported, not taken for applied.
  */
-async function settled(read: () => unknown, before: unknown): Promise<void> {
+async function settled(read: () => unknown, before: unknown, unshown: string): Promise<void> {
   for (let tries = 0; tries < 60; tries += 1) {
     if (read() !== before) return;
     await new Promise((resolve) => setTimeout(resolve, 16));
   }
-  throw new Error('The editor did not show this change. Call get_document to see what the page holds before trying again.');
+  throw new Error(unshown);
 }
 
 export function useV2WebMcp(options: V2WebMcpOptions): V2WebMcp {
@@ -78,7 +82,7 @@ export function useV2WebMcp(options: V2WebMcpOptions): V2WebMcp {
         const { command, output, threadsChanged } = ran;
         trackOnce('agent_webmcp');
         if (command) setActivity({ label: command.label, id: command.id });
-        if (command || threadsChanged) await settled(() => optionsRef.current.document, before);
+        if (command || threadsChanged) await settled(() => optionsRef.current.document, before, command ? UNSHOWN_EDIT : UNSHOWN_THREAD);
         const commented = agentCommented(name, ran);
         optionsRef.current.onActivity(commented ? `An agent in this browser ${commented}.` : `${name} ran from an agent in this browser.`);
         return output;
