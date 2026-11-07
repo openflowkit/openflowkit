@@ -1505,9 +1505,12 @@
 
 .ofk-comment-input {
   display: flex; align-items: flex-end; gap: 6px; padding: 5px 5px 5px 12px; border-radius: 10px;
-  background: color-mix(in srgb, var(--ofk-text) 6%, transparent); box-shadow: inset 0 0 0 1px var(--ofk-border);
+  border: 1px solid var(--ofk-border); background: var(--ofk-canvas);
+  transition: border-color var(--ofk-motion-fast, .12s), box-shadow var(--ofk-motion-fast, .12s);
 }
-.ofk-comment-input:focus-within { box-shadow: inset 0 0 0 2px var(--ofk-focus); }
+/* One focus treatment, the AI assistant's prompt box: the field takes it, the textarea inside draws none. */
+.ofk-comment-input:focus-within { border-color: var(--ofk-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ofk-accent) 18%, transparent); }
+.ofk-v2 .ofk-comment-input textarea:focus, .ofk-v2 .ofk-comment-input textarea:focus-visible { outline: none; box-shadow: none; border: 0; }
 .ofk-comment-input textarea {
   flex: 1; min-width: 0; margin: 0; padding: 4px 0; border: 0; outline: 0; background: transparent; color: var(--ofk-text); font: inherit;
   resize: none; field-sizing: content; min-height: 22px; max-height: 140px;
