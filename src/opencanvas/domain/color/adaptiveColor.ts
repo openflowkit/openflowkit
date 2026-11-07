@@ -1,4 +1,4 @@
-import { getContrastText, mixHex, normalizeHex, rgbToHex } from '../../../lib/colorUtils';
+import { getContrastText, mixHex, normalizeHex, readableTextOn, rgbToHex } from '../../../lib/colorUtils';
 
 const AUTO_COLOR = 'auto' as const;
 export const DEFAULT_CANVAS_COLOR = '#f7f7f5';
@@ -15,6 +15,13 @@ export function resolveAdaptiveInk(value: unknown, background = DEFAULT_CANVAS_C
 export function numericColorToHex(color: number): string {
   return `#${Math.max(0, Math.min(0xffffff, color)).toString(16).padStart(6, '0')}`;
 }
+
+/** A fill as it shows over `canvas` at `opacity` (0–1): through a see-through fill, the canvas shows. */
+export const fillOverCanvas = (fill: string, canvas: string, opacity: number): string =>
+  (opacity < 1 ? mixHex(fill, canvas, 1 - opacity) : fill);
+
+/** Whether dark ink reads better than white on `backdrop`, by contrast (teal takes dark ink, slate grey white). */
+export const darkInkReadsOn = (backdrop: string): boolean => readableTextOn(backdrop) !== '#ffffff';
 
 export const isDarkCanvas = (canvas: unknown): canvas is string =>
   typeof canvas === 'string' && getContrastText(canvas) === '#ffffff';

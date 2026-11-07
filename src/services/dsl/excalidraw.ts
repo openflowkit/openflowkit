@@ -1,3 +1,4 @@
+import { darkInkReadsOn, fillOverCanvas } from '../../opencanvas/domain/color/adaptiveColor';
 import { createDefaultSceneLayer, DEFAULT_SCENE_LAYER_ID, UNTITLED_DOCUMENT_NAME } from '../../opencanvas/domain/document/defaults';
 import type { JsonObject } from '../../opencanvas/domain/document/json';
 import {
@@ -11,7 +12,6 @@ import { resolveNodeStyle } from '../../opencanvas/domain/nodes/nodeStyle';
 import { createShapeNode, type ShapeKind } from '../../opencanvas/domain/nodes/shapeNode';
 import { cellRange } from '../../opencanvas/domain/scene/spatialIndex';
 import { measurePortableText } from '../../opencanvas/domain/text/measurement';
-import { mixHex, readableTextOn } from '../../lib/colorUtils';
 import {
   excalidrawColor, excalidrawConnectorAppearance, excalidrawFont, excalidrawHead, excalidrawNodeAppearance, excalidrawOpacity,
   excalidrawStrokeContent, excalidrawWordInk, finite, text, type ExcalidrawElement,
@@ -127,7 +127,7 @@ const DARK_CANVAS = '#191b19';
 function blackReadsOnDark(node: SceneNode): boolean {
   if (typeof node.appearance.fill !== 'string' || node.appearance.fill === 'transparent') return false;
   const { fill, opacity } = resolveNodeStyle(node, DARK_CANVAS);
-  return fill.startsWith('#') && readableTextOn(mixHex(fill, DARK_CANVAS, 1 - opacity)) !== '#ffffff';
+  return fill.startsWith('#') && darkInkReadsOn(fillOverCanvas(fill, DARK_CANVAS, opacity));
 }
 
 const FILL_CELL = 256;
