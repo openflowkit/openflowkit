@@ -41,6 +41,11 @@ describe('resolveNodeStyle', () => {
     expect(resolveNodeStyle(node({ appearance: { fill: 'transparent' } }), '#191b19').textColor).toBe('#ffffff');
     expect(resolveNodeStyle(node({ appearance: { fill: '#fef2f2' } }), '#191b19').textColor).toBe('#0f172a');
     expect(resolveNodeStyle(node({ appearance: { fill: 'transparent', textColor: '#ef4444' } }), '#191b19').textColor).toBe('#ef4444');
+    // A see-through fill: the label reads against the colour it makes over the canvas, not the fill alone.
+    for (const canvas of ['#191b19', '#f7f7f5']) {
+      const faint = resolveNodeStyle(node({ appearance: { fill: '#a5d8ff', opacity: 0.3 } }), canvas);
+      expect(contrast(faint.textColor, mixHex('#a5d8ff', canvas, 0.7)), canvas).toBeGreaterThanOrEqual(4.5);
+    }
   });
   it('turns a frame default wash faint on a dark canvas and keeps authored fills', () => {
     const frame = node({ kind: 'section', content: { label: 'Frame', color: 'slate' } });

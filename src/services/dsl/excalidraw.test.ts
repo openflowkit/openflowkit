@@ -130,6 +130,9 @@ describe('excalidrawToDocument', () => {
       // A white card on a pastel zone: the words sit on the card, the topmost fill, not on the zone below it.
       { ...box('zone', 0, 300, '#ffec99'), width: 560, height: 160 },
       box('card', 20, 320, '#ffffff'), words('on-card', 40, 348, 'free on a card'),
+      // A see-through fill shows the dark canvas through it: #a5d8ff at 30% is a slate grey there.
+      box('faint', 600, 150, '#a5d8ff', 30), words('faint-label', 620, 178, 'faint', 'faint'),
+      box('under-faint', 600, 300, '#a5d8ff', 30), words('on-faint', 620, 328, 'free on faint'),
     ]));
     const node = (id: string) => document.pages[0]!.nodes.find((candidate) => candidate.id === id)!;
     for (const canvas of ['#191b19', '#f7f7f5']) {
@@ -139,7 +142,8 @@ describe('excalidrawToDocument', () => {
         return fill.startsWith('#') ? mixHex(fill, canvas, 1 - opacity) : canvas;
       };
       for (const [id, under] of [['plain', 'plain'], ['white', 'white'], ['short', 'short'], ['teal', 'teal'],
-        ['on-white', 'under-white'], ['on-blue', 'under-blue'], ['loose', 'loose'], ['on-card', 'card']] as const) {
+        ['on-white', 'under-white'], ['on-blue', 'under-blue'], ['loose', 'loose'], ['on-card', 'card'],
+        ['faint', 'faint'], ['on-faint', 'under-faint']] as const) {
         expect(contrastRatio(resolveNodeStyle(node(id), canvas).textColor, backdrop(under)), `${id} on ${canvas}`).toBeGreaterThanOrEqual(4.5);
       }
     }

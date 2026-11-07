@@ -11,6 +11,7 @@ import { resolveNodeStyle } from '../../opencanvas/domain/nodes/nodeStyle';
 import { createShapeNode, type ShapeKind } from '../../opencanvas/domain/nodes/shapeNode';
 import { cellRange } from '../../opencanvas/domain/scene/spatialIndex';
 import { measurePortableText } from '../../opencanvas/domain/text/measurement';
+import { mixHex, readableTextOn } from '../../lib/colorUtils';
 import {
   excalidrawColor, excalidrawConnectorAppearance, excalidrawFont, excalidrawHead, excalidrawNodeAppearance, excalidrawOpacity,
   excalidrawStrokeContent, excalidrawWordInk, finite, text, type ExcalidrawElement,
@@ -116,12 +117,18 @@ function turnedPoints(element: ExcalidrawElement): Point2d[] {
   }));
 }
 
-/** Our dark canvas; the style only asks whether the canvas is dark. */
+/** Our dark canvas: what the dark theme washes a white fill to, and what shows through a see-through one. */
 const DARK_CANVAS = '#191b19';
 
-/** A painted fill that keeps its colour on a dark canvas. White and paper fills don't: the dark theme washes them to the canvas. */
-const solidOnDark = (node: SceneNode): boolean => typeof node.appearance.fill === 'string' && node.appearance.fill !== 'transparent'
-  && resolveNodeStyle(node, DARK_CANVAS).fill.startsWith('#');
+/**
+ * Whether Excalidraw's default black reads better than our dark theme's white on this fill, as the dark canvas shows it.
+ * A white or paper fill washes to the canvas; a see-through one lets the canvas through (#a5d8ff at 30% is slate grey).
+ */
+function blackReadsOnDark(node: SceneNode): boolean {
+  if (typeof node.appearance.fill !== 'string' || node.appearance.fill === 'transparent') return false;
+  const { fill, opacity } = resolveNodeStyle(node, DARK_CANVAS);
+  return fill.startsWith('#') && readableTextOn(mixHex(fill, DARK_CANVAS, 1 - opacity)) !== '#ffffff';
+}
 
 const FILL_CELL = 256;
 /** A shape covering more cells than this (a page-sized backdrop) goes on a short list instead of into every cell. */
@@ -286,14 +293,14 @@ class SceneBuilder {
       }
       const node = createShapeNode(this.page, { kind: rounded ? 'rounded' : circle ? 'circle' : shape, id: at.id, at: at.at, size: at.size,
         label: at.label, appearance: excalidrawNodeAppearance(element, at.bound) });
-      const ink = at.bound && node.appearance.textColor === undefined ? excalidrawWordInk(at.bound.strokeColor, solidOnDark(node)) : undefined;
+      const ink = at.bound && node.appearance.textColor === undefined ? excalidrawWordInk(at.bound.strokeColor, blackReadsOnDark(node)) : undefined;
       return ink ? { ...node, appearance: { ...node.appearance, textColor: ink } } : node;
     }
     if (type === 'text') {
-      // Default ink follows the theme, except where the topmost fill drawn below it stays solid on dark: there dark ink stays readable.
+      // Default ink follows the theme, except where black reads on the topmost fill drawn below it, as the dark canvas shows it.
       const centre = { x: finite(element.x) + at.size.width / 2, y: finite(element.y) + at.size.height / 2 };
       const under = this.fills.top(centre);
-      const ink = excalidrawWordInk(element.strokeColor, !!under && solidOnDark(under));
+      const ink = excalidrawWordInk(element.strokeColor, !!under && blackReadsOnDark(under));
       // Excalidraw's box is exactly its words; ours keeps 8px clear each side and draws handwriting in a wider
       // face, so the box widens about the same centre. ponytail: the margin is guessed — measure the canvas face if words break.
       // Fixed-width text (autoResize false) is wrapped by Excalidraw to its box: those lines, not one long one.
