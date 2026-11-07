@@ -10,7 +10,7 @@ import { hasExplicitColor, nodePaletteName, PALETTE_KEYS, paletteResolver } from
 import { widgetLabelBox } from './widgetNodePresentation';
 import { framePresetOf } from './framePreset';
 import { DRAWN_SHAPE_FILL } from './shapeNode';
-import { mixHex, readableTextOn } from '../../../lib/colorUtils';
+import { mixHex, normalizeHex, readableTextOn } from '../../../lib/colorUtils';
 
 // Every visible property of a node, resolved from flat `appearance` keys
 // with legacy `content.*` palette/typography keys as fallbacks. Renderers, the
@@ -245,7 +245,7 @@ function computeNodeStyle(node: SceneNode, canvasColor?: string): NodeStyle {
     : paint(a.textColor, defaults.text);
   // The palette's grey sub-label ink is for its own fills; on a dark authored hex it follows the label, as the export
   // draws it (72%). Palette swatches and cards (whose header reads subTextColor as a wash) keep their look.
-  const darkFill = explicitTextColor !== undefined && /^#[0-9a-f]{6}$/i.test(fill) && readableTextOn(fill) === '#ffffff'
+  const darkFill = explicitTextColor !== undefined && normalizeHex(fill) !== null && readableTextOn(fill) === '#ffffff'
     && !resolveArchitectureNodePresentation(node) && !isPaletteFill(fill, nodePaletteName(node));
   return {
     fill,
