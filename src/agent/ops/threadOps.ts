@@ -11,19 +11,25 @@ const body = () => z.string().min(1).max(COMMENT_BODY_MAX).describe(`Plain text,
 const author = (context: OpContext): SceneCommentAuthor => ({ kind: 'agent', name: agentName(context.client) });
 const stamp = () => ({ id: crypto.randomUUID(), createdAt: new Date().toISOString() });
 
+/** A body in a listing of several threads is cut past this many characters; one thread (`threadId`) reads in full. */
+export const LISTED_BODY_MAX = 500;
+
 export const listThreads = defineOp({
   name: 'list_threads',
   title: 'List threads',
   description: 'Threads people (and agents) pinned on the canvas: id, page, the node it is pinned to (with its label, '
     + 'when the node still exists), the pin point, resolved, and every comment in it. Resolved threads are left out unless asked for. '
+    + `At most \`limit\` threads, and \`more\` counts the rest; in a list, a body past ${LISTED_BODY_MAX} characters is cut `
+    + '(`truncated: true`): pass threadId to read that thread in full. '
     + 'Threads never appear in get_diagram or exports.',
   schema: z.object({
     pageId: z.string().min(1).optional().describe('Only this page (see list_pages); default every page.'),
     threadId: z.string().min(1).optional().describe('Only this thread, whatever its page or state; an unknown id is an error, and so is a pageId it is not on.'),
     unanswered: z.boolean().default(false).describe('Only threads whose last comment is from a person, so still waiting for an answer.'),
     includeResolved: z.boolean().default(false).describe('Also list resolved threads.'),
+    limit: z.number().int().min(1).max(100).default(20).describe('Most threads to list, in page order.'),
   }),
-  async run({ pageId, threadId, unanswered, includeResolved }, context) {
+  async run({ pageId, threadId, unanswered, includeResolved, limit }, context) {
     const found = threadId ? findThread(context.document, threadId) : undefined;
     if (threadId && !found) throw new ThreadError(`Unknown thread "${threadId}".`);
     if (found && pageId && found.page.id !== pageId) {
@@ -42,12 +48,14 @@ export const listThreads = defineOp({
             ...(node ? { nodeLabel: typeof node.content.label === 'string' ? node.content.label : '' } : {}),
             point: thread.anchor.point, resolved: thread.resolved,
             comments: thread.comments.map(({ id, author: by, body: text, createdAt, editedAt }) => ({
-              id, author: by, body: text, createdAt, ...(editedAt ? { editedAt } : {}),
+              id, author: by,
+              ...(!found && text.length > LISTED_BODY_MAX ? { body: `${text.slice(0, LISTED_BODY_MAX)}…`, truncated: true as const } : { body: text }),
+              createdAt, ...(editedAt ? { editedAt } : {}),
             })),
           };
         });
     });
-    return { command: null, output: { threads } };
+    return { command: null, output: { threads: threads.slice(0, limit), more: Math.max(0, threads.length - limit) } };
   },
 });
 

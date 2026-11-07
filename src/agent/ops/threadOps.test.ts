@@ -1,11 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import { applyDocumentCommand } from '@/opencanvas/domain/commands/execute';
 import { addComment, pageThreads } from '@/opencanvas/domain/threads/threads';
-import type { SceneDocumentV1 } from '@/opencanvas/domain/document/types';
+import { COMMENT_BODY_MAX, type SceneDocumentV1 } from '@/opencanvas/domain/document/types';
 import { createAgentDocument } from '../index';
 import { READ_ONLY_REFUSAL, runLiveAgentOp, type LiveAgentSession } from '../liveOp';
 import { resolveAgentOpCommand, runAgentOp } from '../runAction';
 import { findAgentOp } from './index';
+import { LISTED_BODY_MAX } from './threadOps';
 import { createTestCapabilities } from './testHost';
 import type { OpContext } from './types';
 
@@ -137,6 +138,24 @@ describe('thread ops, file mode', () => {
     const listed = (await file(document, 'list_threads', { threadId, pageId: drawingId })).output as { threads: { id: string }[] };
     expect(listed.threads.map(({ id }) => id)).toEqual([threadId]);
     await expect(file(document, 'list_threads', { threadId, pageId: 'blank' })).rejects.toThrow(`Thread "${threadId}" is on page "${drawingId}", not "blank".`);
+  });
+
+  // Every body can be 4000 characters, on every page: a listing stays small, and one thread reads in full.
+  it('list_threads lists at most `limit` threads, says how many more, and cuts long bodies until one is asked for', async () => {
+    let document = await drawn();
+    for (let index = 0; index < 22; index += 1) {
+      document = (await file(document, 'start_thread', { point: { x: index, y: 0 }, body: `${index}: ${'x'.repeat(COMMENT_BODY_MAX - 10)}` })).document;
+    }
+    type Listed = { threads: { id: string; comments: { body: string; truncated?: true }[] }[]; more: number };
+    const listed = (await file(document, 'list_threads', {})).output as Listed;
+    expect(listed.threads).toHaveLength(20);
+    expect(listed.more).toBe(2);
+    expect(listed.threads[0]!.comments[0]!.body).toHaveLength(LISTED_BODY_MAX + 1);
+    expect(listed.threads[0]!.comments[0]!.truncated).toBe(true);
+    expect(((await file(document, 'list_threads', { limit: 30 })).output as Listed)).toMatchObject({ more: 0 });
+    const one = (await file(document, 'list_threads', { threadId: listed.threads[0]!.id })).output as Listed;
+    expect(one.threads[0]!.comments[0]!.body.length).toBeGreaterThan(LISTED_BODY_MAX);
+    expect(one.threads[0]!.comments[0]!.truncated).toBeUndefined();
   });
 
   it('get_document and list_pages count open threads', async () => {
