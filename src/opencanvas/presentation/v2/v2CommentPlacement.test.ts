@@ -16,17 +16,25 @@ beforeEach(() => { frames.length = 0; requests = 0; });
 describe('Placement', () => {
   const setup = () => {
     const camera = { x: 0, y: 0, zoom: 1 };
-    const placement = new Placement(() => camera, () => ({ left: 0, top: 0, width: 1000, height: 800 }));
+    const placement = new Placement(() => camera, () => ({ width: 1000, height: 800 }), () => ({ left: 0, top: 0, width: 1000, height: 800 }));
+    const layer = document.createElement('div');
+    placement.setLayer(layer);
     const pins = [0, 1, 2].map((i) => { const el = document.createElement('div'); placement.add(el, { x: i * 10, y: 5 }); return el; });
-    return { camera, placement, pins };
+    return { camera, placement, pins, layer };
   };
 
-  it('paints a pin where its world point lands on screen', () => {
-    const { camera, placement, pins } = setup();
+  it('paints a pin where its world point lands on screen: a pan moves the layer alone, a zoom moves the pins', () => {
+    const { camera, placement, pins, layer } = setup();
+    runFrame(); runFrame();
     camera.x = 100;
     placement.kick();
     runFrame();
-    expect(pins[1]!.style.transform).toBe('translate3d(110px, 5px, 0)');
+    expect(layer.style.transform).toBe('translate(100px, 0px)');
+    expect(pins[1]!.style.transform).toBe('translate(10px, 5px)');
+    camera.zoom = 2;
+    placement.kick();
+    runFrame();
+    expect(pins[1]!.style.transform).toBe('translate(20px, 10px)');
   });
 
   it('schedules no frame while pins are mounted and nothing moves', () => {
@@ -47,10 +55,10 @@ describe('Placement', () => {
   });
 
   it('keeps painting while the camera moves, then stops one frame after it settles', () => {
-    const { camera, placement, pins } = setup();
+    const { camera, placement, layer } = setup();
     runFrame(); runFrame();
     for (let x = 1; x <= 5; x += 1) { camera.x = x; placement.kick(); runFrame(); expect(frames).toHaveLength(1); }
-    expect(pins[0]!.style.transform).toBe('translate3d(5px, 5px, 0)');
+    expect(layer.style.transform).toBe('translate(5px, 0px)');
     runFrame();
     expect(frames).toHaveLength(0);
   });
@@ -58,7 +66,7 @@ describe('Placement', () => {
   it('places an open card in the free canvas at once, and again when the free canvas shrinks (a panel opens)', () => {
     const camera = { x: 0, y: 0, zoom: 1 };
     let free = { left: 0, top: 0, width: 1000, height: 800 };
-    const placement = new Placement(() => camera, () => free);
+    const placement = new Placement(() => camera, () => ({ width: 1000, height: 800 }), () => free);
     const el = document.createElement('div');
     const card = document.createElement('div');
     Object.defineProperties(card, { offsetWidth: { value: 320 }, offsetHeight: { value: 200 } });
@@ -73,12 +81,32 @@ describe('Placement', () => {
     expect(el.dataset.side).toBe('left');
   });
 
+  it('hides a pin whose tip left the canvas, writes nothing for it while it stays off, and shows it again on return', () => {
+    const { camera, placement, pins, layer } = setup();
+    runFrame(); runFrame();
+    camera.x = -2000;
+    placement.kick();
+    runFrame();
+    expect(pins.every((pin) => pin.hidden)).toBe(true);
+    const parked = pins[0]!.style.transform;
+    camera.x = -2100;
+    placement.kick();
+    runFrame();
+    expect(pins[0]!.style.transform).toBe(parked);
+    camera.x = 0;
+    placement.kick();
+    runFrame();
+    expect(pins[0]!.hidden).toBe(false);
+    expect(pins[0]!.style.transform).toBe('translate(0px, 5px)');
+    expect(layer.style.transform).toBe('translate(0px, 0px)');
+  });
+
   it('repaints a pin whose anchor moved even when the camera did not', () => {
     const { placement, pins } = setup();
     runFrame(); runFrame();
     placement.move(pins[0]!, { x: 50, y: 60 });
     runFrame();
-    expect(pins[0]!.style.transform).toBe('translate3d(50px, 60px, 0)');
+    expect(pins[0]!.style.transform).toBe('translate(50px, 60px)');
   });
 });
 

@@ -1453,12 +1453,15 @@
 }
 
 /* Comments: pins over the canvas, and the card a pin or a new thread opens. The card is a panel of the editor, on its surface and accent. */
-.ofk-comment-anchor { position: absolute; top: 0; left: 0; z-index: calc(var(--ofk-layer-toolbar, 10) - 1); width: 0; height: 0; pointer-events: none; will-change: transform; }
-.ofk-comment-anchor:has([data-comment-open]) { z-index: var(--ofk-layer-toolbar, 10); }
+/* One composited layer for every pin: the camera's pan moves it (v2CommentPlacement), the pins inside move only on zoom. */
+.ofk-comment-layer { position: absolute; top: 0; left: 0; width: 0; height: 0; z-index: calc(var(--ofk-layer-toolbar, 10) - 1); pointer-events: none; will-change: transform; }
+.ofk-comment-anchor { position: absolute; top: 0; left: 0; width: 0; height: 0; pointer-events: none; }
+.ofk-comment-anchor:has([data-comment-open]) { z-index: 1; }
 .ofk-comment-pin {
   position: absolute; left: 0; bottom: 0; box-sizing: border-box; width: 30px; height: 30px; padding: 0; border: 2px solid var(--ofk-surface);
   border-radius: 50% 50% 50% 0; background: var(--ofk-surface); overflow: hidden; cursor: pointer; pointer-events: auto;
-  box-shadow: 0 1px 3px rgb(0 0 0 / .35), 0 3px 10px rgb(0 0 0 / .18);
+  /* A crisp ring, no blur: a soft shadow, painted for every pin on each zoom frame, is what made zooming over many pins stutter. */
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ofk-text) 22%, transparent);
   transition: transform .12s ease;
 }
 .ofk-comment-pin[data-ghost] { pointer-events: none; opacity: .9; }
