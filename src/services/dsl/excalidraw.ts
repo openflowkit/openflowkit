@@ -127,14 +127,17 @@ const FILL_CELL = 256;
 /** A shape covering more cells than this (a page-sized backdrop) goes on a short list instead of into every cell. */
 const MAX_FILL_CELLS = 256;
 
-interface Fill { readonly box: Bounds2d; readonly node: SceneNode }
+/** A filled shape's box in Excalidraw's space, and its place in the drawing order: a later one lies on top. */
+interface Fill { readonly box: Bounds2d; readonly node: SceneNode; readonly order: number }
 
 /** Filled shapes placed so far, filed by the cells they cover in Excalidraw's own space: what lies under a word is a lookup, not a scan. */
 class FillIndex {
   private readonly cells = new Map<string, Fill[]>();
   private readonly wide: Fill[] = [];
+  private count = 0;
 
-  add(fill: Fill): void {
+  add(box: Bounds2d, node: SceneNode): void {
+    const fill = { box, node, order: this.count++ };
     const [minX, minY, maxX, maxY] = cellRange(fill.box, FILL_CELL);
     if (!((maxX - minX + 1) * (maxY - minY + 1) <= MAX_FILL_CELLS)) { this.wide.push(fill); return; }
     for (let x = minX; x <= maxX; x += 1) {
@@ -146,12 +149,18 @@ class FillIndex {
     }
   }
 
-  /** Whether a filled shape whose fill stays solid on a dark canvas covers `point`. */
-  covers(point: Point2d): boolean {
-    const under = ({ box, node }: Fill) => point.x >= box.x && point.x <= box.x + box.width
-      && point.y >= box.y && point.y <= box.y + box.height && solidOnDark(node);
+  /** The topmost filled shape under `point`: the words sit on it, whatever lies below (a white card on a pastel zone). */
+  top(point: Point2d): SceneNode | undefined {
+    let top: Fill | undefined;
     const cell = this.cells.get(`${Math.floor(point.x / FILL_CELL)}:${Math.floor(point.y / FILL_CELL)}`) ?? [];
-    return cell.some(under) || this.wide.some(under);
+    for (const list of [cell, this.wide]) {
+      for (const fill of list) {
+        const { box } = fill;
+        const under = point.x >= box.x && point.x <= box.x + box.width && point.y >= box.y && point.y <= box.y + box.height;
+        if (under && (!top || fill.order > top.order)) top = fill;
+      }
+    }
+    return top?.node;
   }
 }
 
@@ -259,7 +268,7 @@ class SceneBuilder {
     this.nodes.push({ ...node, ...base, transform });
     this.nodeIds.add(id);
     if (typeof node.appearance.fill === 'string' && node.appearance.fill !== 'transparent') {
-      this.fills.add({ box: { x: finite(element.x), y: finite(element.y), width, height }, node });
+      this.fills.add({ x: finite(element.x), y: finite(element.y), width, height }, node);
     }
   }
 
@@ -281,9 +290,10 @@ class SceneBuilder {
       return ink ? { ...node, appearance: { ...node.appearance, textColor: ink } } : node;
     }
     if (type === 'text') {
-      // Default ink follows the theme, except over a fill drawn below it that stays solid on dark, where dark ink stays readable.
+      // Default ink follows the theme, except where the topmost fill drawn below it stays solid on dark: there dark ink stays readable.
       const centre = { x: finite(element.x) + at.size.width / 2, y: finite(element.y) + at.size.height / 2 };
-      const ink = excalidrawWordInk(element.strokeColor, this.fills.covers(centre));
+      const under = this.fills.top(centre);
+      const ink = excalidrawWordInk(element.strokeColor, !!under && solidOnDark(under));
       // Excalidraw's box is exactly its words; ours keeps 8px clear each side and draws handwriting in a wider
       // face, so the box widens about the same centre. ponytail: the margin is guessed — measure the canvas face if words break.
       // Fixed-width text (autoResize false) is wrapped by Excalidraw to its box: those lines, not one long one.
