@@ -10,7 +10,7 @@ import type { PixiRendererHost } from '../../infrastructure/pixi/PixiRendererHos
 import { Avatar, CommentComposer, DraftsContext, ThreadPopover } from './V2CommentsParts';
 import { Anchored, CommentPin, PlacementContext, type PinActions } from './V2CommentPin';
 import { mintV2Id } from './v2Document';
-import { HUMAN_AUTHOR_NAME, keyboardSpot, pinNudge, pinsOnPreview } from './v2CommentsView';
+import { HUMAN_AUTHOR_NAME, keyboardSpot, pinNudge, pinsOnPreview, unlessGone } from './v2CommentsView';
 import { Placement } from './v2CommentPlacement';
 import { clearance } from './map/mapMode';
 import type { V2Tool } from './v2ToolCatalog';
@@ -143,7 +143,9 @@ function pinActions(
 
 /** Comment pins over the canvas, the composer a click with the comment tool opens, and a pin's thread. DOM, so no export ever draws them. */
 export const V2Comments = memo(function V2Comments(props: Props): React.JSX.Element | null {
-  const { page, hidden, readOnly, tool, sectionRef, hostRef, cameraRef, updateThreads, subscribeCamera, apiRef, selectedNodeId } = props;
+  const { page, hidden, readOnly, tool, sectionRef, hostRef, cameraRef, subscribeCamera, apiRef, selectedNodeId } = props;
+  const write = props.updateThreads;
+  const updateThreads = useCallback((change: (document: SceneDocumentV1) => SceneDocumentV1) => write(unlessGone(change)), [write]);
   const [open, setOpen] = useState<Open | null>(null);
   const [now, setNow] = useState(() => Date.now());
   // The loop reads the refs when a frame runs, never during render.

@@ -1,7 +1,7 @@
 // Pure helpers for the comment overlays: how a message's age reads, what a pin is called, where a pin is drawn mid-drag.
 import type { Point2d } from '../../domain/geometry/types';
-import type { SceneNode, ScenePage, SceneThread } from '../../domain/document/types';
-import { pageThreads, pinOnNode } from '../../domain/threads/threads';
+import type { SceneDocumentV1, SceneNode, ScenePage, SceneThread } from '../../domain/document/types';
+import { pageThreads, pinOnNode, ThreadError } from '../../domain/threads/threads';
 import { buildNodeWorldMatrices } from '../../domain/scene/worldGeometry';
 
 /** Every human comment is written by this name until named commenters exist; the data model already carries it. */
@@ -87,4 +87,19 @@ export function pinLabel(thread: SceneThread): string {
   const cut = text.length <= LABEL_WORDS ? text : `${text.slice(0, LABEL_WORDS + 1).replace(/\s+\S*$/, '')}…`;
   const count = thread.comments.length > 1 ? `, ${thread.comments.length} messages` : '';
   return `Comment #${thread.number} by ${lead.author.name}: ${cut}${count}`;
+}
+
+/**
+ * `change`, except that a thread or message someone else removed first (an agent, another tab) makes it no change: the card
+ * that asked closes with its thread, instead of the error reaching the page.
+ */
+export function unlessGone(change: (document: SceneDocumentV1) => SceneDocumentV1): (document: SceneDocumentV1) => SceneDocumentV1 {
+  return (document) => {
+    try {
+      return change(document);
+    } catch (error) {
+      if (error instanceof ThreadError) return document;
+      throw error;
+    }
+  };
 }

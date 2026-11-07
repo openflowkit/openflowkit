@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { keyboardSpot, pinLabel, pinNudge, pinsOnPreview, PIN_STEP, relativeTime } from './v2CommentsView';
+import { keyboardSpot, pinLabel, unlessGone, pinNudge, pinsOnPreview, PIN_STEP, relativeTime } from './v2CommentsView';
 import { createTestDocument, createTestNode } from '../../testing/builders/documentBuilder';
-import { addThread } from '../../domain/threads/threads';
+import { addThread, ThreadError } from '../../domain/threads/threads';
 import type { SceneNode } from '../../domain/document/types';
 
 const NOW = Date.parse('2026-10-26T12:00:00.000Z');
@@ -110,5 +110,14 @@ describe('pinLabel', () => {
   it('cuts a long opening at a word, with an ellipsis', () => {
     const label = pinLabel(thread(1, ['Rename the cache layer to something that says what it actually stores for the sessions']));
     expect(label).toBe('Comment #1 by User: Rename the cache layer to something that says…');
+  });
+});
+
+describe('unlessGone', () => {
+  it('turns a change to a thread or message someone else already removed into no change; other errors still throw', () => {
+    const document = createTestDocument();
+    expect(unlessGone(() => { throw new ThreadError('Unknown comment "m9".'); })(document)).toBe(document);
+    expect(() => unlessGone(() => { throw new Error('boom'); })(document)).toThrow('boom');
+    expect(unlessGone((doc) => ({ ...doc, name: 'changed' }))(document).name).toBe('changed');
   });
 });
