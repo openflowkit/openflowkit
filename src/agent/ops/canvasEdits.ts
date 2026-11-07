@@ -3,7 +3,7 @@
 // panel says so in a banner; an agent gets the list: each node or connector that differs from what the
 // frame's authored text compiles to, and the attributes that keep it where the language can say it.
 import { areStructurallyEqual } from '../../opencanvas/domain/commands/equality';
-import { hashDslScene, type CompileOptions, type CompileResult, type CompileWorkspaceResult } from '../../dsl/compile';
+import { hashText64, type CompileOptions, type CompileResult, type CompileWorkspaceResult } from '../../dsl/compile';
 import { frameEdited } from '../../dsl/frameScene';
 import { dslFrameMeta, dslFrameRaw, type DslFrameScene } from '../../dsl/sceneMeta';
 import { quote } from '../../dsl/text';
@@ -173,7 +173,7 @@ function baselineKey(frame: SceneNode): string {
  * Not the frame's scene hash: placing a frame re-takes that over renamed ids, so a new title alone can keep it.
  */
 export function frameRevision(frame: SceneNode): string | null {
-  return typeof dslFrameMeta(frame).source === 'string' ? hashDslScene(baselineKey(frame)) : null;
+  return typeof dslFrameMeta(frame).source === 'string' ? hashText64(baselineKey(frame)) : null;
 }
 
 /** What the frame's authored text compiles to, or null and why it could not be compiled. */

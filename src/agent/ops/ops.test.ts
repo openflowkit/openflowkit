@@ -233,6 +233,18 @@ views { view context of Shop; view container of Shop }
     expect((await run.run('get_diagram', { frameId: run.frame().id, since: next })).output).toMatchObject({ revision: next, dslDiff: '' });
   });
 
+  // PR #94 review: the revision was a 32-bit hash, so two texts could share one and a redraw read as "no change".
+  it('tells two texts apart that a 32-bit hash would not', async () => {
+    const run = await host();
+    const { revision } = (await run.run('create_diagram', { dsl: 'flowchart\nA -> B229599' })).output as { revision: string };
+    expect(revision).toMatch(/^[0-9a-f]{16}$/);
+    const next = (await run.run('update_diagram', { frameId: run.frame().id, dsl: 'flowchart\nA -> B432382' })).output as { revision: string };
+    expect(next.revision).not.toBe(revision);
+    const read = await run.run('get_diagram', { frameId: run.frame().id, since: revision });
+    expect(read.output).toMatchObject({ dsl: 'flowchart\nA -> B432382' });
+    expect(read.output).not.toHaveProperty('dslDiff');
+  });
+
   it('keeps the revision through canvas edits and the same text drawn again', async () => {
     const run = await host();
     const { revision } = (await run.run('create_diagram', { dsl: FLOW })).output as { revision: string };
