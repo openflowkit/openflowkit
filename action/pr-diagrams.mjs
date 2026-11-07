@@ -12,7 +12,7 @@ import {
 
 const dryRun = process.argv.includes('--dry-run');
 const env = process.env;
-const cli = env.OFK_CLI || 'npx -y openflowkit@0.2.4';
+const cli = env.OFK_CLI || 'npx -y openflowkit@0.3.0';
 const commentAuthor = env.OFK_COMMENT_AUTHOR || 'github-actions[bot]';
 const refreshSvg = env.OFK_REFRESH_SVG === 'true';
 const token = env.GITHUB_TOKEN || env.GH_TOKEN || '';

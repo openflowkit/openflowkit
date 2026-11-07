@@ -1,7 +1,7 @@
 {
   "name": "openflowkit-app",
   "private": true,
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Architecture diagrams you draw, write as code, or hand to your agent.",
   "license": "MIT",
   "repository": {
