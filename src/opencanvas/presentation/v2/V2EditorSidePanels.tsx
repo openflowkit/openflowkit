@@ -24,6 +24,7 @@ import type { useV2WorkspaceFolder } from './useV2WorkspaceFolder';
 import type { useV2MapMode } from './map/useV2MapMode';
 import type { useV2Threads } from './useV2Threads';
 import { V2ThreadsPanel } from './V2ThreadsPanel';
+import { V2WorkspaceRail } from './V2Workspace';
 import type { ToastItem } from '../design-system';
 import { counted } from './v2EditorUtil';
 
@@ -60,9 +61,11 @@ interface SidePanelsProps {
   readonly setAnnouncement: (message: string) => void;
   readonly focusCanvas: () => void;
   readonly threads: ReturnType<typeof useV2Threads>;
+  /** Diagram as code on the rail (codeToggle). */
+  readonly toggleCode: () => void;
 }
 
-/** The workspace panels on the right: code, agent pairing, inspect, model and the flow player. */
+/** The workspace rail and the panels on the right it opens: code, agent pairing, threads, inspect, model and the flow player. */
 export function V2EditorSidePanels(p: SidePanelsProps): React.JSX.Element {
   const {
     panels, code, preferences, updatePreferences, agents, session, viewPage, selection, selectedConnectorIds, selectionApi, selectNodes, camera,
@@ -72,6 +75,13 @@ export function V2EditorSidePanels(p: SidePanelsProps): React.JSX.Element {
   const openWorkspace = panels.openWorkspace;
   return (
     <>
+      <V2WorkspaceRail mode={panels.workspace} onShortcuts={panels.toggleShortcuts} agentConnected={agentBridge.status === 'connected'}
+        openThreads={p.threads.openCount}
+        onChange={(mode) => {
+          if (mode === 'code') p.toggleCode();
+          else if (mode === 'threads') p.threads.toggleFromRail();
+          else panels.toggleWorkspace(mode);
+        }} />
       {panels.workspace === 'code' ? <V2CodePanel code={code.draft} palette={preferences.diagramPalette} autoFocus={code.panelFocus} selectAll={code.panelSelect}
         onPaletteChange={(diagramPalette) => updatePreferences({ diagramPalette })}
         onCodeChange={code.edit}
