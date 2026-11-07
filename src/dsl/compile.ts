@@ -78,6 +78,21 @@ export function hashDslScene(value: string): string {
   return (hash >>> 0).toString(36);
 }
 
+const FNV64_OFFSET = 0xcbf29ce484222325n;
+const FNV64_PRIME = 0x100000001b3n;
+
+/**
+ * 64-bit FNV-1a over the UTF-16 code units, as 16 hex digits: for an id an agent holds and hands back, where the
+ * 32-bit hashDslScene would let two texts share one (about one pair in 77,000). Same output on every platform.
+ */
+export function hashText64(value: string): string {
+  let hash = FNV64_OFFSET;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = BigInt.asUintN(64, (hash ^ BigInt(value.charCodeAt(index))) * FNV64_PRIME);
+  }
+  return hash.toString(16).padStart(16, '0');
+}
+
 export { slugifyDslId } from './text';
 
 interface AssembleOptions {

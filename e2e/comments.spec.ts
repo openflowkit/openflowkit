@@ -1,0 +1,448 @@
+import { expect, test, type Page } from './test';
+
+// Discussions: Figma-style comments pinned on the canvas. They are document data (saved, reloaded, carried with the node)
+// but never undo steps of their own. OFK_SHOTS_DIR=<dir> also writes screenshots.
+
+const SHOTS = process.env.OFK_SHOTS_DIR;
+type V2Api = {
+  getState(): { nodes: string[]; revision: number; save: string };
+  getNodeRect(id: string): { x: number; y: number; width: number; height: number } | null;
+  getDocument(): { pages: { threads?: { resolved: boolean; anchor: { nodeId: string | null; point: { x: number } }; comments: { body: string; author: { kind: string; name: string } }[] }[] }[] };
+};
+const api = <T,>(page: Page, run: (v2: V2Api) => T) => page.evaluate(`(${run.toString()})(window.__V2__)`) as Promise<T>;
+const threads = (page: Page) => api(page, (v2) => v2.getDocument().pages[0]!.threads ?? []);
+const shot = async (page: Page, name: string) => { if (SHOTS) await page.screenshot({ path: `${SHOTS}/${name}.png` }); };
+
+async function start(page: Page, preferences: Record<string, unknown> = {}): Promise<{ id: string; centre: { x: number; y: number } }> {
+  await page.addInitScript((value) => localStorage.setItem('openflowkit-v2-preferences', JSON.stringify({ theme: 'dark', ...value })), preferences);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await page.goto('/');
+  await page.waitForFunction(() => window.__V2__?.getState());
+  // The opening cover lies over the canvas until the renderer has drawn.
+  await expect(page.locator('[data-cover]')).toHaveCount(0, { timeout: 15_000 });
+  await page.getByTestId('v2-canvas').focus();
+  // The first press right after load can land before the renderer takes input: arm and click again until a shape is there.
+  await expect(async () => {
+    await page.keyboard.press('r');
+    await page.mouse.click(520, 360);
+    expect((await api(page, (v2) => v2.getState())).nodes.length).toBe(1);
+  }).toPass({ timeout: 15_000, intervals: [1000] });
+  await page.keyboard.press('Escape');
+  const id = (await api(page, (v2) => v2.getState())).nodes[0]!;
+  const rect = (await page.evaluate((nodeId) => window.__V2__!.getNodeRect(nodeId), id))!;
+  return { id, centre: { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 } };
+}
+
+async function comment(page: Page, at: { x: number; y: number }, text: string): Promise<void> {
+  await page.keyboard.press('c');
+  await page.mouse.click(at.x, at.y);
+  const box = page.getByTestId('v2-comment-composer').getByRole('textbox', { name: 'Comment' });
+  await expect(box).toBeFocused();
+  await box.fill(text);
+  await box.press('Enter');
+}
+
+test('press C, click a node, type, Enter: a pin appears, survives a reload, and follows the node', { tag: '@gate' }, async ({ page }) => {
+  const { id, centre } = await start(page);
+  await comment(page, centre, 'Why is this a queue?');
+  const pin = page.getByTestId('v2-comment-pin');
+  await expect(pin).toHaveCount(1);
+  expect(await threads(page)).toMatchObject([{ anchor: { nodeId: id }, resolved: false, comments: [{ body: 'Why is this a queue?', author: { kind: 'human', name: 'User' } }] }]);
+  // Each pin has its own name: number, author, first words.
+  await expect(pin.getByRole('button', { name: 'Comment #1 by User: Why is this a queue?' })).toBeVisible();
+  await expect(pin.locator('.ofk-comment-avatar svg')).toHaveCount(1);
+  // The tip of the pin is where it was clicked.
+  const before = (await pin.boundingBox())!;
+  expect(Math.abs(before.x - centre.x)).toBeLessThan(2);
+  expect(Math.abs(before.y + before.height - centre.y)).toBeLessThan(2);
+  await shot(page, 'comment-pin');
+
+  // The shape moves, the pin goes with it: during the drag, not only on the drop.
+  await page.keyboard.press('v');
+  await page.mouse.move(centre.x - 30, centre.y + 10);
+  await page.mouse.down();
+  await page.mouse.move(centre.x + 70, centre.y + 90, { steps: 8 });
+  await expect.poll(async () => ((await pin.boundingBox())!.x - before.x)).toBeGreaterThan(80);
+  await page.mouse.up();
+  // Dropped: the document's anchor agrees with where the pin was drawn.
+  await expect.poll(async () => Math.round((await pin.boundingBox())!.y - before.y)).toBeGreaterThan(70);
+  await expect.poll(async () => ((await pin.boundingBox())!.x - before.x)).toBeGreaterThan(80);
+
+  // The pin follows a pan of the camera as the shape does.
+  const node = (await page.evaluate((nodeId) => window.__V2__!.getNodeRect(nodeId), id))!;
+  const pinned = (await pin.boundingBox())!;
+  await page.mouse.move(centre.x + 200, centre.y + 150);
+  await page.mouse.wheel(-120, -80);
+  await expect.poll(async () => (await page.evaluate((nodeId) => window.__V2__!.getNodeRect(nodeId), id))!.x).not.toBe(node.x);
+  const panned = (await page.evaluate((nodeId) => window.__V2__!.getNodeRect(nodeId), id))!;
+  await expect.poll(async () => Math.round((await pin.boundingBox())!.x - pinned.x)).toBe(Math.round(panned.x - node.x));
+  expect(Math.round((await pin.boundingBox())!.y - pinned.y)).toBe(Math.round(panned.y - node.y));
+
+  // Saved with the document: reload only once the save has landed.
+  await expect.poll(async () => (await api(page, (v2) => v2.getState())).save).toBe('saved');
+  await page.reload();
+  await page.waitForFunction(() => window.__V2__?.getState());
+  await expect(page.getByTestId('v2-comment-pin')).toHaveCount(1);
+});
+
+test('the pin opens its thread: reply, edit, resolve hides the pin and keeps the thread in the document', async ({ page }) => {
+  const { centre } = await start(page);
+  await comment(page, centre, 'First');
+  await page.getByTestId('v2-comment-pin').getByRole('button').click();
+  const thread = page.getByTestId('v2-comment-thread');
+  await expect(thread.getByRole('heading', { name: 'Comment' })).toBeVisible();
+  await expect(thread.getByTestId('v2-comment-message')).toHaveCount(1);
+  await expect(thread).toContainText('Just now');
+
+  const reply = thread.getByRole('textbox', { name: 'Reply' });
+  await reply.fill('Second line one');
+  await reply.press('Shift+Enter');
+  await reply.type('line two');
+  await reply.press('Enter');
+  await expect(thread.getByTestId('v2-comment-message')).toHaveCount(2);
+  await expect(thread.getByTestId('v2-comment-message').nth(1)).toContainText('line two');
+  await shot(page, 'comment-thread');
+
+  // Edit the reply from its menu.
+  await thread.getByTestId('v2-comment-message').nth(1).getByRole('button', { name: 'Comment actions' }).click();
+  await page.getByRole('menuitem', { name: 'Edit' }).click();
+  const edit = thread.getByRole('textbox', { name: 'Edit comment' });
+  await edit.fill('Edited');
+  await edit.press('Enter');
+  await expect(thread.getByTestId('v2-comment-message').nth(1)).toContainText('Edited');
+  await expect(thread.getByTestId('v2-comment-message').nth(1)).toContainText('edited');
+
+  await thread.getByRole('button', { name: 'Resolve thread' }).click();
+  await expect(page.getByTestId('v2-comment-pin')).toHaveCount(0);
+  expect(await threads(page)).toMatchObject([{ resolved: true, comments: [{ body: 'First' }, { body: 'Edited' }] }]);
+});
+
+test('deleting a thread asks first, in the app and not in the browser', async ({ page }) => {
+  const { centre } = await start(page);
+  page.on('dialog', () => { throw new Error('a browser dialog opened'); });
+  await comment(page, centre, 'Gone soon');
+  await page.getByTestId('v2-comment-pin').getByRole('button').click();
+  const thread = page.getByTestId('v2-comment-thread');
+  await thread.getByRole('button', { name: 'Thread actions' }).click();
+  await page.getByRole('menuitem', { name: /Delete thread/ }).click();
+  await thread.getByRole('button', { name: 'Cancel' }).click();
+  expect(await threads(page)).toHaveLength(1);
+  await thread.getByRole('button', { name: 'Thread actions' }).click();
+  await page.getByRole('menuitem', { name: /Delete thread/ }).click();
+  await thread.getByRole('button', { name: 'Delete thread' }).click();
+  await expect(page.getByTestId('v2-comment-pin')).toHaveCount(0);
+  expect(await threads(page)).toHaveLength(0);
+});
+
+test('a reply is deleted only after asking; Delete on a focused pin asks about its thread and leaves the shapes alone', { tag: '@gate' }, async ({ page }) => {
+  const { centre } = await start(page);
+  await comment(page, centre, 'Opening');
+  const pin = page.getByTestId('v2-comment-pin').getByRole('button');
+  const thread = page.getByTestId('v2-comment-thread');
+  await pin.click();
+  await thread.getByRole('textbox', { name: 'Reply' }).fill('A reply');
+  await thread.getByRole('textbox', { name: 'Reply' }).press('Enter');
+  await thread.getByTestId('v2-comment-message').nth(1).getByRole('button', { name: 'Comment actions' }).click();
+  await page.getByRole('menuitem', { name: 'Delete' }).click();
+  await expect(thread.getByRole('alert')).toContainText('Delete this reply?');
+  await shot(page, 'comment-delete-reply');
+  await thread.getByRole('button', { name: 'Cancel' }).click();
+  await expect(thread.getByTestId('v2-comment-message')).toHaveCount(2);
+  await thread.getByTestId('v2-comment-message').nth(1).getByRole('button', { name: 'Comment actions' }).click();
+  await page.getByRole('menuitem', { name: 'Delete' }).click();
+  await thread.getByRole('button', { name: 'Delete reply' }).click();
+  await expect(thread.getByTestId('v2-comment-message')).toHaveCount(1);
+  // The shape stays selected while a pin has focus: Delete is the pin's, and asks.
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('v');
+  await page.mouse.click(centre.x + 20, centre.y + 20);
+  await expect.poll(async () => (await api(page, (v2) => v2.getState())).nodes.length).toBe(1);
+  await pin.focus();
+  await page.keyboard.press('Delete');
+  await expect(thread.getByRole('alert')).toContainText('Delete this thread?');
+  expect((await api(page, (v2) => v2.getState())).nodes).toHaveLength(1);
+  await thread.getByRole('button', { name: 'Delete thread' }).click();
+  await expect(page.getByTestId('v2-comment-pin')).toHaveCount(0);
+  expect((await api(page, (v2) => v2.getState())).nodes).toHaveLength(1);
+});
+
+test('undo never removes a comment, and a comment adds no undo step', async ({ page }) => {
+  const { centre } = await start(page);
+  await comment(page, centre, 'Stays');
+  await expect(page.getByTestId('v2-comment-pin')).toHaveCount(1);
+  await page.getByTestId('v2-canvas').focus();
+  await page.keyboard.press('ControlMeta+z'.replace('ControlMeta', process.platform === 'darwin' ? 'Meta' : 'Control'));
+  // The undo took the rectangle, not the comment.
+  await expect.poll(async () => (await api(page, (v2) => v2.getState())).nodes.length).toBe(0);
+  await expect(page.getByTestId('v2-comment-pin')).toHaveCount(1);
+  expect(await threads(page)).toHaveLength(1);
+});
+
+test('Esc and clicking away cancel the composer; an empty comment cannot be sent', async ({ page }) => {
+  const { centre } = await start(page);
+  await page.keyboard.press('c');
+  await page.mouse.click(centre.x, centre.y);
+  const composer = page.getByRole('dialog', { name: 'New comment' });
+  const box = composer.getByRole('textbox', { name: 'Comment' });
+  await expect(box).toBeFocused();
+  await expect(composer.getByRole('button', { name: 'Send comment' })).toBeDisabled();
+  await box.fill('   ');
+  await box.press('Enter');
+  await expect(composer).toBeVisible();
+  expect(await threads(page)).toHaveLength(0);
+  await box.press('Escape');
+  await expect(composer).toHaveCount(0);
+
+  await page.getByTestId('v2-canvas').focus();
+  await page.mouse.click(centre.x, centre.y);
+  await expect(composer).toBeVisible();
+  await page.mouse.click(centre.x + 300, centre.y + 200);
+  await expect(composer).toHaveCount(0);
+  expect(await threads(page)).toHaveLength(0);
+});
+
+test('the comment tool stays active after posting; a second click starts a second thread; Esc closes a thread, then leaves the tool', { tag: '@gate' }, async ({ page }) => {
+  const { centre } = await start(page);
+  await comment(page, centre, 'First');
+  await expect(page.getByTestId('v2-comment-pin')).toHaveCount(1);
+  // No second press of C: the tool is still the comment tool.
+  await page.mouse.click(centre.x + 200, centre.y + 150);
+  const box = page.getByTestId('v2-comment-composer').getByRole('textbox', { name: 'Comment' });
+  await expect(box).toBeFocused();
+  await box.fill('Second');
+  await box.press('Enter');
+  await expect(page.getByTestId('v2-comment-pin')).toHaveCount(2);
+  expect(await threads(page)).toMatchObject([{ comments: [{ body: 'First' }] }, { comments: [{ body: 'Second' }] }]);
+  // Clicking an existing pin opens its thread, not a new composer.
+  await page.getByTestId('v2-comment-pin').first().getByRole('button').click();
+  await expect(page.getByTestId('v2-comment-thread')).toBeVisible();
+  await expect(page.getByTestId('v2-comment-composer')).toHaveCount(0);
+  // One Escape closes the thread the mouse opened, and only that: the comment tool stays.
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('v2-comment-thread')).toHaveCount(0);
+  await expect(page.getByTestId('v2-editor')).toHaveAttribute('data-tool', 'comment');
+  // The next Escape leaves the tool: a click on the canvas no longer starts a thread.
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('v2-editor')).toHaveAttribute('data-tool', 'select');
+  await page.mouse.click(centre.x + 200, centre.y - 150);
+  await expect(page.getByTestId('v2-comment-composer')).toHaveCount(0);
+  expect(await threads(page)).toHaveLength(2);
+});
+
+test('a press anywhere in the editor closes an open thread; the press that closes it starts nothing', { tag: '@gate' }, async ({ page }) => {
+  const { centre } = await start(page);
+  await comment(page, centre, 'First');
+  const pin = page.getByTestId('v2-comment-pin').getByRole('button');
+  const thread = page.getByTestId('v2-comment-thread');
+  // The toolbar is outside the canvas: a press there closes the thread and still does its own job.
+  await pin.click();
+  await expect(thread).toBeVisible();
+  await page.getByRole('toolbar', { name: 'Create' }).getByRole('button', { name: 'Text', exact: true }).click();
+  await expect(thread).toHaveCount(0);
+  await expect(page.getByTestId('v2-editor')).toHaveAttribute('data-tool', 'text');
+  // With the comment tool, the click that closes a thread on the canvas is not also a new thread.
+  await page.keyboard.press('c');
+  await pin.click();
+  await expect(thread).toBeVisible();
+  await page.mouse.click(centre.x + 200, centre.y + 150);
+  await expect(thread).toHaveCount(0);
+  await expect(page.getByTestId('v2-comment-composer')).toHaveCount(0);
+});
+
+test('with the comment tool, the selection bar, Space-drag and a middle-button pan never start a comment', { tag: '@gate' }, async ({ page }) => {
+  const { centre } = await start(page);
+  await page.keyboard.press('v');
+  await page.mouse.click(centre.x, centre.y);
+  // A blank shape takes a typed C as its name: name it first, so C picks the tool with the shape still selected.
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('Queue');
+  await page.keyboard.press('Enter');
+  await page.getByTestId('v2-canvas').focus();
+  const bar = page.locator('[data-context-bar]');
+  await expect(bar).toBeVisible();
+  await page.keyboard.press('c');
+  await expect(page.getByTestId('v2-editor')).toHaveAttribute('data-tool', 'comment');
+  // The bar is inside the canvas section: its Fill still works, and no composer opens under it.
+  await bar.getByRole('button', { name: 'Fill' }).click();
+  await expect(page.getByRole('dialog', { name: 'Fill', exact: true })).toBeVisible();
+  await expect(page.getByTestId('v2-comment-composer')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  // Space held is the hand: a drag pans the canvas.
+  await page.getByTestId('v2-canvas').focus();
+  await page.keyboard.down('Space');
+  await page.mouse.move(centre.x + 150, centre.y + 120);
+  await page.mouse.down();
+  await page.mouse.move(centre.x + 60, centre.y + 40, { steps: 5 });
+  await page.mouse.up();
+  await page.keyboard.up('Space');
+  // So is the middle button.
+  await page.mouse.move(centre.x + 150, centre.y + 120);
+  await page.mouse.down({ button: 'middle' });
+  await page.mouse.move(centre.x + 100, centre.y + 80, { steps: 5 });
+  await page.mouse.up({ button: 'middle' });
+  await expect(page.getByTestId('v2-comment-composer')).toHaveCount(0);
+  expect(await threads(page)).toHaveLength(0);
+});
+
+test('unsent text is never lost: a click away warns first, and a closed thread keeps its reply', { tag: '@gate' }, async ({ page }) => {
+  const { centre } = await start(page);
+  await comment(page, centre, 'First');
+  await page.keyboard.press('v');
+  const pin = page.getByTestId('v2-comment-pin').getByRole('button');
+  const thread = page.getByTestId('v2-comment-thread');
+  await pin.click();
+  const reply = thread.getByRole('textbox', { name: 'Reply' });
+  await reply.fill('Half a thought');
+  // The first press away only shakes the card and hands the text back its focus.
+  await page.mouse.click(centre.x + 260, centre.y + 180);
+  await expect(thread).toBeVisible();
+  await expect(reply).toBeFocused();
+  await shot(page, 'comment-unsent-warned');
+  // The second closes it; the text waits in the thread.
+  await page.mouse.click(centre.x + 260, centre.y + 180);
+  await expect(thread).toHaveCount(0);
+  await pin.click();
+  await expect(thread.getByRole('textbox', { name: 'Reply' })).toHaveValue('Half a thought');
+  // Switching tool from the toolbar keeps it too.
+  await page.getByRole('toolbar', { name: 'Create' }).getByRole('button', { name: 'Text', exact: true }).click();
+  await page.mouse.click(centre.x + 260, centre.y + 180);
+  await pin.click();
+  await expect(thread.getByRole('textbox', { name: 'Reply' })).toHaveValue('Half a thought');
+  expect(await threads(page)).toMatchObject([{ comments: [{ body: 'First' }] }]);
+});
+
+test('a card opens in the free canvas: never under an open panel, and whole near the bottom', { tag: '@gate' }, async ({ page }) => {
+  await start(page);
+  await page.getByRole('toolbar', { name: 'Workspace', exact: true }).getByRole('button', { name: 'Connect agent', exact: true }).click();
+  const panel = (await page.getByRole('complementary', { name: 'Connect agent' }).boundingBox())!;
+  // A pin just left of the panel: the card would run under it on the right, so it opens on the left.
+  await page.getByTestId('v2-canvas').focus();
+  await page.keyboard.press('c');
+  await page.mouse.click(panel.x - 140, 300);
+  const composer = page.getByRole('dialog', { name: 'New comment' });
+  await expect(composer).toBeVisible();
+  expect((await composer.boundingBox())!.x + (await composer.boundingBox())!.width).toBeLessThanOrEqual(panel.x);
+  await composer.getByRole('textbox', { name: 'Comment' }).fill('Beside the panel');
+  await composer.getByRole('textbox', { name: 'Comment' }).press('Enter');
+  // A thread near the bottom slides up so its reply box shows.
+  await page.mouse.click(400, 730);
+  await page.getByRole('dialog', { name: 'New comment' }).getByRole('textbox', { name: 'Comment' }).fill('Low on the page');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('v');
+  await page.getByTestId('v2-comment-pin').nth(1).getByRole('button').click();
+  const card = page.getByTestId('v2-comment-thread');
+  await expect(card.getByRole('textbox', { name: 'Reply' })).toBeVisible();
+  const box = (await card.boundingBox())!;
+  expect(box.y + box.height).toBeLessThanOrEqual(800);
+  await shot(page, 'comment-card-near-bottom');
+});
+
+test('a thread is placed, written and sent with the keyboard alone', async ({ page }) => {
+  const { id, centre } = await start(page);
+  await page.getByTestId('v2-canvas').focus();
+  // C arms the tool; Enter is its click, at the selected shape or else the middle of the canvas. No pointer event.
+  await page.keyboard.press('c');
+  await page.keyboard.press('Enter');
+  const box = page.getByTestId('v2-comment-composer').getByRole('textbox', { name: 'Comment' });
+  await expect(box).toBeFocused();
+  await box.fill('From the keyboard');
+  await box.press('Enter');
+  await expect(page.getByTestId('v2-comment-pin')).toHaveCount(1);
+  expect(await threads(page)).toMatchObject([{ anchor: { nodeId: null }, comments: [{ body: 'From the keyboard' }] }]);
+  // Sending hands focus back to the canvas, so the next key is the canvas's.
+  await expect(page.getByTestId('v2-canvas')).toBeFocused();
+
+  // With a shape selected the thread anchors to it. Sending handed focus back to the canvas.
+  await page.keyboard.press('v');
+  await page.mouse.click(centre.x, centre.y);
+  // A blank shape takes typed letters as its name; a named one keeps its tool letters.
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('Queue');
+  await page.keyboard.press('Enter');
+  await page.getByTestId('v2-canvas').focus();
+  await page.keyboard.press('c');
+  await page.keyboard.press('Enter');
+  await page.getByTestId('v2-comment-composer').getByRole('textbox', { name: 'Comment' }).fill('On the shape');
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('v2-comment-pin')).toHaveCount(2);
+  expect((await threads(page))[1]).toMatchObject({ anchor: { nodeId: id } });
+
+  // The pin itself is a button: Alt+Arrow moves it, Enter opens its thread.
+  const pinButton = page.getByTestId('v2-comment-pin').first().getByRole('button', { name: /^Comment #1 by User: From the keyboard/ });
+  const x = (await threads(page))[0]!.anchor.point.x;
+  await pinButton.focus();
+  await page.keyboard.press('Alt+ArrowRight');
+  await expect.poll(async () => (await threads(page))[0]!.anchor.point.x).toBe(x + 8);
+  await pinButton.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('v2-comment-thread')).toBeVisible();
+});
+
+test('Delete on the pin of an open thread asks in a card that is still whole near the bottom', { tag: '@gate' }, async ({ page }) => {
+  await start(page);
+  await comment(page, { x: 400, y: 740 }, 'Low on the page');
+  await page.keyboard.press('v');
+  const pin = page.locator('.ofk-comment-pin[data-thread-id]');
+  await pin.click();
+  await expect(page.getByTestId('v2-comment-thread')).toBeVisible();
+  // The confirm card is taller than the thread card it replaces: it must be placed by its own size.
+  await pin.press('Delete');
+  await expect(page.getByRole('alert')).toContainText('Delete this thread');
+  await expect(async () => {
+    const box = (await page.getByTestId('v2-comment-thread').boundingBox())!;
+    expect(box.y + box.height).toBeLessThanOrEqual(800);
+  }).toPass();
+});
+
+test('a pin that holds focus stays when the canvas is panned away; Escape closes its card and focus stays on the pin', { tag: '@gate' }, async ({ page }) => {
+  const { centre } = await start(page);
+  await comment(page, centre, 'Pinned on the shape');
+  await page.keyboard.press('v');
+  const pin = page.locator('.ofk-comment-pin[data-thread-id]');
+  await pin.click();
+  await expect(page.getByTestId('v2-comment-thread')).toBeVisible();
+  // Far enough that the pin is well off the screen.
+  await page.mouse.move(700, 500);
+  await page.mouse.wheel(3000, 0);
+  await expect(async () => expect((await pin.boundingBox())!.x).toBeLessThan(-100)).toPass();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('v2-comment-thread')).toHaveCount(0);
+  // Two frames: hiding the pin, if it were hidden, drops focus to the page.
+  await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
+  await expect(pin).toBeFocused();
+});
+
+test('a card opened beside the selection bar is not cut by it', { tag: '@gate' }, async ({ page }) => {
+  const { id } = await start(page);
+  const rect = (await page.evaluate((nodeId) => window.__V2__!.getNodeRect(nodeId), id))!;
+  // Level with the selection bar and just left of it: the card opens to the right of the pin, across the bar's row.
+  await comment(page, { x: rect.x - 240, y: rect.y - 35 }, 'Beside the bar');
+  await page.keyboard.press('v');
+  await page.mouse.click(rect.x + rect.width / 2, rect.y + rect.height / 2);
+  const bar = page.locator('[data-context-bar]');
+  await expect(bar).toBeVisible();
+  await page.locator('.ofk-comment-pin[data-thread-id]').click();
+  const card = page.getByTestId('v2-comment-thread');
+  await expect(card).toBeVisible();
+  const [a, b] = [(await card.boundingBox())!, (await bar.boundingBox())!];
+  const [x, y] = [Math.max(a.x, b.x) + 8, Math.max(a.y, b.y) + 4];
+  // The test only means something where they overlap.
+  expect(x).toBeLessThan(Math.min(a.x + a.width, b.x + b.width));
+  expect(y).toBeLessThan(Math.min(a.y + a.height, b.y + b.height));
+  expect(await page.evaluate(([px, py]) => !!document.elementFromPoint(px!, py!)?.closest('[data-comment-open]'), [x, y])).toBe(true);
+});
+
+test('a focused comment field has one focus treatment: the field\'s, never an outline on the textarea', { tag: '@gate' }, async ({ page }) => {
+  const { centre } = await start(page);
+  await comment(page, centre, 'A thread to reply to');
+  await page.keyboard.press('v');
+  await page.locator('.ofk-comment-pin[data-thread-id]').click();
+  const reply = page.getByTestId('v2-comment-thread').getByRole('textbox', { name: 'Reply' });
+  await reply.click();
+  await reply.fill('typing');
+  await expect(reply).toBeFocused();
+  const outline = await reply.evaluate((el) => getComputedStyle(el).outlineStyle);
+  expect(outline).toBe('none');
+  const field = await reply.evaluate((el) => getComputedStyle(el.parentElement!).boxShadow);
+  expect(field).not.toBe('none');
+});

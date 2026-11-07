@@ -27,7 +27,8 @@
 .ofk-v2[data-tool='square'] .ofk-v2-canvas,
 .ofk-v2[data-tool='shape'] .ofk-v2-canvas,
 .ofk-v2[data-tool='text'] .ofk-v2-canvas,
-.ofk-v2[data-tool='connector'] .ofk-v2-canvas {
+.ofk-v2[data-tool='connector'] .ofk-v2-canvas,
+.ofk-v2[data-tool='comment'] .ofk-v2-canvas {
   cursor: crosshair;
 }
 
@@ -1003,6 +1004,13 @@
 .ofk-copy-feedback { display: block; color: var(--ofk-secondary); font-size: 11px; margin-top: 8px; }
 /* Rail: live dot on the agent button while connected. */
 .ofk-v2-workspace-rail .ofk-icon-button[data-live] { position: relative; }
+/* Rail: the open-thread count on the Threads button, a small neutral pill (the label carries it for screen readers). */
+.ofk-v2-workspace-rail .ofk-icon-button[data-count] { position: relative; }
+.ofk-v2-workspace-rail .ofk-icon-button[data-count]::after {
+  content: attr(data-count); position: absolute; top: 1px; right: 0; min-width: 16px; height: 16px; box-sizing: border-box; padding: 0 4px;
+  border-radius: 8px; background: var(--ofk-inverse); color: var(--ofk-onInverse); box-shadow: 0 0 0 2px var(--ofk-surface);
+  font-size: 10px; font-weight: 600; line-height: 16px; text-align: center; font-variant-numeric: tabular-nums; pointer-events: none;
+}
 .ofk-v2-workspace-rail .ofk-icon-button[data-live]::after { content: ''; position: absolute; top: 6px; right: 6px; width: 6px; height: 6px; border-radius: 50%; background: var(--ofk-success); box-shadow: 0 0 0 2px var(--ofk-surface); }
 
 /* Architecture model: one object, many views. */
@@ -1449,3 +1457,125 @@
   /* A phone: the field gets the whole row so its placeholder reads in full, the button goes under it. */
   .ofk-v2-welcome-stack > .ofk-v2-map-repo-form { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Comments: pins over the canvas, and the card a pin or a new thread opens. The card is a panel of the editor, on its surface and accent. */
+/* One composited layer for every pin: the camera's pan moves it (v2CommentPlacement), the pins inside move only on zoom. */
+.ofk-comment-layer { position: absolute; top: 0; left: 0; width: 0; height: 0; z-index: calc(var(--ofk-layer-toolbar, 10) - 1); pointer-events: none; will-change: transform; }
+/* Pins sit under the toolbars; while a card is open the layer rises to the selection bar's level, so the card is never cut by it
+   (the card is placed clear of panels and toolbars, which the bar, floating over the selection, is not). */
+.ofk-comment-layer:has([data-comment-open]) { z-index: var(--ofk-layer-context, 35); }
+.ofk-comment-anchor { position: absolute; top: 0; left: 0; width: 0; height: 0; pointer-events: none; }
+.ofk-comment-anchor:has([data-comment-open]) { z-index: 1; }
+.ofk-comment-pin {
+  position: absolute; left: 0; bottom: 0; box-sizing: border-box; width: 30px; height: 30px; padding: 0; border: 2px solid var(--ofk-surface);
+  border-radius: 50% 50% 50% 0; background: var(--ofk-surface); overflow: hidden; cursor: pointer; pointer-events: auto;
+  /* A crisp ring, no blur: a soft shadow, painted for every pin on each zoom frame, is what made zooming over many pins stutter. */
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ofk-text) 22%, transparent);
+  transition: transform .12s ease;
+}
+.ofk-comment-pin[data-ghost] { pointer-events: none; opacity: .9; }
+.ofk-comment-pin:hover { transform: scale(1.06); transform-origin: 0 100%; }
+/* Selected is a neutral ring, keyboard focus the system blue. */
+.ofk-comment-pin[data-selected] { outline: var(--ofk-focus-width, 2px) solid var(--ofk-text); outline-offset: 2px; }
+.ofk-comment-pin:focus-visible { outline: var(--ofk-focus-width, 2px) solid var(--ofk-focus); outline-offset: 2px; }
+.ofk-comment-pin[data-dragging] { cursor: grabbing; }
+.ofk-comment-pin .ofk-comment-avatar { width: 100% !important; height: 100% !important; border-radius: inherit; }
+/* A person is the neutral inverse tile, an agent the brand one; the glyph says which. */
+.ofk-comment-avatar {
+  display: inline-grid; place-items: center; flex: none; border-radius: 50%; line-height: 1; user-select: none;
+  background: var(--ofk-inverse); color: var(--ofk-onInverse);
+}
+.ofk-comment-avatar[data-kind='agent'] { background: var(--ofk-primary); color: var(--ofk-onPrimary); }
+.ofk-comment-avatar svg { width: 60%; height: 60%; }
+
+.ofk-comment-card {
+  /* Beside the pin, inside the free canvas: v2CommentPlacement sets the side and --ofk-card-top. */
+  position: absolute; left: 38px; top: var(--ofk-card-top, -34px); box-sizing: border-box; width: 320px; max-width: min(320px, 86vw);
+  display: grid; gap: 8px; padding: 10px; border-radius: 12px; background: var(--ofk-surface); color: var(--ofk-text);
+  border: 1px solid var(--ofk-border); font-size: 13px; line-height: 1.4; pointer-events: auto; cursor: default;
+  box-shadow: 0 8px 28px rgb(0 0 0 / .25);
+}
+.ofk-comment-card[data-wiggle] { animation: ofk-comment-wiggle .35s ease; }
+@keyframes ofk-comment-wiggle { 20%, 60% { translate: -4px 0; } 40%, 80% { translate: 4px 0; } }
+.ofk-comment-anchor[data-side='left'] .ofk-comment-card { left: auto; right: 8px; }
+.ofk-comment-composer { width: 300px; }
+.ofk-comment-card p, .ofk-comment-card h3, .ofk-comment-card ul { margin: 0; }
+.ofk-comment-thread > header { display: flex; align-items: center; gap: 2px; padding: 0 2px 0 4px; }
+.ofk-comment-thread > header h3 { flex: 1; font-size: 13px; font-weight: 600; }
+.ofk-comment-messages { display: grid; gap: 12px; max-height: 280px; padding: 2px 4px; overflow-y: auto; list-style: none; }
+.ofk-comment-message { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 8px; align-items: start; }
+.ofk-comment-meta { display: flex; gap: 6px; align-items: baseline; }
+.ofk-comment-meta strong { font-weight: 600; }
+.ofk-comment-meta time, .ofk-comment-meta span { color: var(--ofk-muted); font-size: 12px; }
+.ofk-comment-body { white-space: pre-wrap; overflow-wrap: anywhere; }
+.ofk-comment-thread > footer { display: grid; gap: 4px; }
+
+.ofk-comment-input {
+  display: flex; align-items: flex-end; gap: 6px; padding: 5px 5px 5px 12px; border-radius: 10px;
+  border: 1px solid var(--ofk-border); background: var(--ofk-canvas);
+  transition: border-color var(--ofk-motion-fast, .12s), box-shadow var(--ofk-motion-fast, .12s);
+}
+/* One focus treatment, the AI assistant's prompt box: the field takes it, the textarea inside draws none. */
+.ofk-comment-input:focus-within { border-color: var(--ofk-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ofk-accent) 18%, transparent); }
+.ofk-v2 .ofk-comment-input textarea:focus, .ofk-v2 .ofk-comment-input textarea:focus-visible { outline: none; box-shadow: none; border: 0; }
+.ofk-comment-input textarea {
+  flex: 1; min-width: 0; margin: 0; padding: 4px 0; border: 0; outline: 0; background: transparent; color: var(--ofk-text); font: inherit;
+  resize: none; field-sizing: content; min-height: 22px; max-height: 140px;
+}
+.ofk-comment-input textarea::placeholder { color: var(--ofk-muted); }
+.ofk-comment-send {
+  display: grid; place-items: center; flex: none; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50%;
+  background: var(--ofk-primary); color: var(--ofk-onPrimary); cursor: pointer;
+}
+.ofk-comment-send:disabled { background: color-mix(in srgb, var(--ofk-text) 14%, transparent); color: var(--ofk-muted); cursor: default; }
+.ofk-comment-send:focus-visible { outline: var(--ofk-focus-width, 2px) solid var(--ofk-focus); outline-offset: 1px; }
+.ofk-comment-send svg { width: 16px; height: 16px; }
+.ofk-comment-edit { margin-top: 4px; }
+
+.ofk-comment-confirm { padding: 8px 10px; border-radius: 8px; background: var(--ofk-dangerSoft); box-shadow: inset 0 0 0 1px var(--ofk-danger); }
+.ofk-comment-confirm p { margin-bottom: 8px; }
+.ofk-comment-confirm > div { display: flex; gap: 6px; }
+@media (prefers-reduced-motion: reduce) {
+  .ofk-comment-pin { transition: none; }
+  .ofk-comment-card[data-wiggle] { animation: none; outline: 2px solid var(--ofk-danger); }
+}
+
+/* Threads panel: search and filter on top, a list of thread cards. A card is one button (the whole row opens the thread) with its actions beside it. */
+.ofk-v2 .ofk-threads-panel .ofk-panel-body { display: flex; flex-direction: column; min-height: 0; padding: 0; overflow: hidden; }
+.ofk-threads-bar { flex: none; display: flex; align-items: center; gap: 4px; padding: 10px 12px 8px 16px; }
+.ofk-threads-search { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 10px; color: var(--ofk-muted); background: var(--ofk-surface); border: 1px solid var(--ofk-border); border-radius: 8px; }
+/* The focus treatment of the AI assistant's prompt box and the comment fields. */
+.ofk-threads-search:focus-within { border-color: var(--ofk-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ofk-accent) 18%, transparent); }
+.ofk-threads-search svg { width: 16px; height: 16px; flex: none; }
+.ofk-threads-search input { flex: 1; min-width: 0; padding: 0; font: inherit; font-size: 13px; color: var(--ofk-text); background: none; border: 0; outline: none; }
+.ofk-threads-bar .ofk-icon-button { flex: none; color: var(--ofk-secondary); }
+.ofk-threads-bar .ofk-icon-button[data-active] { color: var(--ofk-text); background: color-mix(in srgb, var(--ofk-text) 9%, transparent); }
+.ofk-threads-list { flex: 1; min-height: 0; margin: 0; padding: 0 8px 12px; overflow-y: auto; list-style: none; display: flex; flex-direction: column; gap: 2px; }
+.ofk-threads-card { position: relative; border-radius: 10px; }
+.ofk-threads-card:hover, .ofk-threads-card:focus-within, .ofk-threads-card[data-menu-open] { background: color-mix(in srgb, var(--ofk-text) 6%, transparent); }
+/* Selected is a neutral lift, never the brand colour, as a tree row's. */
+.ofk-threads-card[data-selected] { background: color-mix(in srgb, var(--ofk-text) 9%, transparent); }
+.ofk-threads-card-main { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; align-items: start; width: 100%; box-sizing: border-box; padding: 10px 12px 10px 10px; font: inherit; color: var(--ofk-text); text-align: start; background: none; border: 0; border-radius: inherit; cursor: pointer; }
+.ofk-threads-card-main:focus-visible { outline: 2px solid var(--ofk-focus); outline-offset: -2px; }
+.ofk-threads-card-text { display: grid; gap: 2px; min-width: 0; }
+.ofk-threads-card-where { display: flex; align-items: center; gap: 6px; min-width: 0; padding-inline-end: 64px; font-size: 12px; color: var(--ofk-muted); }
+.ofk-threads-card-where > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ofk-threads-card-state { flex: none; padding: 0 6px; font-size: 11px; border-radius: 99px; background: color-mix(in srgb, var(--ofk-success) 18%, transparent); color: var(--ofk-success); }
+.ofk-threads-card-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--ofk-accent); }
+.ofk-threads-card-meta { display: flex; align-items: baseline; gap: 6px; font-size: 13px; }
+.ofk-threads-card-meta strong { font-weight: 600; }
+.ofk-threads-card-meta time { font-size: 12px; color: var(--ofk-muted); }
+.ofk-threads-card-body { display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; white-space: pre-wrap; }
+.ofk-threads-card-replies { font-size: 12px; font-weight: 500; color: var(--ofk-accent); }
+.ofk-threads-card[data-unread] .ofk-threads-card-meta strong { font-weight: 700; }
+.ofk-threads-card[data-resolved] .ofk-threads-card-main > .ofk-comment-avatar, .ofk-threads-card[data-resolved] .ofk-threads-card-body { opacity: .55; }
+.ofk-threads-card-actions { position: absolute; top: 6px; inset-inline-end: 6px; display: flex; gap: 0; opacity: 0; transition: opacity .1s ease; }
+.ofk-threads-card:hover .ofk-threads-card-actions, .ofk-threads-card:focus-within .ofk-threads-card-actions, .ofk-threads-card[data-menu-open] .ofk-threads-card-actions { opacity: 1; }
+.ofk-threads-card-actions .ofk-icon-button { width: 28px; height: 28px; min-width: 28px; min-height: 28px; color: var(--ofk-secondary); }
+@media (hover: none) { .ofk-threads-card-actions { opacity: 1; } }
+.ofk-threads-empty { flex: 1; display: grid; place-items: center; padding-bottom: 32px; }
+@media (prefers-reduced-motion: reduce) { .ofk-threads-card-actions { transition: none; } }
+
+/* A pin with news carries a dot; a resolved thread opened from the panel is shown dimmed. */
+.ofk-comment-pin[data-unread]::after { content: ''; position: absolute; top: -3px; right: -3px; width: 10px; height: 10px; box-sizing: border-box; border-radius: 50%; background: var(--ofk-accent); border: 2px solid var(--ofk-surface); }
+.ofk-comment-pin[data-resolved] { opacity: .6; filter: grayscale(.6); }

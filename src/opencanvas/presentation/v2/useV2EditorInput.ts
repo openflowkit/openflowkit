@@ -81,7 +81,7 @@ export function useV2EditorInput(input: EditorInputInput) {
     for (const file of files) void media.insertImageFile(file, at);
   };
   // ⌘V arrives here as the native paste event (the keyboard hook leaves it alone): a text field pastes into itself;
-  // on the canvas, images, then our own copied shapes, image URLs, diagram code (drawn in place), and last the in-memory copy.
+  // on the canvas, images, then shapes copied here or in Excalidraw, image URLs, diagram code (drawn in place), and last the in-memory copy.
   const handlePaste = (event: Pick<ClipboardEvent, 'target' | 'clipboardData' | 'preventDefault'>) => {
     editActions.pasteEventArrived();
     if (isEditableTarget(event.target) || editLocked) return;

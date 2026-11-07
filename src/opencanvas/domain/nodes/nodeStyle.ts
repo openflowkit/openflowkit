@@ -5,12 +5,12 @@ import { resolveBasicNodePresentation } from './basicNodePresentation';
 import { resolveContainerNodePresentation } from './containerNodePresentation';
 import { resolveNodeStroke, type NodeStrokeStyle } from './nodeStroke';
 import { optionalPresentationString } from './nodePresentationValues';
-import { darkWashFill, isDarkCanvas, resolveAdaptiveInk, WASH_SUB_INK } from '../color/adaptiveColor';
+import { darkWashFill, isDarkCanvas, paintOver, resolveAdaptiveInk, WASH_SUB_INK } from '../color/adaptiveColor';
 import { hasExplicitColor, nodePaletteName, PALETTE_KEYS, paletteResolver } from './nodePalette';
 import { widgetLabelBox } from './widgetNodePresentation';
 import { framePresetOf } from './framePreset';
 import { DRAWN_SHAPE_FILL } from './shapeNode';
-import { mixHex, readableTextOn } from '../../../lib/colorUtils';
+import { mixHex, normalizeHex, readableTextOn } from '../../../lib/colorUtils';
 
 // Every visible property of a node, resolved from flat `appearance` keys
 // with legacy `content.*` palette/typography keys as fallbacks. Renderers, the
@@ -235,17 +235,19 @@ function computeNodeStyle(node: SceneNode, canvasColor?: string): NodeStyle {
   // The white swatch's own ink is part of that default and follows the canvas with it.
   const swatchInk = darkWash && a.fill !== undefined && typeof a.textColor === 'string' && a.textColor.toLowerCase() === white.textColor;
   const explicitTextColor = swatchInk ? undefined : a.textColor ?? (text ? c.customColor : undefined);
-  // Ink adapts to whatever is behind the label: a solid fill, or the canvas
-  // when the label sits outside the fill or the fill is transparent. A tinted
-  // (rgba) container fill keeps its palette ink, except as a dark-canvas wash.
+  // Ink adapts to whatever is behind the label: a solid fill (seen through at the node's
+  // opacity, the canvas showing through it), or the canvas when the label sits outside the
+  // fill or the fill is transparent. A tinted (rgba) container fill keeps its palette ink,
+  // except as a dark-canvas wash.
+  const opacity = clampNumber(a.opacity, { min: 0, max: 1 }, 1);
   const textBackdrop = defaults.labelOnCanvas || fill === 'transparent' || darkWash ? canvasColor
-    : fill.startsWith('#') ? fill : undefined;
+    : fill.startsWith('#') ? (canvasColor === undefined ? fill : paintOver(fill, canvasColor, opacity)) : undefined;
   const textColor = canvasColor !== undefined && textBackdrop !== undefined
     ? resolveAdaptiveInk(explicitTextColor, textBackdrop)
     : paint(a.textColor, defaults.text);
   // The palette's grey sub-label ink is for its own fills; on a dark authored hex it follows the label, as the export
   // draws it (72%). Palette swatches and cards (whose header reads subTextColor as a wash) keep their look.
-  const darkFill = explicitTextColor !== undefined && /^#[0-9a-f]{6}$/i.test(fill) && readableTextOn(fill) === '#ffffff'
+  const darkFill = explicitTextColor !== undefined && normalizeHex(fill) !== null && readableTextOn(fill) === '#ffffff'
     && !resolveArchitectureNodePresentation(node) && !isPaletteFill(fill, nodePaletteName(node));
   return {
     fill,
@@ -254,7 +256,7 @@ function computeNodeStyle(node: SceneNode, canvasColor?: string): NodeStyle {
     strokeStyle: stroke.style,
     dash: strokeWidth > 0 ? stroke.dash : [],
     cornerRadius: clampNumber(a.cornerRadius, STYLE_LIMITS.cornerRadius, defaults.cornerRadius),
-    opacity: clampNumber(a.opacity, { min: 0, max: 1 }, 1),
+    opacity,
     shadow: a.shadow === true,
     textColor,
     ...(darkWash && explicitTextColor === undefined ? { subTextColor: WASH_SUB_INK }

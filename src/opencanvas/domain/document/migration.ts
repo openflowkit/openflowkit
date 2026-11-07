@@ -1,6 +1,6 @@
 import { cloneJsonValue, isJsonObject, type JsonObject } from './json';
 import { SCENE_DOCUMENT_VERSION, type SceneDocumentV1 } from './types';
-import { validateSceneDocumentV1, type DocumentValidationIssue } from './validation';
+import { validateSceneDocumentV1, withoutInvalidThreads, type DocumentValidationIssue } from './validation';
 
 type DocumentMigrationResult =
   | { readonly success: true; readonly document: SceneDocumentV1; readonly migrated: false }
@@ -41,7 +41,7 @@ export function migrateSceneDocument(value: unknown): DocumentMigrationResult {
   }
 
   const cloned = cloneJsonValue(value);
-  const validation = validateSceneDocumentV1(cloned);
+  const validation = validateSceneDocumentV1(withoutInvalidThreads(cloned));
   if (validation.success === false) {
     return { success: false, reason: 'invalid', issues: validation.issues };
   }

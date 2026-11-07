@@ -26,6 +26,8 @@ export function beginOperation(
   }
   // The laser only points: V2LaserTrail draws it, the document never hears of it.
   if (tool === 'laser') return null;
+  // A comment is placed on release, so a pinch's first finger, a long press or a drag never opens one (finishGesture).
+  if (tool === 'comment') return { kind: 'comment', pointerId: event.pointerId, start: point };
   if (opts.readOnlyRef.current) {
     const additive = event.shiftKey || event.metaKey || event.ctrlKey;
     const fromNode = opts.onNodeDrag && !additive ? host.pickNode(point) : null;

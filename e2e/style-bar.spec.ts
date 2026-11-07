@@ -249,3 +249,26 @@ for (const theme of ['light', 'dark'] as const) {
     await expect.poll(() => fills(page)).not.toEqual([0x123456]);
   });
 }
+
+test('a custom navy fill gets a white label @gate', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForSelector('[data-testid="v2-canvas"]');
+  await page.mouse.click(400, 300);
+  await page.keyboard.press('r');
+  await page.mouse.click(400, 300);
+  await expect.poll(() => count(page)).toBe(1);
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('Navy');
+  await page.keyboard.press('ControlOrMeta+Enter');
+  await page.locator('[data-context-bar]').getByRole('button', { name: 'Fill', exact: true }).click();
+  await page.getByRole('dialog', { name: 'Fill', exact: true }).getByRole('button', { name: 'Custom color', exact: true }).click();
+  const hex = page.getByRole('dialog', { name: 'Custom color', exact: true }).getByRole('textbox', { name: 'Hex', exact: true });
+  await hex.fill('1e3a5f');
+  await hex.press('Enter');
+  await expect.poll(() => fills(page)).toEqual([0x1e3a5f]);
+  // The label's ink is reported once the shape is drawn at rest: close the pickers and let go of the selection.
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+  await page.mouse.click(900, 600);
+  await expect.poll(() => textColors(page)).toEqual([0xffffff]);
+});

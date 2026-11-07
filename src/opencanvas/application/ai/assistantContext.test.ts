@@ -25,6 +25,12 @@ describe('assistant context', () => {
     expect(context.outOfScope).toBe(0);
   });
 
+  it('names a palette the text lacks, so a rewrite of it keeps the palette', async () => {
+    const mono = await compile('flowchart\nPay -> Ship', { appearance: { palette: 'mono' } });
+    const page = (buildDslPageCommand(createEmptyV2Page(), mono) as { after: ScenePage }).after;
+    expect(assistantContext(page, [], 'page').frames[0]!.dsl).toContain('appearance: mono');
+  });
+
   it('narrows to the diagram holding the selected shape and names it', async () => {
     const { page, second } = await twoDiagrams();
     expect(selectedFrameIds(page, ['login'])).toEqual([second]);

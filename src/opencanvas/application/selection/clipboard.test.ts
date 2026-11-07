@@ -4,6 +4,7 @@ import { createTestDocument, createTestNode } from '../../testing/builders/docum
 import { buildPasteProductionSelectionCommand, copyProductionSelection, pastePlacement } from './clipboard';
 import type { ScenePage } from '../../domain/document/types';
 import { buildNodeWorldMatrices, nodeWorldBounds } from '../../domain/scene/worldGeometry';
+import { excalidrawScene, readExcalidraw } from '../../../services/dsl/excalidraw';
 
 describe('production clipboard', () => {
   it('copies a hierarchy and internal connectors, remaps ids, offsets, and reverses atomically', () => {
@@ -27,6 +28,84 @@ describe('production clipboard', () => {
       id: 'connector-copy-3', source: { nodeId: 'node-copy-1' }, target: { nodeId: 'node-copy-2' },
     });
     expect(applyDocumentCommand(applied.document, applied.inverse).document).toEqual(document);
+  });
+
+  it('pastes an arrow with a free end, the free end moving with the paste (Excalidraw copies these)', () => {
+    const document = createTestDocument({ nodes: [] });
+    const snapshot = { version: 1 as const, nodes: [createTestNode('box')], connectors: [{
+      id: 'loose', source: { nodeId: 'box', portId: null, anchor: null, point: null },
+      target: { nodeId: null, portId: null, anchor: null, point: { x: 300, y: 40 } },
+      route: { kind: 'direct' as const, ownership: 'automatic' as const }, waypoints: [], labels: [],
+      appearance: {}, semantics: {}, metadata: {}, extensions: {},
+    }] };
+    let sequence = 0;
+    const result = buildPasteProductionSelectionCommand(document.pages[0], snapshot,
+      (kind) => `${kind}-${++sequence}`, { offset: { x: 10, y: 20 }, keepParents: false });
+    const applied = applyDocumentCommand(document, result.command);
+    expect(applied.document.pages[0].connectors[0]).toMatchObject({
+      source: { nodeId: 'node-1' }, target: { nodeId: null, point: { x: 310, y: 60 } },
+    });
+  });
+
+  it('pastes Excalidraw’s clipboard into an ordinary diagram, on its layer', () => {
+    const document = createTestDocument({ nodes: [createTestNode('mine')] });
+    const scene = readExcalidraw(JSON.stringify({ type: 'excalidraw/clipboard', files: {}, elements: [
+      { id: 'box', type: 'rectangle', x: 0, y: 0, width: 120, height: 60, angle: 0, isDeleted: false },
+    ] }))!;
+    const { nodes, connectors } = excalidrawScene(scene);
+    const result = buildPasteProductionSelectionCommand(document.pages[0], { version: 1, nodes, connectors },
+      (kind) => `${kind}-pasted`, { offset: { x: 0, y: 0 }, keepParents: false });
+    expect(applyDocumentCommand(document, result.command).document.pages[0].nodes).toHaveLength(2);
+  });
+
+  it('pastes a hand-made Excalidraw clipboard whose frame is its own frame', () => {
+    const document = createTestDocument({ nodes: [createTestNode('mine')] });
+    const scene = readExcalidraw(JSON.stringify({ type: 'excalidraw/clipboard', files: {}, elements: [
+      { id: 'loop', type: 'frame', frameId: 'loop', x: 0, y: 0, width: 200, height: 200, angle: 0, isDeleted: false },
+    ] }))!;
+    const { nodes, connectors } = excalidrawScene(scene);
+    const result = buildPasteProductionSelectionCommand(document.pages[0], { version: 1, nodes, connectors },
+      (kind) => `${kind}-pasted`, { offset: { x: 0, y: 0 }, keepParents: false });
+    expect(applyDocumentCommand(document, result.command).document.pages[0].nodes[1]).toMatchObject({ kind: 'frame', parentId: null });
+  });
+
+  it('moves a pasted connector’s bends with its ends', () => {
+    const document = createTestDocument({ nodes: [] });
+    const snapshot = { version: 1 as const, nodes: [createTestNode('box')], connectors: [{
+      id: 'bent', source: { nodeId: 'box', portId: null, anchor: null, point: null },
+      target: { nodeId: null, portId: null, anchor: null, point: { x: 300, y: 40 } },
+      route: { kind: 'polyline' as const, ownership: 'imported-fixed' as const }, waypoints: [{ x: 200, y: 100 }], labels: [],
+      appearance: {}, semantics: {}, metadata: {}, extensions: {},
+    }] };
+    const result = buildPasteProductionSelectionCommand(document.pages[0], snapshot,
+      (kind) => `${kind}-1`, { offset: { x: 10, y: 20 }, keepParents: false });
+    expect(applyDocumentCommand(document, result.command).document.pages[0].connectors[0]!.waypoints).toEqual([{ x: 210, y: 120 }]);
+  });
+
+  it('pastes a big copy onto a big page in one pass (a whole Excalidraw drawing pastes at once)', () => {
+    const page = { ...createTestDocument({ nodes: [] }).pages[0]!,
+      nodes: Array.from({ length: 150_000 }, (_, i) => createTestNode(`on-page-${i}`, { zIndex: i })) };
+    const snapshot = { version: 1 as const, connectors: [], nodes: Array.from({ length: 20_000 }, (_, i) => createTestNode(`copied-${i}`)) };
+    const started = performance.now();
+    const { command } = buildPasteProductionSelectionCommand(page, snapshot, (kind, id) => `${kind}:${id}`);
+    // One pass: well under a second. Scanning the page per pasted shape took seconds, and spreading it overflowed the stack.
+    expect(performance.now() - started).toBeLessThan(2_000);
+    const zIndexes = command.kind === 'batch' ? command.commands.map((child) => (child.kind === 'insert-node' ? child.node.zIndex : 0)) : [];
+    expect([zIndexes[0], zIndexes.at(-1)]).toEqual([150_000, 169_999]);
+  });
+
+  it('refuses ids that repeat within one paste, not only ids already on the page', () => {
+    const page = createTestDocument({ nodes: [] }).pages[0]!;
+    const free = { nodeId: null, portId: null, anchor: null };
+    const line = { id: 'line', source: { ...free, point: { x: 0, y: 0 } }, target: { ...free, point: { x: 10, y: 0 } },
+      route: { kind: 'direct' as const, ownership: 'automatic' as const }, waypoints: [], labels: [],
+      appearance: {}, semantics: {}, metadata: {}, extensions: {} };
+    const twoNodes = { version: 1 as const, nodes: [createTestNode('a'), createTestNode('b')], connectors: [] };
+    const twoLines = { version: 1 as const, nodes: [], connectors: [line, { ...line, id: 'line-2' }] };
+    const nodeAndLine = { version: 1 as const, nodes: [createTestNode('a')], connectors: [line] };
+    for (const snapshot of [twoNodes, twoLines, nodeAndLine]) {
+      expect(() => buildPasteProductionSelectionCommand(page, snapshot, () => 'same')).toThrow('Paste ids must be unique.');
+    }
   });
 });
 
@@ -60,6 +139,20 @@ describe('where a paste lands', () => {
     const page = createTestDocument({ nodes: [at('n', 5000, -3000)] }).pages[0]!;
     // The 100×50 node is centred on (500, 400).
     expect(pastePlacement(copyProductionSelection(page, ['n']), view)).toEqual({ offset: { x: 450 - 5000, y: 375 + 3000 }, keepParents: false });
+  });
+
+  it('places arrows copied without shapes (Excalidraw) by their free ends, and pastes them as connectors', () => {
+    const free = (x: number, y: number) => ({ nodeId: null, portId: null, anchor: null, point: { x, y } });
+    const snapshot = { version: 1 as const, nodes: [], connectors: [{ id: 'go', source: free(5000, -3000), target: free(5200, -3000),
+      route: { kind: 'direct' as const, ownership: 'automatic' as const }, waypoints: [], labels: [],
+      appearance: {}, semantics: {}, metadata: {}, extensions: {} }] };
+    const placement = pastePlacement(snapshot, view);
+    // The 200 px arrow is centred on the view's (500, 400).
+    expect(placement).toEqual({ offset: { x: 400 - 5000, y: 400 + 3000 }, keepParents: false });
+    const document = createTestDocument({ nodes: [] });
+    const result = buildPasteProductionSelectionCommand(document.pages[0]!, snapshot, (kind) => `${kind}-1`, placement);
+    expect(result).toMatchObject({ pastedNodeIds: [], pastedConnectorIds: ['connector-1'] });
+    expect(applyDocumentCommand(document, result.command).document.pages[0]!.connectors[0]!.source.point).toEqual({ x: 400, y: 400 });
   });
 
   it('a shape copied out of a section lands a step off where it is on the canvas, in that section (as ⌘D does), one undo', () => {

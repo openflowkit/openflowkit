@@ -27,7 +27,7 @@ import { PixiSelectionOverlay, selectionWorldBounds } from './PixiSelectionOverl
 import { shouldRedrawNodes } from './sceneInvalidation';
 import { type ConnectSide } from '../../domain/connectors/connectHandles';
 import { type ViewportSceneProjection } from './viewportProjection';
-import { abandonInitializedApplication, assembleStage, getNodeDebugSnapshot, getRenderDiagnostics, PIXI_HOST_STAGE_DESTROY_OPTIONS, warmShader, type PixiRenderDiagnostics } from './pixiHostStage';
+import { abandonInitializedApplication, assembleStage, contextLost, getNodeDebugSnapshot, getRenderDiagnostics, PIXI_HOST_STAGE_DESTROY_OPTIONS, warmShader, type PixiRenderDiagnostics } from './pixiHostStage';
 import { drawMotionFrame, endMotion, getMotionState } from './pixiHostMotion';
 import { finishReveal, revealTick, startArmedReveal, type ArmedReveal, type RevealStats, type RunningReveal } from './pixiHostReveal';
 import { drawFocus, getFocusState, syncFlow } from './pixiHostFocus';
@@ -361,7 +361,8 @@ export class PixiRendererHost {
   }
 
   renderNow(): void {
-    if (this.destroyed || !this.app.renderer) return;
+    // A lost context draws nothing; the restore asks for a frame again (handleContextRestored).
+    if (this.destroyed || !this.app.renderer || contextLost(this.app)) return;
     settleCamera(this);
     const startedAt = performance.now();
     this.app.render();

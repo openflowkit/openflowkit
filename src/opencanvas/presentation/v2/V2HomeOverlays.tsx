@@ -42,7 +42,7 @@ export function HomeDropOverlay(): React.JSX.Element {
     <div className="ofk-home-drop" aria-hidden="true">
       <Icon icon={IconUpload} />
       <strong>Drop to import</strong>
-      <span>OpenFlowKit .json, Mermaid, D2, Structurizr or OpenFlow DSL</span>
+      <span>OpenFlowKit .json, Excalidraw, Mermaid, D2, Structurizr or OpenFlow DSL</span>
     </div>
   );
 }

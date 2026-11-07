@@ -1,5 +1,6 @@
 import type { SceneNode } from '../document/types';
 import { resolveAdaptiveInk } from '../color/adaptiveColor';
+import { normalizeHex } from '../../../lib/colorUtils';
 import { resolveNodeStyle, type NodeStyle } from './nodeStyle';
 import { paletteSwatch } from './nodePalette';
 import {
@@ -43,7 +44,7 @@ export function widgetBackdrop(
     parent = parent.parentId ? parentOf(parent.parentId) : undefined) {
     seen.add(parent.id);
     const fill = resolveNodeStyle(parent, canvasColor).fill;
-    if (/^#[0-9a-f]{6}$/i.test(fill)) return fill;
+    if (normalizeHex(fill)) return fill;
   }
   return canvasColor;
 }

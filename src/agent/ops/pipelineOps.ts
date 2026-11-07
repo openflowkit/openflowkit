@@ -1,6 +1,7 @@
 // Pipeline ops: files and the camera. These never touch the document, so they
 // carry no command — they hand back artefacts or move the viewport.
 import { z } from 'zod';
+import { openThreadCount } from '../../opencanvas/domain/threads/threads';
 import { descendantIds } from '../../opencanvas/domain/scene/queries';
 import { defineOp, requireFrame, requirePage, type ExportedFile } from './types';
 
@@ -24,14 +25,14 @@ export const exportDiagram = defineOp({
     scope: z.enum(['selection', 'page', 'document']).default('document').describe('document: every page; page: one page; selection: the ids you pass.'),
     pageId: z.string().min(1).optional().describe('Page to act on (see list_pages); defaults to the page the editor shows, or the first page in file mode.'),
     ids: z.array(z.string().min(1)).optional().describe('Selection scope: the node and connector ids to export; defaults to everything on the page.'),
-    scale: z.union([z.literal(1), z.literal(2), z.literal(3)]).default(1),
+    scale: z.literal([1, 2, 3]).default(1),
     theme: z.enum(['light', 'dark', 'print']).default('light'),
     preset: z.enum(['build', 'walkthrough', 'pulse']).default('build').describe('Animation preset: build reveals in order, walkthrough spotlights each step, pulse shows everything with a moving light.'),
     order: z.string().min(1).optional().describe('Animation order: a flow id from the architecture model, or "code" for the animate block in the diagram source. Omit for the connector graph.'),
     durationMs: z.number().int().min(500).max(600_000).optional().describe('Animation clip length in milliseconds; omit for the natural length.'),
     loop: z.boolean().default(false),
-    size: z.union([z.literal(720), z.literal(1080), z.literal(1440)]).default(1080).describe('Raster animation width in pixels.'),
-    fps: z.union([z.literal(12), z.literal(24), z.literal(30)]).default(24),
+    size: z.literal([720, 1080, 1440]).default(1080).describe('Raster animation width in pixels.'),
+    fps: z.literal([12, 24, 30]).default(24),
   }),
   async run({ format, scope, pageId, ids, scale, theme, preset, order, durationMs, loop, size, fps }, context) {
     if (!context.capabilities.exportFiles) throw new Error('This host cannot export files; connect a live editor or use a host with an export pipeline.');
@@ -58,7 +59,7 @@ export const screenshotDiagram = defineOp({
   schema: z.object({
     frameId: z.string().min(1).optional().describe('Diagram frame id, from create_diagram or list_diagrams; omit for the whole page.'),
     pageId: z.string().min(1).optional().describe('Page to act on (see list_pages); defaults to the page the editor shows, or the first page in file mode.'),
-    scale: z.union([z.literal(1), z.literal(2), z.literal(3)]).default(2),
+    scale: z.literal([1, 2, 3]).default(2),
     theme: z.enum(['light', 'dark']).default('light'),
   }),
   async run({ frameId, pageId, scale, theme }, context) {
@@ -97,7 +98,7 @@ export const fitView = defineOp({
 export const getDocument = defineOp({
   name: 'get_document',
   title: 'Read the page',
-  description: 'Nodes and connectors of one page, with ids, labels and geometry, plus `selection`: the ids the user has '
+  description: 'Nodes and connectors of one page, with ids, labels and geometry, plus `openThreads` (unresolved threads; list_threads reads them) and `selection`: the ids the user has '
     + 'selected on that page in the live editor ("the box I selected"; empty in file mode or when nothing is selected). '
     + 'Use get_diagram for a diagram\'s DSL.',
   schema: z.object({ pageId: z.string().min(1).optional().describe('Page to read (see list_pages); defaults to the page the editor shows, or the first page in file mode.') }),
@@ -112,6 +113,7 @@ export const getDocument = defineOp({
         pageId: page.id,
         pageName: page.name,
         // C4 view pages share element ids: a selection belongs to the page the editor shows, and only to it.
+        openThreads: openThreadCount(page),
         selection: context.selection?.pageId === page.id ? context.selection.ids.filter(onPage) : [],
         nodes: page.nodes.map((node) => ({
           id: node.id, kind: node.kind, parentId: node.parentId,
@@ -131,7 +133,7 @@ export const getDocument = defineOp({
 export const listPages = defineOp({
   name: 'list_pages',
   title: 'List pages',
-  description: 'Every page in the document with its shape counts and diagram kind.',
+  description: 'Every page in the document with its shape counts, diagram kind and open threads.',
   schema: z.object({}),
   async run(_input, context) {
     return {
@@ -139,7 +141,7 @@ export const listPages = defineOp({
       output: {
         pages: context.document.pages.map((page, index) => ({
           pageId: page.id, index, name: page.name, diagramKind: page.diagramKind,
-          nodes: page.nodes.length, connectors: page.connectors.length,
+          nodes: page.nodes.length, connectors: page.connectors.length, openThreads: openThreadCount(page),
         })),
       },
     };

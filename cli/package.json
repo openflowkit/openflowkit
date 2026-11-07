@@ -1,6 +1,6 @@
 {
   "name": "openflowkit",
-  "version": "0.2.4",
+  "version": "0.3.0",
   "mcpName": "io.github.openflowkit/openflowkit-mcp",
   "description": "The OpenFlowKit CLI: render Mermaid, D2, Structurizr or OpenFlow DSL to SVG, validate diagrams in CI, map a repo. Same as @openflowkit/openflowkit-mcp.",
   "keywords": ["diagram", "cli", "mermaid", "d2", "structurizr", "svg", "architecture", "mcp", "openflowkit"],
@@ -12,5 +12,5 @@
   "bin": { "openflowkit": "./openflowkit.js", "openflowkit-mcp": "./openflowkit-mcp.js" },
   "files": ["openflowkit.js", "openflowkit-mcp.js", "README.md", "LICENSE"],
   "engines": { "node": ">=20.11" },
-  "dependencies": { "@openflowkit/openflowkit-mcp": "0.2.4" }
+  "dependencies": { "@openflowkit/openflowkit-mcp": "0.3.0" }
 }

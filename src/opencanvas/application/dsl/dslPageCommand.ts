@@ -48,6 +48,17 @@ function placeRecords(compiled: CompileResult, frameId: string, taken: ReadonlyS
   return { frame, inside, connectors };
 }
 
+function uniqueId(taken: ReadonlySet<string>, id: string): string {
+  let unique = id;
+  for (let copy = 2; taken.has(unique); copy += 1) unique = `${id}-${copy}`;
+  return unique;
+}
+
+/** The id a new frame lands under: its compiled id, or a numbered copy when the page already holds that id. */
+export function placedFrameId(page: ScenePage, compiled: CompileResult): string {
+  return uniqueId(new Set([...page.nodes, ...page.connectors].map(({ id }) => id)), compiled.frame.id);
+}
+
 /**
  * Creates one reversible page replacement for one Generate intent, or null when
  * the regenerated frame is identical (set-page rejects no-op commands).
@@ -61,8 +72,7 @@ export function buildDslPageCommand(page: ScenePage, compiled: CompileResult, bo
     retainedConnectors = retainedConnectors.filter((connector) => !removed.has(connector.source.nodeId ?? '') && !removed.has(connector.target.nodeId ?? ''));
   }
   const taken = new Set([...retainedNodes, ...retainedConnectors].map(({ id }) => id));
-  let frameId = boundFrameId ?? compiled.frame.id;
-  for (let copy = 2; !boundFrameId && taken.has(frameId); copy += 1) frameId = `${compiled.frame.id}-${copy}`;
+  const frameId = boundFrameId ?? uniqueId(taken, compiled.frame.id);
   const { frame, inside, connectors } = placeRecords(compiled, frameId, taken);
   const after: ScenePage = {
     ...page,

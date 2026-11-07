@@ -1,40 +1,40 @@
 # State
 What is done and what is next. Maintainers' plan and logs live in the untracked `docs/` folder.
 
-## Now (2026-10-14): 2.1.0 is live; v2 is ahead of main
-- `main` = v2 since PR #86 (merge commit, tagged `v2.1.0`; release + Docker published). App 2.1.0, MCP server +
-  CLI 0.2.4 on v2 and on npm. `main` by PR only.
-- **On v2, not main:** map ↔ drawing, one-reveal loader, private repos, agent connect/presence, self-host AI proxy
-  (`OPENFLOWKIT_AI_UPSTREAM`), source files ≤ 500 lines (ESLint `max-lines`). Why: `docs/logs/2026-10-14.md`.
+## Now (2026-11-07): app 2.2.0 and MCP server + CLI 0.3.0
+- 2.2.0: comments on the canvas, the Threads panel and agent thread tools (@svallory, #102/#104/#105/#103, landed
+  through #111–#114 because his fork is org-owned and takes no maintainer pushes), Excalidraw import (@Mr-Macharia,
+  #97), `get_diagram` `since`/`revision` (#94, #107), the placed frame id + palette fixes (#109), custom-colour ink
+  (#108), dependency security updates and zod 4 (#115, #116). `main` by PR only; v2 = main plus merge commits.
 - Repo: github.com/openflowkit/openflowkit. npm `openflowkit` (`npx -y openflowkit mcp`) pins the engine
   `@openflowkit/openflowkit-mcp` at the same version; `@vrun-design/openflowkit-mcp` is deprecated at 0.2.2.
-- MCP registry `io.github.openflowkit/openflowkit-mcp` publishes from `release.yml` on an `mcp-v*` tag
-  (GitHub OIDC, no secret). Push the tag only after both npm packages are live.
-- Hosting (Cloudflare Pages, production = `main`): `ofk-app` app.openflowkit.com, `ofk-docs` docs.openflowkit.com,
-  `ofk-site` openflowkit.com + www (website repo; marketing home at `/`, its buttons open the app).
-  Share Worker: share.openflowkit.com (R2 + Quota Durable Object, Turnstile); `worker/README.md`.
-  MCP Worker: mcp.openflowkit.com/mcp (`mcp-server/`: `deploy:remote`, then `smoke:remote -- <url>`).
+- Hosting (Cloudflare Pages, production = `main`, every merge deploys): `ofk-app` app.openflowkit.com, `ofk-docs`
+  docs.openflowkit.com, `ofk-site` openflowkit.com (website repo). Share Worker: share.openflowkit.com
+  (`worker/README.md`). MCP Worker: mcp.openflowkit.com/mcp (`mcp-server/`: `deploy:remote`, `smoke:remote -- <url>`).
 - Gate: `npm run verify` (typecheck, lint, unit, MCP tests + typecheck, headed `@gate`). CI: `quality`
   ∥ 4 e2e shards → `e2e-report`; `@local` specs (GPU budgets, `agent-live`) run only in `e2e:headed`.
 
-## Release steps (MCP server + CLI)
-Bump `mcp-server/package.json`, `src/lib/version.ts`, `server.json`, `cli/package.json` (version and
-the exact engine pin), both plugin manifests, and the `openflowkit@x.y.z` pins (`git grep 'openflowkit@0\.'`);
-`src/agent/plugin.test.ts` fails on drift. Verify, publish `mcp-server/` then `cli/`, push `mcp-vX.Y.Z`.
+## Release steps (MCP server + CLI, then the app tag)
+Bump `mcp-server/package.json`, `src/lib/version.ts`, `server.json`, `cli/package.json` (version and the exact
+engine pin), both plugin manifests and every `openflowkit@x.y.z` pin (`git grep 'openflowkit@0\.'`: the Action and
+its docs); `src/agent/plugin.test.ts` fails on drift. Merge the bump only when ready to publish (the Action's default
+`npx openflowkit@x.y.z` breaks until npm has it). Publish `mcp-server/` then `cli/` (2FA in the browser), deploy and
+smoke the MCP Worker, push `mcp-vX.Y.Z` (registry), then the app tag `vX.Y.Z` (its Action pins the new CLI).
 
 ## Shipped in this cycle
-- DSL families, Mermaid / Structurizr / D2 import, headless ELK, exports (SVG, PNG, GIF/MP4/WebM), encrypted share links.
-- Agents: one op registry for MCP, CLI (`op`, `render`, `convert`, `validate`, `map`, `discover`,
-  `drift`, `build`, `mcp`), WebMCP, in-app assistant, PR Action, Claude Code / Codex plugins.
-- Twelve starter templates (`UPDATE_HOME_PREVIEWS=1` redraws previews); Map mode: repo maps with file:line evidence.
+- DSL families, Mermaid / Structurizr / D2 / Excalidraw import, headless ELK, exports, encrypted share links.
+- Agents: one op registry for MCP, CLI, WebMCP, in-app assistant, PR Action, Claude Code / Codex plugins.
+- Comment threads: pins on the canvas, the Threads panel, agent tools; a `.openflow.json` keeps them, exports and
+  share links leave them out unless **Include comments**.
 
 ## Known ceilings (`// ponytail:` in code)
-- Whole SVG re-emitted per export; chart/ink/image/annotation/text frames rasterized in JS. GIF: 256 colours, ≤ 20 fps,
-  no custom keyframes; frames don't clip. Headless layout cap: 1000 shapes / 400 connections. Discovery blind to .NET/Elixir.
+- Whole SVG re-emitted per export; GIF 256 colours ≤ 20 fps; headless layout 1000 shapes / 400 connections.
+- Translucent `#rrggbbaa` fills count as opaque for label ink; off-screen comment pins are culled (out of Tab order).
 
 ## Next
-- PR v2 → main; then release in order: app → MCP Worker (`deploy:remote`, `smoke:remote`) → npm (bump first) →
-  docs/site. Owner calls: bridge token default, canvas relay for claude.ai (log, "decisions").
-- Launch week: apply D1 migration 0004 (one usage row per person per day, nightly rollup past 100 days)
-  before deploying the share Worker; origin check on `/e`.
-- After launch: npm trusted publishing, Dependabot triage, main ruleset, owner click-through (`npm run e2e:headed` first).
+- Small follow-ups from the 11-07 review: the code panel's palette picker ignores an `appearance:` line in the text;
+  the custom picker could save `#rrggbb` when alpha is ff; CLI `--page` → `start_thread` `pageId`; #104's IME
+  `composing()` in six other text fields; comment shortcuts missing from `keyboard-shortcuts.md`; an open comment card
+  in its own layer (it lifts every pin above the toolbars now); `add_shape.kind` errors say only "Invalid input".
+- Unconfirmed since 10-14: D1 migration 0004 applied before the share Worker deploy; origin check on `/e`.
+- After launch: npm trusted publishing, owner click-through (`npm run e2e:headed` first).

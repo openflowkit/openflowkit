@@ -2,7 +2,7 @@
 // vite.agent.config.ts. Pure: no store, no browser, no React.
 import { createDefaultSceneLayer } from '@/opencanvas/domain/document/defaults';
 import { SCENE_DOCUMENT_FORMAT, SCENE_DOCUMENT_VERSION, type SceneDocumentV1 } from '@/opencanvas/domain/document/types';
-import { validateSceneDocumentV1 } from '@/opencanvas/domain/document/validation';
+import { migrateSceneDocument } from '@/opencanvas/domain/document/migration';
 
 export { AGENT_OPS, LOOKUP_OPS, MAX_IMAGE_KB, PAGELESS_OPS, base64Kb, findAgentOp, opInputShape } from './ops';
 export { createFileCapabilities, grammarSection } from './host';
@@ -72,8 +72,9 @@ export function createAgentDocument(name: string, id: string = crypto.randomUUID
   };
 }
 
+/** A document file opened by an agent (openflow_open, the CLI's --doc): loaded as the app loads one, so a bad thread is dropped with a warning on stderr. */
 export function parseAgentDocument(value: unknown): SceneDocumentV1 {
-  const result = validateSceneDocumentV1(value);
+  const result = migrateSceneDocument(value);
   if (result.success === false) {
     const summary = result.issues.map((issue) => `${issue.path}: ${issue.message}`).join('; ');
     throw new TypeError(`Invalid OpenCanvas document: ${summary}`);

@@ -2,6 +2,7 @@ import { createServer, request } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
 import { CONNECT_URL, LiveBridge, NOT_PAIRED } from '../src/lib/bridge.js';
+import { MCP_SERVER_VERSION } from '../src/lib/version.js';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { createServerWithDeps } from '../src/server.js';
@@ -372,7 +373,7 @@ describe('many agents, one canvas', () => {
     const port = await bridge.start();
     guest = new LiveBridge({ port, log: () => undefined });
     await expect(guest.start()).resolves.toBe(port);
-    expect(guest.status()).toEqual({ port, state: 'shared', shared: { side: 'guest', holder: 'openflowkit 0.2.4', editorPaired: false } });
+    expect(guest.status()).toEqual({ port, state: 'shared', shared: { side: 'guest', holder: `openflowkit ${MCP_SERVER_VERSION}`, editorPaired: false } });
     const tool = await agentOn(guest, 'cursor');
     // Nobody paired yet: the guest says what to do, like any server.
     expect(await tool('list_pages')).toEqual({ isError: true, text: NOT_PAIRED });
@@ -471,7 +472,7 @@ describe('many agents, one canvas', () => {
 
   it('refuses to share with an older server, another protocol or another program, and says which', async () => {
     const cases: [number, unknown, RegExp][] = [
-      [200, OLD_HEALTH, /\(0\.2\.4\) owns port \d+ and cannot share its canvas with this one \(0\.2\.4\): their bridge protocols differ/],
+      [200, OLD_HEALTH, new RegExp(`\\(0\\.2\\.4\\) owns port \\d+ and cannot share its canvas with this one \\(${MCP_SERVER_VERSION.replace(/\./g, '\\.')}\\): their bridge protocols differ`)],
       [200, { ...OLD_HEALTH, version: '9.0.0', protocol: 2, share: 1 }, /\(9\.0\.0\) owns port \d+ and cannot share/],
       [404, { error: 'nope' }, /^Another program already owns port \d+; this one can only edit files/],
     ];

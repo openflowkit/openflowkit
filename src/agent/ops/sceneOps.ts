@@ -123,8 +123,8 @@ export const addShape = defineOp({
   schema: z.object({
     kind: z.union([z.enum(CATALOG_IDS as [string, ...string[]]), z.literal('chart'), z.literal('widget'), z.literal('frame')]).default('process'),
     label: z.string().optional().describe('Text on the shape; required for catalog kinds other than the toolbar shapes.'),
-    x: z.number().finite().default(0).describe('Top-left x in page pixels (inside parentId: from the frame).'),
-    y: z.number().finite().default(0).describe('Top-left y in page pixels (inside parentId: from the frame).'),
+    x: z.number().default(0).describe('Top-left x in page pixels (inside parentId: from the frame).'),
+    y: z.number().default(0).describe('Top-left y in page pixels (inside parentId: from the frame).'),
     id: z.string().min(1).optional().describe('Id for the new node; one is minted when omitted.'),
     /** Charts only: the data the node renders (categories and series, or points). */
     chart: z.object({

@@ -111,7 +111,7 @@ describe('assistant change chain', () => {
       { id: 'blue', op: styleNodes, input: { ids: ['box'], stroke: '#0000ff' }, label: 'Style' },
       move('right', 40),
     ]);
-    const proposal = createProposal({ document, revision: 3, source: 'test', intent: 'red', scope: { kind: 'page', pageId: page.id, objectIds: [] }, changes });
+    const proposal = createProposal({ document, contentRevision: 3, source: 'test', intent: 'red', scope: { kind: 'page', pageId: page.id, objectIds: [] }, changes });
     expect(proposal.error).toBeUndefined();
     const batch = applyCommand(proposal, 3, document)!;
     const after = applyDocumentCommand(document, batch).document.pages[0]!;

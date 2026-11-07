@@ -17,6 +17,22 @@ function node(overrides: Partial<SceneNode>): SceneNode {
 }
 
 describe('resolveNodeStyle', () => {
+  it('reads an 8-digit fill, as the custom picker saves it, like its 6-digit colour', () => {
+    for (const canvas of ['#f7f7f5', '#191b19']) {
+      for (const [hex, ink] of [['#1e3a5f', '#ffffff'], ['#a5d8ff', '#0f172a'], ['#f59f00', '#0f172a']] as const) {
+        const picked = resolveNodeStyle(node({ appearance: { fill: `${hex}ff` } }), canvas);
+        expect(picked.textColor, `${hex} on ${canvas}`).toBe(ink);
+        expect(picked.textColor).toBe(resolveNodeStyle(node({ appearance: { fill: hex } }), canvas).textColor);
+      }
+    }
+  });
+
+  it('keeps an 8-digit text colour, and gives the sub-label of a dark 8-digit fill an ink that reads on it', () => {
+    expect(resolveNodeStyle(node({ appearance: { fill: '#ffffffff', textColor: '#ff0000ff' } }), '#f7f7f5').textColor).toBe('#ff0000');
+    const style = resolveNodeStyle(node({ content: { shape: 'actor', label: 'Ops', subLabel: '[Person]' }, appearance: { fill: '#08427bff', textColor: '#ffffff' } }), '#f7f7f5');
+    expect(contrast(style.fill, style.subTextColor!)).toBeGreaterThanOrEqual(4.5);
+  });
+
   it('gives the sub-label of a dark authored fill an ink that reads on it, light canvas or dark', () => {
     for (const canvas of [undefined, '#f7f7f5', '#191b19']) {
       const style = resolveNodeStyle(node({ content: { shape: 'actor', label: 'Ops', subLabel: '[Person]' }, appearance: { fill: '#08427b', textColor: '#ffffff' } }), canvas);
@@ -41,6 +57,11 @@ describe('resolveNodeStyle', () => {
     expect(resolveNodeStyle(node({ appearance: { fill: 'transparent' } }), '#191b19').textColor).toBe('#ffffff');
     expect(resolveNodeStyle(node({ appearance: { fill: '#fef2f2' } }), '#191b19').textColor).toBe('#0f172a');
     expect(resolveNodeStyle(node({ appearance: { fill: 'transparent', textColor: '#ef4444' } }), '#191b19').textColor).toBe('#ef4444');
+    // A see-through fill: the label reads against the colour it makes over the canvas, not the fill alone.
+    for (const canvas of ['#191b19', '#f7f7f5']) {
+      const faint = resolveNodeStyle(node({ appearance: { fill: '#a5d8ff', opacity: 0.3 } }), canvas);
+      expect(contrast(faint.textColor, mixHex('#a5d8ff', canvas, 0.7)), canvas).toBeGreaterThanOrEqual(4.5);
+    }
   });
   it('turns a frame default wash faint on a dark canvas and keeps authored fills', () => {
     const frame = node({ kind: 'section', content: { label: 'Frame', color: 'slate' } });

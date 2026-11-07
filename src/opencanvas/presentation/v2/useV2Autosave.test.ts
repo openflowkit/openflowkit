@@ -2,6 +2,8 @@ import 'fake-indexeddb/auto';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
 import { createTestDocument, createTestNode } from '@/opencanvas/testing/builders/documentBuilder';
+import { useDocumentSession } from '../../application/session/useDocumentSession';
+import { addThread } from '../../domain/threads/threads';
 import { FLOW_PERSISTENCE_DB_NAME } from '../../../services/storage/indexedDbSchema';
 import { V2DocumentInvalidError, V2StorageQuotaError } from '../../../services/storage/v2/v2Errors';
 import { createV2Repository, type LoadV2DocumentResult, type V2DocumentRepository } from '../../../services/storage/v2/v2Repository';
@@ -85,6 +87,29 @@ describe('useV2Autosave', () => {
     expect(result.current.status).toEqual({
       state: 'failed', reason: 'invalid', message: 'This diagram has a problem we can’t save: Expected a non-empty string. ($.name)',
     });
+  });
+});
+
+describe('useV2Autosave with the document session', () => {
+  // A comment is no undo step, but it is a change to keep: the session's revision moves, and that is what autosave saves by.
+  it('saves a comment thread change', async () => {
+    const repository = fakeRepository();
+    const ignore = () => undefined;
+    const { result } = renderHook(() => {
+      const session = useDocumentSession({ onStaleRevision: ignore });
+      useV2Autosave({ repository, documentId: 'doc-1', document: session.document, revision: session.revision, baseRevision: 0, onConflict: ignore });
+      return session;
+    });
+    act(() => result.current.openDocument(createTestDocument()));
+    act(() => result.current.updateThreads((document) => addThread(document, {
+      pageId: 'page-1', threadId: 't1', nodeId: null, point: { x: 0, y: 0 },
+      comment: { id: 'm1', author: { kind: 'human', name: 'Ada' }, body: 'Keep me', createdAt: '2026-10-26T12:00:00.000Z' },
+    })));
+    await act(async () => { await vi.advanceTimersByTimeAsync(900); });
+    expect(repository.saveDocument).toHaveBeenCalledTimes(1);
+    const [, saved, revision] = repository.saveDocument.mock.calls[0]!;
+    expect(revision).toBe(1);
+    expect(saved.pages[0]!.threads!.map(({ id }) => id)).toEqual(['t1']);
   });
 });
 

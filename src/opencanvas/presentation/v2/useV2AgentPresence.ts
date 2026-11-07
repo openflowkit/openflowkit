@@ -30,7 +30,7 @@ const delayed = (plan: RevealPlan, ms: number): RevealPlan => ({
 });
 
 /** The cursor's one rAF loop, in world space so it stays on its shape while the camera moves. No React: a frame never renders the page. */
-class CursorMotion {
+export class CursorMotion {
   private el: HTMLDivElement | null = null;
   private pos: Point2d | null = null;
   private legs: Leg[] = [];
@@ -101,7 +101,11 @@ class CursorMotion {
 
   private readonly tick = (now: number): void => {
     this.raf = 0;
+    const gliding = this.legs.length > 0;
     while (this.legs[0] && now >= this.legs[0].t0 + this.legs[0].ms) { this.pos = this.legs[0].to; this.legs.shift(); }
+    // The rest counts from the frame that draws it arriving: a page held up past the rest (a busy software-GL
+    // runner) still shows it at the change before it fades.
+    if (gliding && !this.legs.length) this.until = Math.max(this.until, now + IDLE_MS);
     const leg = this.legs[0];
     if (leg && now >= leg.t0) this.pos = lerp(leg.from, leg.to, easeInOut((now - leg.t0) / leg.ms));
     const shown = this.pos !== null && (this.busy || this.legs.length > 0 || now < this.until);

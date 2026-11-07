@@ -53,7 +53,7 @@ describe('v2 tool catalog', () => {
 
   it('keeps every tool the old 12-button rail had, behind the 7 new ones', () => {
     const tools = [...POINTER_OPTIONS, ...DRAW_OPTIONS].map((option) => option.id);
-    expect(tools.sort()).toEqual(['eraser', 'hand', 'highlighter', 'laser', 'pen', 'select']);
+    expect(tools.sort()).toEqual(['comment', 'eraser', 'hand', 'highlighter', 'laser', 'pen', 'select']);
     const shapes = SHAPE_SECTIONS.flatMap((section) => section.options.map((option) => option.id));
     expect(shapes).toEqual(['tool:square', 'tool:rectangle', 'tool:ellipse', ...SHAPE_OPTIONS.map((option) => option.id)]);
   });

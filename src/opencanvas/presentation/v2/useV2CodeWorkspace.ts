@@ -158,6 +158,7 @@ export function useV2CodeWorkspace(options: V2CodeWorkspaceOptions) {
     const scene = pageRef.current ? frameScene(pageRef.current, id) : null;
     if (!scene) return;
     const metadata = dslFrameRaw(scene.frame);
+    // frameSource, not frameText: the picker below shows the palette, and an `appearance:` line in the editor would override it.
     const source = frameSource(scene);
     // The picker follows the frame's authored palette so re-theming is explicit.
     const authored = (metadata.appearance as { palette?: unknown } | undefined)?.palette;

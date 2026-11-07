@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { createTestDocument, createTestNode } from '@/opencanvas/testing/builders/documentBuilder';
 import { UNTITLED_DOCUMENT_NAME } from '@/opencanvas/domain/document/defaults';
 import { FLOW_PERSISTENCE_DB_NAME } from '../indexedDbSchema';
-import { V2_BACKUP_FORMAT, buildV2Backup, importFiles, readAllDocuments, importSummary } from './backup';
+import { V2_BACKUP_FORMAT, buildV2Backup, importFiles, openedNotice, readAllDocuments, importSummary } from './backup';
 import { createV2Repository } from './v2Repository';
 import drawio from '../../dsl/fixtures/drawio/flow.drawio?raw';
 
@@ -80,12 +80,24 @@ describe('importFiles', () => {
     expect(report).toMatchObject({ count: 1, problems: [], draw: null });
     expect(report.documents[0]).toMatchObject({ id: 'new-1', name: 'checkout' });
     expect(report.documents[0]!.pages).toHaveLength(2);
-    expect(report.notes).toEqual(['checkout.drawio: 1 thing didn’t come across: Services: draw.io’s “mxgraph.aws4.lambda_function” shape is drawn as a box.']);
+    expect(report).toMatchObject({ notes: [] });
+    expect(report.losses).toEqual(['checkout.drawio: 1 thing didn’t come across: Services: draw.io’s “mxgraph.aws4.lambda_function” shape is drawn as a box.']);
   });
 
   it('says why a broken draw.io file did not open', async () => {
     const report = await importFiles([fileOf('<mxfile><diagram>', 'broken.drawio')], repository(), mint);
     expect(report).toMatchObject({ count: 0, problems: ['broken.drawio: It isn’t a readable draw.io file (<diagram> is never closed).'] });
+  });
+
+  it('keeps what an Excalidraw drawing lost apart from repairs, so Open file… titles it as an import', async () => {
+    const drawing = JSON.stringify({ type: 'excalidraw', elements: [
+      { id: 'a', type: 'rectangle', x: 0, y: 0, width: 40, height: 40, groupIds: ['g'] },
+    ] });
+    const report = await importFiles([fileOf(drawing, 'sketch.excalidraw')], repository(), mint);
+    expect(report).toMatchObject({ count: 1, notes: [], losses: ['sketch.excalidraw: 1 thing didn’t come across: groups come in as separate shapes.'] });
+    expect(openedNotice(report)).toEqual({ title: 'Imported 1 diagram', description: report.losses[0] });
+    expect(openedNotice({ ...report, losses: [], notes: ['old.json: a repair.'] })).toEqual({ title: 'Opened, with a repair', description: 'old.json: a repair.' });
+    expect(openedNotice({ ...report, losses: [] })).toBeNull();
   });
 
   it('opens none of several text files, and says to open them one at a time', async () => {
@@ -108,7 +120,7 @@ describe('the list a search reads', () => {
 // already-here count (restoring twice) went missing when the opener became one function.
 describe('importSummary', () => {
   it('names a backup and counts the diagrams already here', () => {
-    const base = { count: 34, firstId: 'a', documents: [], problems: [], notes: [], draw: null };
+    const base = { count: 34, firstId: 'a', documents: [], problems: [], notes: [], losses: [], draw: null };
     expect(importSummary({ ...base, fromBackup: true, existing: 2 })).toBe('Opened 34 diagrams from the backup. 2 were already here and kept as is.');
     expect(importSummary({ ...base, count: 1, fromBackup: false, existing: 0 })).toBe('Opened 1 diagram.');
   });

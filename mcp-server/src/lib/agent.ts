@@ -1,4 +1,4 @@
-import type { ZodType, ZodTypeDef } from 'zod';
+import type { ZodType } from 'zod';
 // The bundle is emitted by `npm run build:agent` at the repo root (see
 // vite.agent.config.ts) and carries no declarations; this file is its typed
 // surface. Keep in sync with src/agent/index.ts in the app.
@@ -22,12 +22,12 @@ export interface AgentOp {
   readonly title: string;
   readonly description: string;
   /** Zod object schema; `shape` is read by the MCP tool registration. */
-  readonly schema: ZodType<unknown, ZodTypeDef, unknown>;
+  readonly schema: ZodType<unknown, unknown>;
   readonly run: (input: unknown, context: unknown) => Promise<{ command: unknown; output: unknown }>;
 }
 
 export interface AgentOpSchemaObject {
-  readonly shape: Record<string, ZodType<unknown, ZodTypeDef, unknown>>;
+  readonly shape: Record<string, ZodType<unknown, unknown>>;
 }
 
 export interface ExportedFile {
@@ -304,7 +304,7 @@ export interface ScannedFile {
 interface AgentBundle {
   readonly AGENT_OPS: readonly AgentOp[];
   findAgentOp(name: string): AgentOp | null;
-  /** The op's fields, through a `.refine` wrapper: what a client advertises. */
+  /** The op's fields: what a client advertises. */
   opInputShape(op: AgentOp): AgentOpSchemaObject['shape'];
   /** Ops that read no document (no documentId field). */
   readonly LOOKUP_OPS: ReadonlySet<string>;
@@ -314,7 +314,7 @@ interface AgentBundle {
   readonly MAX_IMAGE_KB: number;
   base64Kb(base64: string): number;
   runAgentOp(op: AgentOp, rawInput: unknown, context: {
-    document: SceneDocumentV1; pageId: string; capabilities: OpCapabilities;
+    document: SceneDocumentV1; pageId: string; capabilities: OpCapabilities; client?: string;
   }): Promise<{ document: SceneDocumentV1; changed: boolean; output: unknown }>;
   createFileCapabilities(options: {
     grammar: string;
@@ -335,7 +335,7 @@ interface AgentBundle {
   tablerSvg(nodes: readonly (readonly [string, Readonly<Record<string, string>>])[]): string;
   readonly ICON_PACK_IDS: Readonly<Record<string, string>>;
   /** One row per op: the human operation it mirrors. */
-  readonly CAPABILITY_MANIFEST: readonly { readonly action: string; readonly operation: string; readonly mutates: boolean }[];
+  readonly CAPABILITY_MANIFEST: readonly { readonly action: string; readonly operation: string; readonly writes: 'diagram' | 'threads' | null }[];
   /** A cheap grid layout, for checks that discard positions. */
   readonly deterministicLayout: unknown;
   /** ELK in process: the editor's layout, for file mode and the CLI. */

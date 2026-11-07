@@ -28,7 +28,6 @@ interface V2AgentPanelProps {
   readonly assistant: ReturnType<typeof useV2Assistant>;
   readonly proposal: ReturnType<typeof useV2Proposal>;
   readonly aiSettings: ReturnType<typeof useV2AiSettings>;
-  readonly currentRevision: number;
   readonly readOnly: boolean;
   /** Diagrams on the page, and how many hold the selection. */
   readonly diagramCount: number;
@@ -55,7 +54,7 @@ const PAGE_STARTERS = [
 
 
 export function V2AgentPanel({
-  assistant, proposal, aiSettings, currentRevision, readOnly, diagramCount, selectedDiagramCount, onClose,
+  assistant, proposal, aiSettings, readOnly, diagramCount, selectedDiagramCount, onClose,
 }: V2AgentPanelProps) {
   const [draft, setDraft] = useState('');
   const [providerOpen, setProviderOpen] = useState(false);
@@ -132,7 +131,8 @@ export function V2AgentPanel({
       const label = current.scope.kind === 'selection' ? 'Scope: selected diagram' : 'Scope: this page';
       return <ProposalReview
         id={current.id} baseRevision={current.baseRevision}
-        currentRevision={proposal.phase === 'stale' ? current.baseRevision + 1 : currentRevision}
+        // useV2Proposal says when it is stale (the diagram changed since, not a comment); the review only compares the two.
+        currentRevision={proposal.stale || proposal.phase === 'stale' ? current.baseRevision + 1 : current.baseRevision}
         scopeLabel={readOnly ? `${label} · read-only` : label}
         changes={proposal.changes} decisions={proposal.decisions}
         onDecide={proposal.decide}

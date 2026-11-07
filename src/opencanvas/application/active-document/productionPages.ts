@@ -53,10 +53,12 @@ export function buildProductionDuplicatePageCommand(
   if (!pageId.trim() || document.pages.some((page) => page.id === pageId)) {
     throw new Error('Page ID must be non-empty and unique.');
   }
+  // The copy takes the diagram, not its discussion: thread ids and numbers are unique across the document.
+  const { threads: _threads, ...diagram } = source;
   return {
     kind: 'insert-page', id: `duplicate-page:${sourcePageId}`, label: 'Duplicate page',
     index: document.pages.findIndex((page) => page.id === sourcePageId) + 1,
-    page: structuredClone({ ...source, id: pageId, name: `${source.name} Copy` }),
+    page: structuredClone({ ...diagram, id: pageId, name: `${source.name} Copy` }),
   };
 }
 

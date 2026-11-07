@@ -3,13 +3,13 @@
 // serves both entry points — the canvas menu's Export… and an element's
 // context menu — so scope always matches what the user pointed at.
 import { useState } from 'react';
-import { dslFrames, frameScene, frameSource } from '../../../dsl/frameScene';
+import { dslFrames, frameScene, frameText } from '../../../dsl/frameScene';
 import { diagramToMermaid, mermaidLossSummary } from '../../../dsl/mermaid/toMermaid';
 import { dslFrameMeta } from '../../../dsl/sceneMeta';
 import { IconChevronRight, IconCode, IconCopy, IconDownload, IconLink, IconLinkOff, IconLock, IconMovie, IconPhoto } from '@tabler/icons-react';
 import type { SceneDocumentV1 } from '../../domain/document/types';
 import { isContainerNodeKind } from '../../domain/nodes/containerNodePresentation';
-import { Button, Icon, Popover, PopoverHeader, Segmented, Tooltip, type ToastItem } from '../design-system';
+import { Button, Checkbox, Icon, Popover, PopoverHeader, Segmented, Tooltip, type ToastItem } from '../design-system';
 import { track } from '../../../services/usage/usage';
 import { appBaseUrl, createShareLink, browserStorage, deleteShare, forgetShare, latestShareFor, rememberShare, ShareError } from '../../../services/share/shareClient';
 import { getTurnstileToken } from '../../../services/share/turnstile';
@@ -89,6 +89,7 @@ export function V2ExportMenu({
   const [scale, setScale] = useState<1 | 2>(2);
   const [theme, setTheme] = useState<V2ExportTheme>('light');
   const [transparent, setTransparent] = useState(false);
+  const [includeComments, setIncludeComments] = useState(false);
   const [busy, setBusy] = useState(false);
   const [sharing, setSharing] = useState<'snapshot' | 'code' | null>(null);
   const [linkKind, setLinkKind] = useState<'snapshot' | 'code'>('snapshot');
@@ -109,6 +110,7 @@ export function V2ExportMenu({
     ...(effectiveScope === 'selection'
       ? { selectedNodeIds, ...(selectedConnectorIds.length ? { selectedConnectorIds } : {}) }
       : {}),
+    ...(effectiveFormat === 'json' ? jsonOptions(includeComments) : {}),
     ...(effectiveFormat === 'png' ? { scale } : {}),
     ...(effectiveFormat === 'png' || effectiveFormat === 'svg' ? { transparent } : {}),
   } as const;
@@ -215,7 +217,7 @@ export function V2ExportMenu({
     if (!mermaidTarget || !scene) return;
     setSharing('code');
     try {
-      const url = await dslLink(frameSource(scene), appBaseUrl(window.location.href), whole.name);
+      const url = await dslLink(frameText(scene), appBaseUrl(window.location.href), whole.name);
       if (!url) {
         onToast('Too long for an editable link', 'danger', { description: canShare ? 'Share a view-only link instead, or send the file.' : 'Send the file instead.' });
         return;
@@ -307,6 +309,9 @@ export function V2ExportMenu({
               { value: 'transparent', label: 'Transparent', title: 'No background rectangle' },
             ]} />
         ) : null}
+        {effectiveFormat === 'json' ? (
+          <Checkbox label="Include comments" checked={includeComments} onChange={(event) => setIncludeComments(event.currentTarget.checked)} />
+        ) : null}
         <div className="ofk-v2-export-actions">
           <Button variant="primary" disabled={busy || empty} onClick={() => { void run('download'); }}>
             <Icon icon={IconDownload} /> {effectiveFormat === 'pdf' ? 'Print / PDF' : 'Download'}
@@ -370,6 +375,11 @@ export function V2ExportMenu({
       </div>
     </Popover>
   );
+}
+
+/** The JSON export request's thread option: comments reach the file only when the box is ticked. */
+function jsonOptions(includeComments: boolean): { readonly includeThreads?: true } {
+  return includeComments ? { includeThreads: true } : {};
 }
 
 function frameName(frame: SceneDocumentV1['pages'][number]['nodes'][number]): string {

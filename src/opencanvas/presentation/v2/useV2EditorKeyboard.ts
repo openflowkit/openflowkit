@@ -1,4 +1,4 @@
-import type { RefObject } from 'react';
+import type { KeyboardEvent, RefObject } from 'react';
 import type { CanvasSelection } from '../../application/selection/selection';
 import type { ScenePage } from '../../domain/document/types';
 import type { useV2MapMode } from './map/useV2MapMode';
@@ -10,13 +10,18 @@ import type { useV2EditActions } from './useV2EditActions';
 import type { useV2EditorInput } from './useV2EditorInput';
 import type { useV2Find } from './useV2Find';
 import { typeToEditNames, type OpenEditorOptions } from './useV2LabelEditing';
-import { useV2Keyboard } from './useV2Keyboard';
+import { keyOwnedByTarget, useV2Keyboard } from './useV2Keyboard';
+import { isEditableTarget } from './pointerOperations';
+import type { useV2FlowPlayback } from './useV2FlowPlayback';
 import type { useV2Panels } from './useV2Panels';
 import type { useV2Selection } from './useV2Selection';
 import { enteredGroup, type V2GestureApi } from './v2PointerGestures';
+import type { V2CommentApi } from './V2Comments';
 
 interface EditorKeyboardInput {
   readonly toolRef: RefObject<V2Tool>;
+  /** The comment layer: Enter with the comment tool goes into its open box or places a new thread. */
+  readonly commentApiRef: RefObject<V2CommentApi | null>;
   readonly editingRef: RefObject<boolean>;
   readonly pageRef: RefObject<ScenePage | null>;
   readonly selectionRef: RefObject<CanvasSelection>;
@@ -45,17 +50,21 @@ interface EditorKeyboardInput {
   readonly fitAll: () => void;
   readonly toggleCode: () => void;
   readonly backToMap: () => boolean;
+  /** A playing flow takes the arrows, Space and Escape. */
+  readonly playback: Pick<ReturnType<typeof useV2FlowPlayback>, 'flow' | 'next' | 'prev'>;
+  readonly endFlow: () => void;
 }
 
-/** Every editor shortcut, wired to what it does. */
-export function useV2EditorKeyboard(k: EditorKeyboardInput) {
+/** Every editor shortcut, wired to what it does: the editor root's keydown (a playing flow, ?, Map, then the shortcuts). */
+export function useV2EditorKeyboard(k: EditorKeyboardInput): (event: KeyboardEvent<HTMLElement>) => void {
   const {
-    toolRef, editingRef, pageRef, selectionRef, gestureApiRef, setTool, setSpacePan, input, editActions, architectureActions, camera, connectorLabel,
+    toolRef, commentApiRef, editingRef, pageRef, selectionRef, gestureApiRef, setTool, setSpacePan, input, editActions, architectureActions, camera, connectorLabel,
     panels, selectionApi, map, find, viewPage, selectedElementId, selectedConnectorIds, docReadOnly, editLocked, undo, redo, escapePanel, openEditor,
-    selectNodes, fitAll, toggleCode, backToMap,
+    selectNodes, fitAll, toggleCode, backToMap, playback, endFlow,
   } = k;
-  return useV2Keyboard({
+  const shortcuts = useV2Keyboard({
     toolRef, editingRef,
+    onCommentHere: () => commentApiRef.current?.enter() ?? false,
     // A with two shapes selected connects them (first-selected → second); otherwise it arms the connector.
     onToolChange: (next) => { if (next !== 'connector' || !gestureApiRef.current?.connectSelection()) setTool(next); },
     onToggleIcons: () => {
@@ -135,4 +144,15 @@ export function useV2EditorKeyboard(k: EditorKeyboardInput) {
     onFind: find.show,
     onSpacePan: setSpacePan,
   });
+  return (event) => {
+    // A focused control (a tree, a button) keeps its own arrows and Space; a playing flow takes the rest.
+    if (playback.flow && !keyOwnedByTarget(event)) {
+      if (event.key === 'ArrowRight' || event.key === ' ') { playback.next(); event.preventDefault(); return; }
+      if (event.key === 'ArrowLeft') { playback.prev(); event.preventDefault(); return; }
+      if (event.key === 'Escape') { endFlow(); event.preventDefault(); return; }
+    }
+    if (event.key === '?' && !isEditableTarget(event.target)) {
+      event.preventDefault(); panels.toggleShortcuts();
+    } else if (!map.onKey(event)) shortcuts(event);
+  };
 }

@@ -19,7 +19,7 @@ On a first visit, Home offers four starts:
 | **Connect your agent** | A new document with the [Connect agent](/connect-your-agent/) panel open |
 
 Below them, **Or start from a template** shows the templates. **Import** (or dropping files
-anywhere on Home) brings in `.json` documents and diagram text files; see
+anywhere on Home) brings in `.json` documents, Excalidraw drawings and diagram text files; see
 [Local-first diagramming](/local-first-diagramming/#opening-and-importing-files).
 
 ## Templates

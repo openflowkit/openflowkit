@@ -17,27 +17,34 @@ export interface CapabilityRow {
   readonly action: string;
   /** Test file (repo-relative) proving the op and the manual path agree. */
   readonly equivalenceTest: string | null;
-  /** True when the op can change the document (and therefore has an inverse). */
-  readonly mutates: boolean;
+  /**
+   * What the op can change: `diagram` (a command with an inverse, one undo step in live mode), `threads` (comment
+   * threads, outside undo history and the diagram text), or null when it only reads.
+   */
+  readonly writes: 'diagram' | 'threads' | null;
 }
 
 const rows: Readonly<Record<string, Omit<CapabilityRow, 'action'>>> = {
-  create_diagram: { operation: 'Generate diagram from code', surface: 'code-panel', equivalenceTest: 'src/agent/ops/ops.test.ts', mutates: true },
-  update_diagram: { operation: 'Regenerate a diagram frame', surface: 'code-panel', equivalenceTest: 'src/agent/ops/ops.test.ts', mutates: true },
-  get_diagram: { operation: 'Edit as code', surface: 'context-bar', equivalenceTest: null, mutates: false },
-  list_diagrams: { operation: 'List diagram frames', surface: 'agent', equivalenceTest: null, mutates: false },
-  get_syntax: { operation: 'Grammar reference', surface: 'agent', equivalenceTest: null, mutates: false },
-  search_icons: { operation: 'Icon search', surface: 'agent', equivalenceTest: null, mutates: false },
-  find_icons_for: { operation: 'Icon search by concept', surface: 'agent', equivalenceTest: null, mutates: false },
-  move: { operation: 'Move / nudge shapes', surface: 'canvas', equivalenceTest: 'src/agent/ops/ops.test.ts', mutates: true },
-  style: { operation: 'Fill / stroke / width / dash / opacity', surface: 'context-bar', equivalenceTest: 'src/agent/ops/ops.test.ts', mutates: true },
-  delete: { operation: 'Delete selection', surface: 'keyboard', equivalenceTest: 'src/agent/ops/ops.test.ts', mutates: true },
-  add_shape: { operation: 'Create rectangle / ellipse / text', surface: 'toolbar', equivalenceTest: 'src/agent/ops/ops.test.ts', mutates: true },
-  export: { operation: 'Export PNG / SVG / PDF / JSON', surface: 'document-bar', equivalenceTest: 'src/agent/ops/ops.test.ts', mutates: false },
-  screenshot: { operation: 'Screenshot a diagram', surface: 'agent', equivalenceTest: null, mutates: false },
-  fit_view: { operation: 'Zoom to fit / zoom to selection', surface: 'keyboard', equivalenceTest: null, mutates: false },
-  get_document: { operation: 'Read document, page and selection', surface: 'canvas', equivalenceTest: null, mutates: false },
-  list_pages: { operation: 'Page list', surface: 'document-bar', equivalenceTest: null, mutates: false },
+  create_diagram: { operation: 'Generate diagram from code', surface: 'code-panel', equivalenceTest: 'src/agent/ops/ops.test.ts', writes: 'diagram' },
+  update_diagram: { operation: 'Regenerate a diagram frame', surface: 'code-panel', equivalenceTest: 'src/agent/ops/ops.test.ts', writes: 'diagram' },
+  get_diagram: { operation: 'Edit as code', surface: 'context-bar', equivalenceTest: null, writes: null },
+  list_diagrams: { operation: 'List diagram frames', surface: 'agent', equivalenceTest: null, writes: null },
+  get_syntax: { operation: 'Grammar reference', surface: 'agent', equivalenceTest: null, writes: null },
+  search_icons: { operation: 'Icon search', surface: 'agent', equivalenceTest: null, writes: null },
+  find_icons_for: { operation: 'Icon search by concept', surface: 'agent', equivalenceTest: null, writes: null },
+  move: { operation: 'Move / nudge shapes', surface: 'canvas', equivalenceTest: 'src/agent/ops/ops.test.ts', writes: 'diagram' },
+  style: { operation: 'Fill / stroke / width / dash / opacity', surface: 'context-bar', equivalenceTest: 'src/agent/ops/ops.test.ts', writes: 'diagram' },
+  delete: { operation: 'Delete selection', surface: 'keyboard', equivalenceTest: 'src/agent/ops/ops.test.ts', writes: 'diagram' },
+  add_shape: { operation: 'Create rectangle / ellipse / text', surface: 'toolbar', equivalenceTest: 'src/agent/ops/ops.test.ts', writes: 'diagram' },
+  export: { operation: 'Export PNG / SVG / PDF / JSON', surface: 'document-bar', equivalenceTest: 'src/agent/ops/ops.test.ts', writes: null },
+  screenshot: { operation: 'Screenshot a diagram', surface: 'agent', equivalenceTest: null, writes: null },
+  fit_view: { operation: 'Zoom to fit / zoom to selection', surface: 'keyboard', equivalenceTest: null, writes: null },
+  get_document: { operation: 'Read document, page and selection', surface: 'canvas', equivalenceTest: null, writes: null },
+  list_threads: { operation: 'Read threads', surface: 'canvas', equivalenceTest: null, writes: null },
+  reply_to_thread: { operation: 'Add a comment to a thread', surface: 'canvas', equivalenceTest: 'src/agent/ops/threadOps.test.ts', writes: 'threads' },
+  resolve_thread: { operation: 'Resolve / reopen a thread', surface: 'canvas', equivalenceTest: 'src/agent/ops/threadOps.test.ts', writes: 'threads' },
+  start_thread: { operation: 'Comment tool: start a thread with its first comment', surface: 'canvas', equivalenceTest: 'src/agent/ops/threadOps.test.ts', writes: 'threads' },
+  list_pages: { operation: 'Page list', surface: 'document-bar', equivalenceTest: null, writes: null },
 };
 
 export const CAPABILITY_MANIFEST: readonly CapabilityRow[] = AGENT_OPS.map((op) => {
@@ -50,7 +57,7 @@ export function manifestCoverage(): { readonly ops: number; readonly withEquival
   return {
     ops: CAPABILITY_MANIFEST.length,
     withEquivalentUiPath: CAPABILITY_MANIFEST.filter(({ equivalenceTest }) => equivalenceTest !== null).length,
-    mutating: CAPABILITY_MANIFEST.filter(({ mutates }) => mutates).length,
+    mutating: CAPABILITY_MANIFEST.filter(({ writes }) => writes !== null).length,
   };
 }
 

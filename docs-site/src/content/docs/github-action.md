@@ -28,7 +28,7 @@ Use a release tag (`v2.1.0` or later) or a commit SHA. A branch name also works 
 under you. Inside the OpenFlowKit repository itself, `uses: ./action` works.
 
 The default CLI is the version pinned in that tag's `action.yml`: 0.2.3 in
-`v2.1.0`, `0.2.4` from the next release. A CLI you point the `cli` input at must be 0.2.0 or
+`v2.1.0`, `0.3.0` in `v2.2.0`. A CLI you point the `cli` input at must be 0.2.0 or
 newer: older versions have no `render`, `convert` or `op`.
 
 ## Inputs

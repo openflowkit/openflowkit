@@ -32,7 +32,18 @@ export function abandonInitializedApplication(app: Application): void {
   canvas.remove();
 }
 
+/**
+ * True while the browser has taken the WebGL context away (Safari does on a GPU reset or memory pressure). A draw then
+ * must wait for `webglcontextrestored`: Pixi compiles a program it has not cached through `createShader`, which returns
+ * null on a lost context, and `shaderSource(null)` throws.
+ */
+export function contextLost(app: Application): boolean {
+  const gl = (app.renderer as { gl?: WebGLRenderingContext | WebGL2RenderingContext } | undefined)?.gl;
+  return gl?.isContextLost() ?? false;
+}
+
 export function warmShader(h: PixiRendererHost): void {
+  if (contextLost(h.app)) return;
   // The first draw of a node compiles and links Pixi's batch shader (seconds under software GL) inside the frame that shows it,
   // holding the label editor back. Draw one pixel now, while nothing waits, so that frame finds the program ready.
   const warm = new Sprite(Texture.WHITE);

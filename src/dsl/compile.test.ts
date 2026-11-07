@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { format, serialize } from './serialize';
 import { CONTAINER_TITLE_HEIGHT } from '../opencanvas/domain/nodes/nodeLabelBounds';
 import { measureGroupSize } from './sizing';
-import { compile, hashDslScene, slugifyDslId } from './compile';
+import { compile, hashDslScene, hashText64, slugifyDslId } from './compile';
 
 describe('compile presentation mapping', () => {
   it('maps shapes onto renderer kinds and shapes', async () => {
@@ -396,6 +396,17 @@ describe('compile graph structure', () => {
     expect(first.connectors.map(({ id }) => id)).toEqual(['edge:api->api-gateway:1', 'edge:api->api-gateway:2']);
     expect(slugifyDslId('Żółć API')).toBe('zo-c-api');
     expect(hashDslScene('same')).toBe(hashDslScene('same'));
+  });
+
+  // The published FNV-1a 64 test vectors (code units below 0x80 are the bytes the reference hashes).
+  it('hashes text to 64-bit FNV-1a, as 16 hex digits', () => {
+    expect(hashText64('')).toBe('cbf29ce484222325');
+    expect(hashText64('a')).toBe('af63dc4c8601ec8c');
+    expect(hashText64('foobar')).toBe('85944171f73967e8');
+    // Two texts the 32-bit hash cannot tell apart.
+    const pair = ['flowchart\nA -> B229599', 'flowchart\nA -> B432382'].map((text) => JSON.stringify([text, null, null]));
+    expect(hashDslScene(pair[0]!)).toBe(hashDslScene(pair[1]!));
+    expect(hashText64(pair[0]!)).not.toBe(hashText64(pair[1]!));
   });
 
   it('records the frame meta the code panel binds to', async () => {

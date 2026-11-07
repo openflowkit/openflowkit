@@ -12,6 +12,7 @@ import { useV2ConnectorLabelEditing } from './useV2ConnectorLabelEditing';
 import { useV2EditActions } from './useV2EditActions';
 import { useV2LabelEditing, type OpenEditorOptions } from './useV2LabelEditing';
 import { mintV2Id } from './v2Document';
+import type { ToastItem } from '../design-system';
 
 interface EditorEditingInput {
   readonly session: ReturnType<typeof useDocumentSession>;
@@ -30,13 +31,14 @@ interface EditorEditingInput {
   readonly editLocked: boolean;
   readonly focusCanvas: () => void;
   readonly setAnnouncement: (message: string) => void;
+  readonly pushToast: (toast: ToastItem) => void;
   /** Set by the page once its architecture actions exist (a model element renames through them). */
   readonly architectureActionsRef: MutableRefObject<ReturnType<typeof useV2ArchitectureActions> | null>;
 }
 
 /** Editing what is selected: shape and connector labels, and the clipboard-and-arrange actions. */
 export function useV2EditorEditing(i: EditorEditingInput) {
-  const { session, page, pageRef, hostRef, camera, selectionRef, selectedConnectorId, selectedConnectorIds, applySelection, applyConnectorSelection, commit, writable, editLocked, focusCanvas, setAnnouncement, architectureActionsRef } = i;
+  const { session, page, pageRef, hostRef, camera, selectionRef, selectedConnectorId, selectedConnectorIds, applySelection, applyConnectorSelection, commit, writable, editLocked, focusCanvas, setAnnouncement, pushToast, architectureActionsRef } = i;
   const labelEditing = useV2LabelEditing({
     hostRef,
     page,
@@ -77,6 +79,7 @@ export function useV2EditorEditing(i: EditorEditingInput) {
     applySelection,
     applyConnectorSelection,
     announce: setAnnouncement,
+    notify: pushToast,
     viewWorldBounds: () => {
       const host = hostRef.current;
       return host ? visibleWorldBounds(camera.cameraRef.current, host.getViewportSize()) : null;

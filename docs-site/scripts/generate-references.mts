@@ -28,40 +28,32 @@ function frontmatter(title: string, description: string): string {
 // --- zod → readable type, for the op argument tables -------------------------
 
 interface ZodLike {
-  readonly _def?: { readonly typeName?: string } & Record<string, unknown>;
+  readonly def?: { readonly type?: string } & Record<string, unknown>;
   readonly shape?: Record<string, ZodLike>;
 }
 
-function shapeOf(schema: ZodLike): Record<string, ZodLike> {
-  let current: ZodLike | undefined = schema;
-  while (current) {
-    if (current.shape) return current.shape;
-    const inner = current._def?.schema ?? current._def?.innerType;
-    current = typeof inner === 'object' ? (inner as ZodLike) : undefined;
-  }
-  return {};
-}
+const shapeOf = (schema: ZodLike): Record<string, ZodLike> => schema.shape ?? {};
 
 function typeOf(schema: ZodLike): string {
-  const def = schema?._def;
+  const def = schema?.def;
   if (!def) return 'unknown';
-  switch (def.typeName) {
-    case 'ZodString': return 'string';
-    case 'ZodNumber': return 'number';
-    case 'ZodBoolean': return 'boolean';
-    case 'ZodLiteral': return JSON.stringify(def.value);
-    case 'ZodEnum': return (def.values as string[]).map((value) => `\`${value}\``).join(' \\| ');
-    case 'ZodOptional': return `${typeOf(def.innerType as ZodLike)} *(optional)*`;
-    case 'ZodDefault': return `${typeOf(def.innerType as ZodLike)} *(default \`${JSON.stringify((def.defaultValue as () => unknown)())}\`)*`;
-    case 'ZodArray': return `${typeOf(def.type as ZodLike)}[]`;
-    case 'ZodNullable': return `${typeOf(def.innerType as ZodLike)} or null`;
-    case 'ZodEffects': return typeOf(def.schema as ZodLike);
-    case 'ZodUnion': return (def.options as ZodLike[]).map(typeOf).join(' \\| ');
-    case 'ZodObject': return `object: ${Object.entries(shapeOf(schema))
+  switch (def.type) {
+    case 'string': return 'string';
+    case 'number': return 'number';
+    case 'boolean': return 'boolean';
+    case 'literal': return (def.values as unknown[]).map((value) => JSON.stringify(value)).join(' \\| ');
+    case 'enum': return Object.values(def.entries as Record<string, string>).map((value) => `\`${value}\``).join(' \\| ');
+    case 'optional': return `${typeOf(def.innerType as ZodLike)} *(optional)*`;
+    case 'default': return `${typeOf(def.innerType as ZodLike)} *(default \`${JSON.stringify(def.defaultValue)}\`)*`;
+    case 'array': return `${typeOf(def.element as ZodLike)}[]`;
+    case 'nullable': return `${typeOf(def.innerType as ZodLike)} or null`;
+    case 'pipe': return typeOf(def.out as ZodLike);
+    case 'union': return (def.options as ZodLike[]).map(typeOf).join(' \\| ');
+    case 'object': return `object: ${Object.entries(shapeOf(schema))
       .map(([key, value]) => `${key} (${typeOf(value)})`).join(', ')}`;
-    case 'ZodRecord': return `map of ${typeOf(def.valueType as ZodLike)}`;
-    case 'ZodAny': return 'any';
-    default: return (def.typeName ?? 'value').replace(/^Zod/, '').toLowerCase();
+    case 'record': return `map of ${typeOf(def.valueType as ZodLike)}`;
+    case 'any': return 'any';
+    default: return def.type ?? 'value';
   }
 }
 
@@ -129,7 +121,9 @@ function opSections(): string {
     const argumentTable = argumentRows(op.schema as unknown as ZodLike)
       + (MCP_PAGE_ID.has(op.name) ? '| `pageId` | string (MCP tool; the CLI says `--page`) |\n' : '');
     // `documentId` is added to every op tool by the MCP server; document it once.
-    const where = row.mutates ? 'changes the document (one undo step in live mode)' : 'read-only';
+    const where = row.writes === 'diagram' ? 'changes the diagram (one undo step in live mode)'
+      : row.writes === 'threads' ? 'changes the comment threads (no undo step, not part of the diagram)'
+        : 'read-only';
     const mirrors = row.surface === 'agent'
       ? 'an agent-only lookup'
       : `mirrors **${row.operation}** in ${surfaces[row.surface] ?? row.surface}`;
@@ -180,7 +174,7 @@ created last. Page-scoped ops take a \`pageId\` from \`list_pages\`.\n\n`
     + `## Resources and prompts\n\n`
     + `The server also exposes MCP resources: ${resources.map((name) => `\`${name}\``).join(', ')} — the\ngrammar, the icon catalogs and the starter templates. Two prompts steer a client toward\nthe right tools: \`flowchart_from_description\` and \`architecture_from_codebase\`. Mermaid,\nStructurizr DSL and D2 need no prompt: \`create_diagram\`, \`update_diagram\` and\n\`validate_openflow_dsl\` take them directly.\n\n`
     + `## The operations\n\n`
-    + `One MCP tool per operation; every mutating op has an inverse, and the live editor applies it\nas a single undo step. The manifest names the human operation each one mirrors.\n\n`
+    + `One MCP tool per operation; every op that changes the diagram has an inverse, and the live editor\napplies it as a single undo step. The comment-thread ops change the threads outside undo history.\nThe manifest names the human operation each one mirrors.\n\n`
     + opSections()
     + `\n## What it does not do\n\n`
     + `- **Local by default.** This server runs on your machine over stdio and calls no outside service. The hosted endpoint for chat apps (\`https://mcp.openflowkit.com/mcp\`) is separate, draws cards in the chat only and stores nothing.\n`

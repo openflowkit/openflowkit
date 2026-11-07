@@ -3,7 +3,7 @@
 // panel says so in a banner; an agent gets the list: each node or connector that differs from what the
 // frame's authored text compiles to, and the attributes that keep it where the language can say it.
 import { areStructurallyEqual } from '../../opencanvas/domain/commands/equality';
-import type { CompileOptions, CompileResult, CompileWorkspaceResult } from '../../dsl/compile';
+import { hashText64, type CompileOptions, type CompileResult, type CompileWorkspaceResult } from '../../dsl/compile';
 import { frameEdited } from '../../dsl/frameScene';
 import { dslFrameMeta, dslFrameRaw, type DslFrameScene } from '../../dsl/sceneMeta';
 import { quote } from '../../dsl/text';
@@ -161,18 +161,36 @@ export type BaselineCache = Map<string, Promise<CompileWorkspaceResult>>;
 const tooBig = (scene: DslFrameScene) => (scene.nodes.length + (scene.groups?.length ?? 0) > HEADLESS_LAYOUT_LIMITS.nodes
   || scene.connectors.length > HEADLESS_LAYOUT_LIMITS.edges);
 
+/** What a frame's baseline is compiled from: its authored text, and the palette and icons setting it was drawn with. */
+function baselineKey(frame: SceneNode): string {
+  const meta = dslFrameMeta(frame);
+  return JSON.stringify([meta.source, meta.appearance?.palette ?? null, dslFrameRaw(frame).autoIcons ?? null]);
+}
+
 /**
- * The frame's canvas edits: the frame against its authored text, compiled with the palette and the icons
- * setting it was made with. Never throws: anything that stops the comparison comes back as `edits: null`
- * and a note, and the read or regenerate that asked carries on.
+ * Names what the frame's canvas is compared against (see frameBaseline). A redraw from other text, or the same text
+ * in another palette, changes it; canvas edits and where the frame was placed do not. Null without authored text.
+ * Not the frame's scene hash: placing a frame re-takes that over renamed ids, so a new title alone can keep it.
  */
-export async function frameCanvasEdits(scene: DslFrameScene, capabilities: OpCapabilities, cache: BaselineCache = new Map()): Promise<CanvasEditsResult> {
+export function frameRevision(frame: SceneNode): string | null {
+  return typeof dslFrameMeta(frame).source === 'string' ? hashText64(baselineKey(frame)) : null;
+}
+
+/** What the frame's authored text compiles to, or null and why it could not be compiled. */
+export type FrameBaselineResult =
+  | { readonly baseline: CompileResult; readonly note?: undefined }
+  | { readonly baseline: null; readonly note: string };
+
+/**
+ * The frame's authored text compiled with the palette and the icons setting it was made with: the canvas
+ * as it was before anyone edited it. Never throws: what stops the compile comes back as a note.
+ */
+export async function frameBaseline(scene: DslFrameScene, capabilities: OpCapabilities, cache: BaselineCache = new Map()): Promise<FrameBaselineResult> {
   const meta = dslFrameMeta(scene.frame);
   const raw = dslFrameRaw(scene.frame);
-  if (typeof meta.source !== 'string') return { edits: null, note: 'Not compared: this frame has no authored text to compare the canvas against.' };
-  if (!frameEdited(scene)) return { edits: [] };
+  if (typeof meta.source !== 'string') return { baseline: null, note: 'Not compared: this frame has no authored text to compare the canvas against.' };
   if (tooBig(scene)) {
-    return { edits: null, note: `Not compared: over ${HEADLESS_LAYOUT_LIMITS.nodes} shapes or ${HEADLESS_LAYOUT_LIMITS.edges} connections. Treat every canvas edit as one update_diagram replaces.` };
+    return { baseline: null, note: `Not compared: over ${HEADLESS_LAYOUT_LIMITS.nodes} shapes or ${HEADLESS_LAYOUT_LIMITS.edges} connections. Treat every canvas edit as one update_diagram replaces.` };
   }
   const palette = meta.appearance?.palette;
   const options: CompileOptions = {
@@ -181,7 +199,7 @@ export async function frameCanvasEdits(scene: DslFrameScene, capabilities: OpCap
     ...(palette ? { appearance: { palette: palette as NonNullable<CompileOptions['appearance']>['palette'] } } : {}),
     ...(typeof raw.autoIcons === 'boolean' ? { autoIcons: raw.autoIcons } : {}),
   };
-  const key = JSON.stringify([meta.source, palette ?? null, raw.autoIcons ?? null]);
+  const key = baselineKey(scene.frame);
   try {
     let pending = cache.get(key);
     if (!pending) { pending = capabilities.compileWorkspace(meta.source, options); cache.set(key, pending); }
@@ -189,12 +207,23 @@ export async function frameCanvasEdits(scene: DslFrameScene, capabilities: OpCap
     // A C4 view: the view this frame shows; a single diagram: its only view.
     const viewId = (raw.arch as { view?: unknown } | undefined)?.view;
     const view = workspace.views.find((candidate) => candidate.viewId === viewId) ?? workspace.views[0];
-    if (!view) return { edits: null, note: 'Not compared: the authored text no longer compiles to this view.' };
-    const edits = diffCanvasEdits(scene, view.result);
-    return edits.length ? { edits } : { edits, note: 'The canvas differs from the text only in ways not listed here (ports or metadata); update_diagram replaces those too.' };
+    if (!view) return { baseline: null, note: 'Not compared: the authored text no longer compiles to this view.' };
+    return { baseline: view.result };
   } catch (error) {
-    return { edits: null, note: `Not compared: ${error instanceof Error ? error.message : String(error)}` };
+    return { baseline: null, note: `Not compared: ${error instanceof Error ? error.message : String(error)}` };
   }
+}
+
+/**
+ * The frame's canvas edits: the frame against its authored text (see frameBaseline). Never throws: anything
+ * that stops the comparison comes back as `edits: null` and a note, and the read or regenerate that asked carries on.
+ */
+export async function frameCanvasEdits(scene: DslFrameScene, capabilities: OpCapabilities, cache: BaselineCache = new Map()): Promise<CanvasEditsResult> {
+  if (typeof dslFrameMeta(scene.frame).source === 'string' && !frameEdited(scene)) return { edits: [] };
+  const compiled = await frameBaseline(scene, capabilities, cache);
+  if (compiled.baseline === null) return { edits: null, note: compiled.note };
+  const edits = diffCanvasEdits(scene, compiled.baseline);
+  return edits.length ? { edits } : { edits, note: 'The canvas differs from the text only in ways not listed here (ports or metadata); update_diagram replaces those too.' };
 }
 
 /**

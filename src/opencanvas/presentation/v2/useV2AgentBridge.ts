@@ -15,7 +15,9 @@ import {
   BRIDGE_POLL_SECONDS, bridgeUrls, isBridgeRequest,
   type BridgeClientInfo, type BridgePageSummary, type BridgeRequest,
 } from '../../../agent/bridge/protocol';
-import { runLiveAgentOp, type LiveAgentSession } from '../../../agent/liveOp';
+import { agentName } from '../../../agent/agentName';
+import { THREAD_WRITE_OPS } from '../../../agent/ops/surface';
+import { runLiveAgentOp, type LiveAgentSession, type LiveOpResult } from '../../../agent/liveOp';
 
 /** `waiting`: nothing answers yet, the normal state until the agent starts its server. `elsewhere`: another tab has it. */
 export type V2BridgeStatus = 'off' | 'connecting' | 'waiting' | 'connected' | 'elsewhere' | 'error';
@@ -67,19 +69,8 @@ const LOCK = 'ofk-agent-bridge';
 const TAB_KEY = 'ofk-agent-tab';
 
 /** Ops that only look: "is reading the canvas…" rather than "is drawing…". */
-const READS = new Set(['get_document', 'get_diagram', 'list_diagrams', 'list_pages', 'screenshot', 'export', 'get_syntax',
+const READS = new Set(['get_document', 'list_threads', 'get_diagram', 'list_diagrams', 'list_pages', 'screenshot', 'export', 'get_syntax',
   'search_icons', 'find_icons_for', 'fit_view']);
-
-/** MCP clientInfo.name → what people call it. Unknown names show as sent. */
-const AGENT_NAMES: Record<string, string> = {
-  'claude-code': 'Claude Code', 'claude-ai': 'Claude Desktop', 'cursor-vscode': 'Cursor', cursor: 'Cursor',
-  'Visual Studio Code': 'VS Code', 'Visual Studio Code - Insiders': 'VS Code', 'codex-mcp-client': 'Codex', codex: 'Codex',
-};
-
-export function agentName(client: string | undefined): string {
-  const raw = client?.trim().slice(0, 40);
-  return raw ? AGENT_NAMES[raw] ?? raw : 'Your agent';
-}
 
 const some = (count: number, noun: string): string => (count === 1 ? `${/^[aeiou]/.test(noun) ? 'an' : 'a'} ${noun}` : `${count} ${noun}s`);
 
@@ -96,6 +87,20 @@ export function agentDid(op: string, input: unknown, label: string): string {
     case 'style': return `restyled ${some(count, 'shape')}`;
     case 'delete': return `deleted ${some(count, fields.kind === 'connector' ? 'connector' : 'shape')}`;
     default: return `made a change: ${label}`;
+  }
+}
+
+/**
+ * What a thread write did, as a person would say it ("commented on #3"), after the agent's name; null for other ops
+ * and for a write that changed nothing (resolving a resolved thread).
+ */
+export function agentCommented(op: string, { output, threadsChanged }: Pick<LiveOpResult, 'output' | 'threadsChanged'>): string | null {
+  const { number, resolved } = (output && typeof output === 'object' ? output : {}) as { number?: unknown; resolved?: unknown };
+  if (!threadsChanged || typeof number !== 'number') return null;
+  switch (op) {
+    case 'start_thread': case 'reply_to_thread': return `commented on #${number}`;
+    case 'resolve_thread': return `${resolved === false ? 'reopened' : 'resolved'} #${number}`;
+    default: return null;
   }
 }
 
@@ -201,11 +206,12 @@ export function useV2AgentBridge(options: V2AgentBridgeOptions): V2AgentBridge {
       const runRequest = async (request: BridgeRequest): Promise<void> => {
         const agent = agentName(request.client);
         setAgents((seen) => (seen[0] === agent ? seen : [agent, ...seen.filter((name) => name !== agent)].slice(0, 4)));
-        setActivity((last) => ({ agent, doing: READS.has(request.op) ? 'reading the canvas' : 'drawing', change: last?.change ?? null }));
+        setActivity((last) => ({ agent, doing: READS.has(request.op) ? 'reading the canvas' : THREAD_WRITE_OPS.has(request.op) ? 'commenting' : 'drawing', change: last?.change ?? null }));
         let result: { id: string; ok: boolean; output?: unknown; error?: string };
         try {
-          const { command, output } = await runLiveAgentOp(() => optionsRef.current, request.op, request.input, request.pageId);
-          const did = command ? agentDid(request.op, request.input, command.label) : null;
+          const ran = await runLiveAgentOp(() => optionsRef.current, request.op, request.input, request.pageId, undefined, request.client);
+          const { command, output } = ran;
+          const did = command ? agentDid(request.op, request.input, command.label) : agentCommented(request.op, ran);
           setActivity((last) => ({ agent, doing: null, change: command && did ? { label: did, id: command.id } : last?.change ?? null }));
           optionsRef.current.onActivity(did ? `${agent} ${did}.` : `${agent} ran ${request.op}.`);
           result = { id: request.id, ok: true, output };

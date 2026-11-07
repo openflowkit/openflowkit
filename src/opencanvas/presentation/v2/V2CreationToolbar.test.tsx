@@ -93,3 +93,17 @@ describe('V2CreationToolbar Shapes', () => {
     expect(named('Shapes options')).toHaveAttribute('tabindex', '-1');
   });
 });
+
+describe('V2CreationToolbar Select', () => {
+  it('lays Select, Hand and Comment out in one row', () => {
+    const bar = (tool: 'select' | 'comment') => <V2CreationToolbar tool={tool} toolConfig={DEFAULT_TOOL_CONFIG} onToolChange={vi.fn()} onPickShape={vi.fn()}
+      onPlaceShape={vi.fn()} onPickConnector={vi.fn()} onInsertIcon={vi.fn()} iconsOpen={false} onIconsOpenChange={vi.fn()}
+      onPickEmoji={vi.fn()} recentEmoji={[]} librarySection="icons" onInsertImage={vi.fn()} moreOpen={false}
+      onMoreOpenChange={vi.fn()} onPickMore={vi.fn()} />;
+    render(bar('comment'));
+    fireEvent.click(screen.getByRole('button', { name: 'Select options' }));
+    const cells = screen.getAllByRole('option');
+    expect(cells.map((cell) => cell.getAttribute('aria-label'))).toEqual(['Select', 'Hand', 'Comment']);
+    expect(cells[0]!.closest('.ofk-v2-flyout-grid')!.getAttribute('style')).toContain('repeat(3, 1fr)');
+  });
+});

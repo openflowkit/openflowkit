@@ -4,6 +4,10 @@ function clampChannel(value: number): number {
   return Math.max(0, Math.min(255, Math.round(value)));
 }
 
+/**
+ * `#rgb`, `#rrggbb` or `#rrggbbaa` (the custom picker saves the last) as lowercase `#rrggbb`, else null.
+ * ponytail: alpha is dropped, so a translucent hex reads as its opaque colour for ink and contrast, as a shape's opacity does — upgrade: composite it over the backdrop.
+ */
 export function normalizeHex(hex: string): string | null {
   const normalized = hex.trim().replace('#', '');
   if (/^[\da-fA-F]{3}$/.test(normalized)) {
@@ -12,8 +16,8 @@ export function normalizeHex(hex: string): string | null {
       .map((char) => char + char)
       .join('')}`.toLowerCase();
   }
-  if (/^[\da-fA-F]{6}$/.test(normalized)) {
-    return `#${normalized}`.toLowerCase();
+  if (/^[\da-fA-F]{6}(?:[\da-fA-F]{2})?$/.test(normalized)) {
+    return `#${normalized.slice(0, 6)}`.toLowerCase();
   }
   return null;
 }

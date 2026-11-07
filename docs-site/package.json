@@ -21,9 +21,6 @@
     "astro": "^7.3.5",
     "sharp": "^0.35.5"
   },
-  "overrides": {
-    "zod": "3"
-  },
   "devDependencies": {
     "@tabler/icons": "^3.47.0"
   }

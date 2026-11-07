@@ -1,6 +1,7 @@
 import { isContainerNodeKind } from '../opencanvas/domain/nodes/containerNodePresentation';
 import type { SceneNode, ScenePage } from '../opencanvas/domain/document/types';
 import { hashDslScene } from './compile';
+import { parseDocument } from './document';
 import { dslFrameMeta, dslFrameRaw, type DslFrameScene } from './sceneMeta';
 import { serialize } from './serialize';
 
@@ -52,4 +53,15 @@ export function frameSource(scene: DslFrameScene): string {
   return !frameEdited(scene) && typeof source === 'string'
     ? source
     : serialize({ frame: scene.frame, nodes: scene.nodes, groups: scene.groups ?? [], connectors: scene.connectors });
+}
+
+/**
+ * A frame's code for a reader who redraws from the text alone (an agent, the assistant). The palette can be set by a
+ * caller option rather than the text, so it is named here: without it the redraw comes back on the default palette.
+ */
+export function frameText(scene: DslFrameScene): string {
+  const text = frameSource(scene);
+  const palette = dslFrameMeta(scene.frame).appearance?.palette;
+  if (!palette || palette === 'pastel' || parseDocument(text).appearance) return text;
+  return `${text.trimEnd()}\nappearance: ${palette}`;
 }

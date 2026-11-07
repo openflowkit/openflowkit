@@ -232,6 +232,7 @@ export class PixiNodeRenderer {
       const strokePaint = pixiPaintColor(style.stroke, visual?.stroke ?? NODE_STROKE);
       const fill = fillPaint.color;
       const stroke = strokePaint.color;
+      const textColor = pixiPaintColor(style.textColor, visual?.text ?? 0x1e293b).color;
       // ponytail: opacity honoured for basic shapes only; family renderers
       // draw into the shared graphics and would each need an alpha argument.
       const alpha = style.opacity;
@@ -268,6 +269,7 @@ export class PixiNodeRenderer {
         shape,
         fill,
         stroke,
+        textColor,
         mediaState: 'none',
       });
       if (detailLevel === 'overview') continue;
@@ -291,7 +293,6 @@ export class PixiNodeRenderer {
         fontSize: style.fontSize, fontWeight: style.fontWeight, lineHeight: style.fontSize * style.lineHeight,
         ...(wrap === null ? {} : { maxWidth: wrap, maxLines: sizing.maxLines, overflow: sizing.overflow }),
       });
-      const textColor = pixiPaintColor(style.textColor, visual?.text ?? 0x1e293b).color;
       const label = markTitle(this.texts.styled(labelMeasurement.displayText, style, textColor, wrap));
       const subStyle = subLabelStyle(style);
       const subLabel =

@@ -18,6 +18,11 @@ export function pastePlacement(snapshot: ProductionClipboardSnapshot, view: Boun
     x: transform.translation.x, y: transform.translation.y,
     width: size.width * transform.scale.x, height: size.height * transform.scale.y,
   }));
+  // Connectors' free ends and bends count too: arrows copied in Excalidraw without their shapes have nothing else.
+  for (const { source, target, waypoints } of snapshot.connectors) {
+    const free = [source, target].flatMap((end) => (end.nodeId === null && end.point ? [end.point] : []));
+    for (const point of [...free, ...waypoints]) boxes.push({ x: point.x, y: point.y, width: 0, height: 0 });
+  }
   if (boxes.length === 0) return STEP_PLACEMENT;
   const box = boxes.slice(1).reduce(unionBounds, boxes[0]!);
   const stepped = { ...box, x: box.x + PASTE_STEP.x, y: box.y + PASTE_STEP.y };
@@ -89,19 +94,22 @@ export function buildPasteProductionSelectionCommand(
   snapshot: ProductionClipboardSnapshot,
   createId: ClipboardIdFactory,
   placement: PastePlacement = STEP_PLACEMENT
-): { readonly command: DocumentCommand; readonly pastedNodeIds: readonly string[] } {
+): { readonly command: DocumentCommand; readonly pastedNodeIds: readonly string[]; readonly pastedConnectorIds: readonly string[] } {
   const { offset, keepParents } = placement;
   const matrices = buildNodeWorldMatrices(page);
-  if (snapshot.version !== 1 || snapshot.nodes.length === 0) throw new TypeError('Clipboard is empty or unsupported.');
+  if (snapshot.version !== 1 || snapshot.nodes.length + snapshot.connectors.length === 0) throw new TypeError('Clipboard is empty or unsupported.');
   const occupied = new Set([
     ...page.nodes.map(({ id }) => id), ...page.connectors.map(({ id }) => id),
   ]);
   const nodeIds = new Map<string, string>();
   for (const node of snapshot.nodes) {
     const id = createId('node', node.id);
-    if (!id || occupied.has(id) || [...nodeIds.values()].includes(id)) throw new TypeError('Paste ids must be unique.');
+    if (!id || occupied.has(id)) throw new TypeError('Paste ids must be unique.');
+    occupied.add(id);
     nodeIds.set(node.id, id);
   }
+  // Pasted shapes go on top, in their copied order: found once, not per shape (a whole drawing pastes at once).
+  const top = page.nodes.reduce((highest, { zIndex }) => Math.max(highest, zIndex), 0);
   const commands: DocumentCommand[] = snapshot.nodes.map((node, index) => {
     const pastedParent = node.parentId && nodeIds.has(node.parentId) ? nodeIds.get(node.parentId)! : null;
     // Members keep their local transform; only roots take the offset, on the canvas, then go back into the
@@ -112,25 +120,31 @@ export function buildPasteProductionSelectionCommand(
     const pasted: SceneNode = {
       ...structuredClone(node), id: nodeIds.get(node.id)!,
       parentId: pastedParent ?? (inverse ? home! : null),
-      zIndex: Math.max(0, ...page.nodes.map(({ zIndex }) => zIndex)) + index + 1,
+      zIndex: top + index + 1,
       transform: { ...node.transform, translation: pastedParent ? { ...node.transform.translation }
         : inverse ? applyMatrixToPoint(inverse, world) : world },
     };
     return { kind: 'insert-node', id: `paste-node:${pasted.id}`, label: 'Paste node',
       pageId: page.id, index: page.nodes.length + index, node: pasted };
   });
+  // A free end (no node) keeps its null and moves with the paste, as do the connector's bends.
+  const end = (endpoint: SceneConnector['source']): SceneConnector['source'] => endpoint.nodeId === null
+    ? { ...endpoint, point: endpoint.point && { x: endpoint.point.x + offset.x, y: endpoint.point.y + offset.y } }
+    : { ...endpoint, nodeId: nodeIds.get(endpoint.nodeId)! };
+  const connectorIds: string[] = [];
   for (const connector of snapshot.connectors) {
     const id = createId('connector', connector.id);
     if (!id || occupied.has(id)) throw new TypeError('Paste ids must be unique.');
+    occupied.add(id);
+    connectorIds.push(id);
     const pasted: SceneConnector = {
-      ...structuredClone(connector), id,
-      source: { ...connector.source, nodeId: nodeIds.get(connector.source.nodeId)! },
-      target: { ...connector.target, nodeId: nodeIds.get(connector.target.nodeId)! },
+      ...structuredClone(connector), id, source: end(connector.source), target: end(connector.target),
+      waypoints: connector.waypoints.map((point) => ({ x: point.x + offset.x, y: point.y + offset.y })),
     };
     commands.push({ kind: 'insert-connector', id: `paste-connector:${id}`, label: 'Paste connector',
       pageId: page.id, index: page.connectors.length + commands.length - snapshot.nodes.length,
       connector: pasted });
   }
   return { command: { kind: 'batch', id: 'paste-selection', label: 'Paste selection', commands },
-    pastedNodeIds: [...nodeIds.values()] };
+    pastedNodeIds: [...nodeIds.values()], pastedConnectorIds: connectorIds };
 }

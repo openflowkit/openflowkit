@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { OpCapabilities } from '../../../agent/ops/types';
 import { createTestDocument } from '../../testing/builders/documentBuilder';
 import {
-  agentDid, agentName, bridgeTabId, ELSEWHERE, pause, portTaken, stillWaiting, TAKEN, useV2AgentBridge, WAITING, type V2AgentBridgeOptions,
+  agentCommented, agentDid, bridgeTabId, ELSEWHERE, pause, portTaken, stillWaiting, TAKEN, useV2AgentBridge, WAITING, type V2AgentBridgeOptions,
 } from './useV2AgentBridge';
 
 /** Web Locks as the browser runs them, for two hooks standing in for two tabs: try, queue, steal (the holder's request rejects). */
@@ -67,7 +67,7 @@ describe('useV2AgentBridge', () => {
     }));
     const base: V2AgentBridgeOptions = {
       enabled: true, port: 43119, token: 'secret', document: null, pageId: null, revision: 0,
-      capabilities: {} as OpCapabilities, commit: vi.fn(), onActivity: vi.fn(),
+      capabilities: {} as OpCapabilities, commit: vi.fn(), threadChange: vi.fn(), onActivity: vi.fn(),
     };
     const { rerender, unmount } = renderHook((options: V2AgentBridgeOptions) => useV2AgentBridge(options), { initialProps: base });
     await waitFor(() => expect(calls.some((call) => call.startsWith('GET /health'))).toBe(true));
@@ -90,7 +90,7 @@ describe('useV2AgentBridge', () => {
     : null;
   const options: V2AgentBridgeOptions = {
     enabled: true, port: 43119, token: '', document: createTestDocument(), pageId: 'page-1', revision: 1,
-    capabilities: {} as OpCapabilities, commit: vi.fn(), onActivity: vi.fn(),
+    capabilities: {} as OpCapabilities, commit: vi.fn(), threadChange: vi.fn(), onActivity: vi.fn(),
   };
 
   it('a hello the server refuses is a failure, whatever the status', async () => {
@@ -318,13 +318,15 @@ describe('useV2AgentBridge', () => {
     expect(agentDid('something_new', {}, 'Do a thing')).toBe('made a change: Do a thing');
   });
 
-  it('names known agents, shows unknown ones as sent, and falls back to "Your agent"', () => {
-    expect(agentName('claude-code')).toBe('Claude Code');
-    expect(agentName('claude-ai')).toBe('Claude Desktop');
-    expect(agentName('cursor-vscode')).toBe('Cursor');
-    expect(agentName('codex-mcp-client')).toBe('Codex');
-    expect(agentName('zed')).toBe('zed');
-    expect(agentName(undefined)).toBe('Your agent');
-    expect(agentName('  ')).toBe('Your agent');
+  // Read aloud after the agent's name ("Claude Code commented on #3."), not "Claude Code ran start_thread."
+  it('says what a thread write did by the thread number people use', () => {
+    const changed = (output: unknown) => ({ output, threadsChanged: true as const });
+    expect(agentCommented('start_thread', changed({ threadId: 't', number: 3 }))).toBe('commented on #3');
+    expect(agentCommented('reply_to_thread', changed({ threadId: 't', number: 3 }))).toBe('commented on #3');
+    expect(agentCommented('resolve_thread', changed({ threadId: 't', number: 3, resolved: true }))).toBe('resolved #3');
+    expect(agentCommented('resolve_thread', changed({ threadId: 't', number: 3, resolved: false }))).toBe('reopened #3');
+    expect(agentCommented('list_threads', { output: { threads: [] } })).toBeNull();
+    // PR #103 review: resolving a resolved thread changes nothing, so there is nothing to announce.
+    expect(agentCommented('resolve_thread', { output: { threadId: 't', number: 3, resolved: true } })).toBeNull();
   });
 });
