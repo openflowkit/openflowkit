@@ -356,3 +356,25 @@ describe('withoutThreads', () => {
     expect(withoutThreads(document)).toBe(document);
   });
 });
+
+describe('a pin on a turned shape', () => {
+  // A 100×50 box at (100, 100), and the same box turned a quarter about its centre (150, 125).
+  const turned = (rotationRadians: number, x: number, y: number) => node('a', x, y, { transform: { translation: { x, y }, rotationRadians, scale: { x: 1, y: 1 } } });
+
+  it('turns with it, as a mark painted on it would', () => {
+    const document = withThread(createTestDocument({ nodes: [node('a', 100, 100)] }), 't1', 'a', { x: 190, y: 110 });
+    const next = carryThreads({ ...document, pages: [{ ...page(document), nodes: [turned(Math.PI / 2, 175, 75)] }] }, document);
+    const { point } = page(next).threads![0]!.anchor;
+    expect(point.x).toBeCloseTo(165);
+    expect(point.y).toBeCloseTo(165);
+  });
+
+  it('pinned while turned, stays where it was put, and comes back when the shape turns back', () => {
+    const document = withThread(createTestDocument({ nodes: [turned(Math.PI / 2, 175, 75)] }), 't1', 'a', { x: 165, y: 165 });
+    expect(page(document).threads![0]!.anchor.point).toEqual({ x: 165, y: 165 });
+    const back = carryThreads({ ...document, pages: [{ ...page(document), nodes: [node('a', 100, 100)] }] }, document);
+    const { point } = page(back).threads![0]!.anchor;
+    expect(point.x).toBeCloseTo(190);
+    expect(point.y).toBeCloseTo(110);
+  });
+});
