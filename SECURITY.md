@@ -28,7 +28,7 @@ When possible, include:
 OpenFlowKit is a browser-first, local-first application. Relevant security areas include:
 
 - persisted local application data
-- imported files (`.json`, Mermaid, D2, Structurizr) and exports
+- imported files (`.json`, Excalidraw, Mermaid, D2, Structurizr), pasted clipboard data, and exports
 - AI provider API key handling
 - the local agent bridge between the editor and the MCP server
 - encrypted share links and the share Worker (`worker/`)

@@ -1,5 +1,6 @@
 import type { SceneDocumentV1, ScenePage } from '../document/types';
 import { validateSceneDocumentV1 } from '../document/validation';
+import { DocumentCommandError } from './commandError';
 import { carryThreads } from '../threads/threads';
 import { areStructurallyEqual } from './equality';
 import type {
@@ -20,13 +21,6 @@ import type {
   SetPageCommand,
   SetNodeCommand,
 } from './types';
-
-class DocumentCommandError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'DocumentCommandError';
-  }
-}
 
 function updatePage(
   document: SceneDocumentV1,

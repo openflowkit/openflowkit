@@ -593,6 +593,14 @@
       "page": "mermaid-import"
     },
     {
+      "id": "excalidraw-import",
+      "name": "Excalidraw import",
+      "status": "shipped",
+      "evidence": "src/services/dsl/excalidraw.ts",
+      "notes": "Home's Import, a drop on Home, or Open file… takes .excalidraw files, kept where they were drawn; Excalidraw's copied shapes paste onto the canvas (⌘V). What doesn't come across is named in a toast.",
+      "page": "local-first-diagramming"
+    },
+    {
       "id": "structurizr-import",
       "name": "Structurizr import",
       "status": "shipped",
@@ -813,7 +821,7 @@
       "name": "Home page",
       "status": "shipped",
       "evidence": "src/opencanvas/presentation/v2/V2HomePage.tsx",
-      "notes": "Recents, Starred, Templates and Archive; search (/), ⌘K to find any diagram, template or action, N for a new diagram; import or drop a .json, Mermaid, D2, Structurizr or DSL file.",
+      "notes": "Recents, Starred, Templates and Archive; search (/), ⌘K to find any diagram, template or action, N for a new diagram; import or drop a .json, Excalidraw, Mermaid, D2, Structurizr or DSL file.",
       "page": "templates"
     },
     {

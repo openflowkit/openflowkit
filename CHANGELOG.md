@@ -11,6 +11,8 @@ separately; its changes are listed under *For developers* in each release.
 
 ### Added
 
+- **Import Excalidraw drawings.** **Import** takes `.excalidraw` files and shapes copied in Excalidraw paste onto the
+  canvas, each where it was drawn; the import names anything that didn't come across.
 - **Comments on the canvas.** Press **C** and click to pin a thread, or press **Enter** to put it on the selected
   shape. A pin follows its shape and opens its thread to reply, edit, resolve or delete; undo and redo never touch
   comments, and unsent text is kept. Image exports never show pins; JSON exports and share links leave comments out
@@ -53,6 +55,16 @@ separately; its changes are listed under *For developers* in each release.
   Send to back and the step versions changed the order but the canvas kept drawing shapes in the order they were made.
   A shape in front now covers the text and images of the shapes behind it too, overlapping images keep their order
   whichever loads first, and clicks and exports agree with what you see.
+
+### For developers: MCP server and CLI, not on npm yet
+
+- **`get_diagram` with `since`.** An agent that already holds the text it wrote can ask for just what changed on the
+  canvas: `dslDiff`, a unified diff of the canvas against the text it was drawn from, in place of the whole `dsl`. Both
+  sides are the canonical (re-serialized) text, so only real changes show. Line numbers refer to the canonical text
+  (what `get_diagram` returns without `since`), not your original source. Empty while the canvas matches the text.
+- **`revision`** comes back from `create_diagram`, `update_diagram` and `get_diagram`; pass it as `since`. When the
+  diagram was redrawn from other text after it (in Edit as code, or by another agent), `get_diagram` returns the whole
+  text and says so, instead of an empty diff.
 
 ### For developers: MCP server and CLI 0.2.4 (on npm since 2026-10-13, tag `mcp-v0.2.4`)
 
