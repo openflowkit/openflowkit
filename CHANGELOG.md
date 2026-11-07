@@ -11,9 +11,7 @@ separately; its changes are listed under *For developers* in each release.
 
 ### Added
 
-- **Import draw.io files.** Home's **Import** and the editor's **Open file…** take `.drawio` and `.xml` files from
-  draw.io: every page comes across with its shapes where they were, plus containers, layers and connectors with their
-  labels and arrows. Anything that can't come across is listed, never dropped silently.
+- **Import draw.io files.** `.drawio`, `.xml`, `.drawio.svg` and `.drawio.png` open with every page, shapes where they were, and anything that can't come across named in a toast.
 
 ## [2.2.0] — 2026-11-07
 
