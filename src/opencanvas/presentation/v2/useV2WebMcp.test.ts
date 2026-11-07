@@ -6,6 +6,7 @@ import { createTestCapabilities } from '../../../agent/ops/testHost';
 import type { WebMcpTool } from '../../../agent/webMcp';
 import { applyDocumentCommand } from '../../domain/commands/execute';
 import type { DocumentCommand } from '../../domain/commands/types';
+import type { SceneDocumentV1 } from '../../domain/document/types';
 import { createTestDocument } from '../../testing/builders/documentBuilder';
 import { useV2WebMcp, type V2WebMcpOptions } from './useV2WebMcp';
 
@@ -35,6 +36,22 @@ function useSession(overrides: Partial<V2WebMcpOptions>, commits: DocumentComman
     commit: (command) => { commits.push(command); setTop(command.id); setCurrent((before) => applyDocumentCommand(before, command).document); return true; },
     ...overrides,
   }));
+}
+
+/**
+ * The hook over a session whose thread changes land at once in `session` (as updateThreads writes its ref) and on
+ * the editor's state only at the next render.
+ */
+function threadSession() {
+  const session = { document: testDocument };
+  const threadChange = (change: (document: SceneDocumentV1) => SceneDocumentV1) => { session.document = change(session.document); };
+  return () => {
+    const [current, setCurrent] = useState(testDocument);
+    return useV2WebMcp(options({
+      document: current, scene: current.pages[0]!,
+      threadChange: (change) => { threadChange(change); setCurrent(session.document); },
+    }));
+  };
 }
 
 const ready = async (result: { current: { tools: number } }) =>
@@ -120,6 +137,21 @@ describe('useV2WebMcp', () => {
     const { result, unmount } = renderHook(() => useV2WebMcp(options({ lockedPageId: 'page-1' })));
     await ready(result);
     await expect(tools.get('get_view')!.execute({})).resolves.toMatchObject({ pageId: 'page-1', readOnly: false });
+    unmount();
+  });
+
+  // One op at a time, each against the document the last one left: a comment too, though it is no commit.
+  it('a call queued right after a comment reads the document with that comment', async () => {
+    const { tools } = installModelContext();
+    const { result, unmount } = renderHook(threadSession());
+    await ready(result);
+    const [started, listed] = await Promise.all([
+      tools.get('start_thread')!.execute({ point: { x: 0, y: 0 }, body: 'Why is this here?' }),
+      tools.get('list_threads')!.execute({}),
+    ]) as [{ threadId: string }, { threads: { id: string }[] }];
+    expect(listed.threads.map(({ id }) => id)).toEqual([started.threadId]);
+    // A change that changes nothing leaves the document as it was: nothing to wait for.
+    await expect(tools.get('resolve_thread')!.execute({ threadId: started.threadId, resolved: false })).resolves.toMatchObject({ resolved: false });
     unmount();
   });
 

@@ -63,8 +63,10 @@ const showsDrawingOf = (mapId: string) => ({ document, pageId }: LiveAgentSessio
 
 export interface LiveOpResult {
   readonly output: unknown;
-  /** The command committed (its label is the undo label), or null for a read. */
+  /** The command committed (its label is the undo label), or null for a read or a thread change. */
   readonly command: DocumentCommand | null;
+  /** A thread change that changed the document: like a commit, it reaches the editor's state on the next render. */
+  readonly threadsChanged?: true;
 }
 
 /** Why a cancelled call stopped: the reason it was aborted with, when that is an Error. */
@@ -112,11 +114,16 @@ export async function runLiveAgentOp(current: () => LiveAgentSession, name: stri
     if (now.readOnly) throw new Error(READ_ONLY_REFUSAL);
     // The change runs against the editor's document as it is then, so the output is read off that one.
     const { threads, report } = outcome;
-    let applied: SceneDocumentV1 | null = null;
-    now.threadChange((document) => (applied = threads(document)));
+    const ran: { before?: SceneDocumentV1; after?: SceneDocumentV1 } = {};
+    now.threadChange((before) => {
+      ran.before = before;
+      ran.after = threads(before);
+      return ran.after;
+    });
     // The session runs the change only on an open document: one that closed meanwhile took nothing.
-    if (applied === null) throw new Error(NO_DOCUMENT);
-    return { output: report ? report(applied) : outcome.output, command: null };
+    if (!ran.after) throw new Error(NO_DOCUMENT);
+    const output = report ? report(ran.after) : outcome.output;
+    return ran.after === ran.before ? { output, command: null } : { output, command: null, threadsChanged: true };
   }
   if (!outcome.command) return { output: outcome.output, command: null };
   stopIfAborted(signal);

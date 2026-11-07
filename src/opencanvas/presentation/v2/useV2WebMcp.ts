@@ -45,7 +45,7 @@ function eitherSignal(closed: AbortSignal, call: AbortSignal | undefined): Abort
 }
 
 /**
- * A commit reaches the editor's state on the next render; the next call must read the document it made. An edit
+ * A commit or a thread change reaches the editor's state on the next render; the next call must read the document it made. An edit
  * the session took that never shows up (a reload over it) is reported, not taken for applied.
  */
 async function settled(read: () => unknown, before: unknown): Promise<void> {
@@ -73,12 +73,10 @@ export function useV2WebMcp(options: V2WebMcpOptions): V2WebMcp {
       const signal = eitherSignal(controller.signal, callSignal);
       const next = queue.then(async () => {
         const before = optionsRef.current.document;
-        const { command, output } = await runLiveAgentOp(() => optionsRef.current, name, input, pageId, signal);
+        const { command, output, threadsChanged } = await runLiveAgentOp(() => optionsRef.current, name, input, pageId, signal);
         trackOnce('agent_webmcp');
-        if (command) {
-          setActivity({ label: command.label, id: command.id });
-          await settled(() => optionsRef.current.document, before);
-        }
+        if (command) setActivity({ label: command.label, id: command.id });
+        if (command || threadsChanged) await settled(() => optionsRef.current.document, before);
         optionsRef.current.onActivity(`${name} ran from an agent in this browser.`);
         return output;
       });
