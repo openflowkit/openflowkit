@@ -205,9 +205,15 @@ export function useV2EditActions(options: V2EditActionsOptions) {
       refuse();
       return true;
     }
+    // Arrows with no end on a pasted shape are selected with the shapes, as a marquee selects them, so Delete takes
+    // them too; an arrow tied to a pasted shape already goes with it.
     const { pastedNodeIds, pastedConnectorIds } = pasted;
+    const loose = pastedConnectorIds.filter((_, index) => {
+      const { source, target } = snapshot.connectors[index]!;
+      return source.nodeId === null && target.nodeId === null;
+    });
     options.applySelection(replaceSelection(pastedNodeIds));
-    options.applyConnectorSelection(pastedNodeIds.length ? [] : pastedConnectorIds);
+    options.applyConnectorSelection(loose);
     options.announce(`${pastedNodeIds.length || pastedConnectorIds.length} pasted.`);
     if (excalidraw?.losses.length) options.notify({ id: 'paste-shapes', tone: 'info', title: 'Pasted from Excalidraw', ...note });
     return true;

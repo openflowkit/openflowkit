@@ -152,6 +152,18 @@ test('Excalidraw arrows copied without their shapes paste as selected connectors
     .toEqual([0, 1, 1]);
 });
 
+test('a pasted Excalidraw sketch selects its loose arrows with its shapes, so Delete takes them all @gate', async ({ page }) => {
+  await freshDiagram(page);
+  await paste(page, [
+    { id: 'box', type: 'rectangle', x: 0, y: 0, width: 160, height: 80 },
+    { id: 'loose', type: 'arrow', x: 0, y: 120, width: 160, height: 0, points: [[0, 0], [160, 0]], endArrowhead: 'arrow' },
+  ]);
+  await expect.poll(async () => { const { nodes, connectors, selectedConnectors } = await state(page); return [nodes.length, connectors.length, selectedConnectors.length]; })
+    .toEqual([1, 1, 1]);
+  await page.keyboard.press('Delete');
+  await expect.poll(async () => { const { nodes, connectors } = await state(page); return [nodes.length, connectors.length]; }).toEqual([0, 0]);
+});
+
 test('a hand-made Excalidraw frame inside itself pastes as a frame, with no page error @gate', async ({ page }) => {
   await freshDiagram(page);
   await paste(page, [{ id: 'f', type: 'frame', x: 0, y: 0, width: 200, height: 200, name: 'Loop', frameId: 'f' }]);

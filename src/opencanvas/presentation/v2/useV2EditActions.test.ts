@@ -91,6 +91,16 @@ describe('useV2EditActions paste from Excalidraw', () => {
     expect(t.notify).toHaveBeenCalledWith(expect.objectContaining({ title: 'Nothing to paste from Excalidraw' }));
   });
 
+  it('selects loose arrows pasted with shapes too, so Delete takes them all', () => {
+    const t = setup([]);
+    const box = { id: 'box', type: 'rectangle', x: 0, y: 0, width: 40, height: 40, isDeleted: false };
+    const tied = { ...arrow, id: 'tied', x: 40, y: 20, startBinding: { elementId: 'box' } };
+    t.actions.pasteShapes(excalidraw([box, arrow, tied]));
+    expect(t.applySelection).toHaveBeenLastCalledWith(expect.objectContaining({ nodeIds: ['node-1'] }));
+    // The loose arrow is selected; the one tied to the box goes with the box.
+    expect(t.applyConnectorSelection).toHaveBeenLastCalledWith(['connector-2']);
+  });
+
   it('names what didn’t come across, as the import does', () => {
     const t = setup([]);
     t.actions.pasteShapes(excalidraw([{ id: 'box', type: 'rectangle', x: 0, y: 0, width: 40, height: 40, isDeleted: false, groupIds: ['g'] }]));
