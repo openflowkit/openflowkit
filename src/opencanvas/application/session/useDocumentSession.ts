@@ -72,12 +72,9 @@ export function useDocumentSession(callbacks: DocumentSessionCallbacks) {
     [advance]
   );
   // Threads change outside undo history (domain/threads). `change` throws ThreadError on bad input.
-  // Returns the revision the session is at afterwards, or null when nothing is open.
   const updateThreads = useCallback(
-    (change: (document: SceneDocumentV1) => SceneDocumentV1): number | null => {
-      advance((current) => updateSessionThreads(current, change, current.revision));
-      return sessionRef.current?.revision ?? null;
-    },
+    (change: (document: SceneDocumentV1) => SceneDocumentV1) =>
+      advance((current) => updateSessionThreads(current, change, current.revision)),
     [advance]
   );
   const forgetHistory = useCallback(() => advance(forgetSessionHistory), [advance]);
