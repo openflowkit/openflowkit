@@ -7,14 +7,15 @@ import { buildWorkspacePagesCommand, workspaceViewFrames, type WorkspacePagesOpt
 import { frameEdited, frameScene, dslFrames } from '../../dsl/frameScene';
 import { serializeLosses } from '../../dsl/losses';
 import { serialize } from '../../dsl/serialize';
-import { dslFrameMeta } from '../../dsl/sceneMeta';
+import { dslFrameMeta, type DslFrameScene } from '../../dsl/sceneMeta';
 import { applyDocumentCommand } from '../../opencanvas/domain/commands/execute';
 import type { CompileResult, CompileWorkspaceResult } from '../../dsl/compile';
 import type { Point2d } from '../../opencanvas/domain/geometry/types';
 import type { SceneDocumentV1 } from '../../opencanvas/domain/document/types';
 import type { DocumentCommand } from '../../opencanvas/domain/commands/types';
 import { readAgentSource, type AgentSource } from '../lint';
-import { discardedEdits, frameCanvasEdits, type BaselineCache, type CanvasEdit } from './canvasEdits';
+import { discardedEdits, frameBaseline, frameCanvasEdits, type BaselineCache, type CanvasEdit } from './canvasEdits';
+import { unifiedLineDiff } from '../../dsl/textDiff';
 import { defineOp, pointOf, pointSchema, requireFrame, requirePage, type OpContext } from './types';
 
 const DSL_HELP = 'OpenFlow DSL source. Mermaid, Structurizr DSL and D2 are accepted too: they convert first, and the '
@@ -188,6 +189,17 @@ async function discardedBy(context: OpContext, command: DocumentCommand | null, 
   return { discarded, note: [...new Set(notes)].join(' ') };
 }
 
+/**
+ * The frame's text as the canvas regenerates it, against its authored text compiled and serialized the same way,
+ * so only what the canvas changed shows. The whole text, and why, when there is no authored text to compare.
+ */
+async function dslDiff(scene: DslFrameScene, edited: boolean, context: OpContext, cache: BaselineCache, dsl: () => string) {
+  if (typeof dslFrameMeta(scene.frame).source === 'string' && !edited) return { dslDiff: '' };
+  const compiled = await frameBaseline(scene, context.capabilities, cache);
+  if (compiled.baseline === null) return { dsl: dsl(), dslDiffNote: compiled.note };
+  return { dslDiff: unifiedLineDiff(serialize(compiled.baseline), serialize(scene)) };
+}
+
 export const getDiagram = defineOp({
   name: 'get_diagram',
   title: 'Read diagram',
@@ -196,12 +208,18 @@ export const getDiagram = defineOp({
     + 'recolours, moves, resizes, renames, icons, rewired or bent connectors, and shapes added or removed. Each has `carry`: '
     + 'attributes to merge into that node\'s existing `[ … ]` list (one list per node) to keep the edit, or null when the '
     + 'language cannot say it. `canvasEdits` is null, with `canvasEditsNote` saying why, when it could not be compared. '
-    + '`losses` names what the language cannot say at all. update_diagram drops anything the text you send does not carry.',
+    + '`losses` names what the language cannot say at all. update_diagram drops anything the text you send does not carry. '
+    + 'With `diffOnly`, `dsl` is left out and `dslDiff` is a unified diff of the canvas against the text it was drawn from, both '
+    + 're-serialized the same way so only real changes show: empty while the canvas matches. Line numbers refer to the '
+    + 'canonical text (what `get_diagram` returns without `diffOnly`), not your original source. Edits the '
+    + 'text does not say, such as moves, are only in `canvasEdits`. When there is nothing to compare against, the whole '
+    + '`dsl` comes back with `dslDiffNote`.',
   schema: z.object({
     frameId: z.string().min(1).optional().describe(`${FRAME_ID} Defaults to the first diagram on the page.`),
     pageId: z.string().min(1).optional().describe('Page to read (see list_pages); defaults to the page the editor shows, or the first page in file mode.'),
+    diffOnly: z.boolean().optional().describe('Return `dslDiff`, a unified diff of the canvas against the text it was drawn from, instead of the whole `dsl`. Line numbers refer to the canonical text (what `get_diagram` returns without `diffOnly`), not your original source.'),
   }),
-  async run({ frameId, pageId }, context) {
+  async run({ frameId, pageId, diffOnly }, context) {
     const page = requirePage(context.document, pageId ?? context.pageId);
     const first = frameId ? null : dslFrames(page)[0];
     if (!frameId && !first) throw new RangeError('This page has no diagram frames. Use list_diagrams.');
@@ -211,7 +229,9 @@ export const getDiagram = defineOp({
     const meta = dslFrameMeta(frame);
     const edited = frameEdited(scene);
     const losses = serializeLosses(scene);
-    const compared = await frameCanvasEdits(scene, context.capabilities);
+    const cache: BaselineCache = new Map();
+    const compared = await frameCanvasEdits(scene, context.capabilities, cache);
+    const dsl = () => (edited || typeof meta.source !== 'string' ? serialize(scene) : meta.source);
     return {
       command: null,
       output: {
@@ -223,7 +243,7 @@ export const getDiagram = defineOp({
         losses,
         canvasEdits: compared.edits,
         ...(compared.note ? { canvasEditsNote: compared.note } : {}),
-        dsl: edited || typeof meta.source !== 'string' ? serialize(scene) : meta.source,
+        ...(diffOnly ? await dslDiff(scene, edited, context, cache, dsl) : { dsl: dsl() }),
       },
     };
   },

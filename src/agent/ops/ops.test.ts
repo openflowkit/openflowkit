@@ -184,6 +184,31 @@ views { view context of Shop; view container of Shop }
     expect((kept.output as { discarded: readonly unknown[] }).discarded).toEqual([]);
   });
 
+  it('returns the canvas edits as a diff of the text with diffOnly', async () => {
+    const run = await host();
+    await run.run('create_diagram', { dsl: FLOW });
+    const fresh = await run.run('get_diagram', { frameId: run.frame().id, diffOnly: true });
+    expect(fresh.output).toMatchObject({ edited: false, dslDiff: '' });
+    expect(fresh.output).not.toHaveProperty('dsl');
+
+    const store = run.page().nodes.find((node) => node.content.label === 'Store')!;
+    const client = run.page().nodes.find((node) => node.content.label === 'Client')!;
+    await run.run('style', { ids: [store.id], fill: '#fde68a' });
+    await run.run('move', { ids: [client.id], delta: { x: 40, y: 0 } });
+    const read = await run.run('get_diagram', { frameId: run.frame().id, diffOnly: true });
+    // Both sides are serialized, so the palette name the author wrote (emerald) and its regenerated form (green)
+    // do not show as a change; the move is not in the text at all and comes only through canvasEdits.
+    expect(read.output).toMatchObject({ edited: true, canvasEdits: expect.arrayContaining([expect.objectContaining({ id: client.id })]) });
+    expect((read.output as { dslDiff: string }).dslDiff).toBe('@@ -4,5 +4,5 @@\n Client [blue]\n API [green]\n-Store [cylinder, red]\n+Store [cylinder, #fde68a]\n Client -> API\n API -> Store\n');
+    expect(read.output).not.toHaveProperty('dsl');
+
+    // No baseline to compare: the whole text, and why.
+    const refusing = { ...run.capabilities, compileWorkspace: () => Promise.reject(new RangeError('layout outside the app stops at 1000 shapes')) };
+    const fallback = await resolveAgentOpCommand(op('get_diagram'), { diffOnly: true }, { ...run.context(), capabilities: refusing });
+    expect(fallback.output).toMatchObject({ dsl: expect.stringContaining('Store [cylinder, #fde68a]'), dslDiffNote: expect.stringMatching(/Not compared: layout outside/) });
+    expect(fallback.output).not.toHaveProperty('dslDiff');
+  });
+
   it('names canvas edits on a C4 view frame against that view', async () => {
     const run = await host();
     const made = await run.run('create_diagram', { dsl: 'architecture\nmodel {\n  system Shop {\n    container Web\n    container API\n    Web -> API\n  }\n}\nviews {\n  view landscape\n  view container of Shop\n}' });

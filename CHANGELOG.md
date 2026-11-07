@@ -20,6 +20,10 @@ separately; its changes are listed under *For developers* in each release.
   by the server. Off unless set.
 - **Connect agent: paste a prompt.** Step 1 can be a prompt you paste into your agent, which then adds OpenFlowKit
   itself, or the command, config or one-click link as before.
+- **`get_diagram` with `diffOnly`.** An agent that already holds the text it wrote can ask for just what changed on
+  the canvas: `dslDiff`, a unified diff of the canvas against the text it was drawn from, in place of the whole `dsl`. Both
+  sides are the canonical (re-serialized) text, so only real changes show. Line numbers refer to the canonical text
+  (what `get_diagram` returns without `diffOnly`), not your original source. Empty while the canvas matches the text.
 
 ### Changed
 
