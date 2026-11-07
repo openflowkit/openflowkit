@@ -40,6 +40,7 @@ export interface LiveAgentSession {
 }
 
 export const NO_THREADS_REFUSAL = 'This editor cannot take comments.';
+const NO_DOCUMENT = 'The editor has no document open.';
 export const READ_ONLY_REFUSAL = 'This document is read-only, so the editor did not apply the change.';
 export const REPO_MAP_REFUSAL = 'The tab shows a repo map, which is read from the code, so the editor did not apply the change. '
   + 'Ask the user to press Canvas (or wait until the map is read), then call again: changes land on the map\'s drawing '
@@ -84,7 +85,7 @@ export async function runLiveAgentOp(current: () => LiveAgentSession, name: stri
   if (!op) throw new RangeError(`Unknown op "${name}".`);
   const { CAPABILITY_MANIFEST } = await import('./manifest');
   let session = current();
-  if (!session.document) throw new Error('The editor has no document open.');
+  if (!session.document) throw new Error(NO_DOCUMENT);
   // The page the op will run on (a named frame's own page), so the read-only check and the camera agree with it.
   let pageId = pageHolding({ document: session.document, pageId: requestedPageId ?? session.pageId ?? session.document.pages[0]?.id ?? '', capabilities: session.capabilities }, input);
   // Thread writes are conversation, not drawing: no repo-map redirect, no page switch, no camera, no commit.
@@ -104,7 +105,7 @@ export async function runLiveAgentOp(current: () => LiveAgentSession, name: stri
     pageId = drawn.pageId!;
   }
   const { document, capabilities } = session;
-  if (!document) throw new Error('The editor has no document open.');
+  if (!document) throw new Error(NO_DOCUMENT);
   const selection = { pageId: session.pageId, ids: session.selectedIds?.() ?? [] };
   const outcome = await resolveAgentOpCommand(op, input, { document, pageId, capabilities, selection, client });
   if (outcome.threads) {
@@ -116,7 +117,9 @@ export async function runLiveAgentOp(current: () => LiveAgentSession, name: stri
     const { threads, report } = outcome;
     let applied: SceneDocumentV1 | null = null;
     now.threadChange((document) => (applied = threads(document)));
-    return { output: report && applied ? report(applied) : outcome.output, command: null };
+    // The session runs the change only on an open document: one that closed meanwhile took nothing.
+    if (applied === null) throw new Error(NO_DOCUMENT);
+    return { output: report ? report(applied) : outcome.output, command: null };
   }
   if (!outcome.command) return { output: outcome.output, command: null };
   stopIfAborted(signal);

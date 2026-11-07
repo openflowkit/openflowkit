@@ -207,6 +207,12 @@ describe('comment ops, live', () => {
     await expect(runLiveAgentOp(host.session, 'resolve_thread', { threadId: 'ghost' })).rejects.toThrow(NO_THREADS_REFUSAL);
   });
 
+  // updateThreads runs nothing when no document is open (it closed while the op ran): that is no success.
+  it('a thread change the editor never ran is an error, not a success', async () => {
+    const host = await live({ threadChange: () => undefined });
+    await expect(runLiveAgentOp(host.session, 'start_thread', { point: { x: 0, y: 0 }, body: 'x' })).rejects.toThrow('The editor has no document open.');
+  });
+
   it('a bad thread id surfaces as an error for the agent', async () => {
     const host = await live();
     await expect(runLiveAgentOp(host.session, 'reply_to_thread', { threadId: 'ghost', body: 'x' })).rejects.toThrow(/ghost/);
