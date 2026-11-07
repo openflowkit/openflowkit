@@ -95,6 +95,7 @@ export function V2EditorCanvas(p: EditorCanvasProps): React.JSX.Element {
       toolConfigRef={p.toolConfigRef} onOpenChartData={p.openChartData} zoomInto={map.active ? null : p.zoomInto}
       {...(map.active ? { onNodeClick: map.clickNode, onNodeDoubleClick: p.editBox, onNodeDrag: () => p.explainMapRef.current() } : {})}
       onCommentClick={(point) => commentApi.current?.click(point)}
+      onTransformPreview={(result, copy) => commentApi.current?.preview(result, copy)}
       onRemoveIcons={() => iconActions.removeIcons(selectionRef.current.nodeIds)}
       onSetIcon={(icon) => iconActions.setIcons(selectionRef.current.nodeIds, icon)}
       onOpenCode={code.openNew}

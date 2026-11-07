@@ -4,12 +4,13 @@ import {
   addComment, addThread, editComment, moveThread, pageThreads, removeComment, removeThread, setThreadResolved,
 } from '../../domain/threads/threads';
 import type { Point2d } from '../../domain/geometry/types';
-import type { SceneThread, SceneDocumentV1, ScenePage } from '../../domain/document/types';
+import type { SceneNode, SceneThread, SceneDocumentV1, ScenePage } from '../../domain/document/types';
+import type { TransformResult } from '../../domain/transforms/types';
 import type { PixiRendererHost } from '../../infrastructure/pixi/PixiRendererHost';
 import { Avatar, CommentComposer, DraftsContext, ThreadPopover } from './V2CommentsParts';
 import { Anchored, CommentPin, PlacementContext, type PinActions } from './V2CommentPin';
 import { mintV2Id } from './v2Document';
-import { HUMAN_AUTHOR_NAME, keyboardSpot, pinNudge } from './v2CommentsView';
+import { HUMAN_AUTHOR_NAME, keyboardSpot, pinNudge, pinsOnPreview } from './v2CommentsView';
 import { Placement } from './v2CommentPlacement';
 import { clearance } from './map/mapMode';
 import type { V2Tool } from './v2ToolCatalog';
@@ -23,6 +24,8 @@ export interface V2CommentApi {
   readonly escape: () => boolean;
   /** A click on the canvas with the comment tool (the pointer pipeline's, screen point in the canvas). */
   readonly click: (point: Point2d) => void;
+  /** A shape move, resize or turn being previewed: pins on those shapes ride along. Null when it ends; an ⌥-copy leaves them. */
+  readonly preview: (result: TransformResult | null, copy: boolean) => void;
 }
 
 // A card opens in the canvas the side panels and floating chrome leave free, as the camera frames things there.
@@ -149,6 +152,9 @@ export const V2Comments = memo(function V2Comments(props: Props): React.JSX.Elem
   }, [placement, sectionRef]);
 
   const threads = useMemo(() => pageThreads(page).filter((thread) => !thread.resolved), [page]);
+  // A shape being dragged, resized or turned: the pins on it are drawn where it is now, not where it was committed.
+  const [preview, setPreview] = useState<readonly SceneNode[] | null>(null);
+  const riding = useMemo(() => (preview ? pinsOnPreview(page, preview) : null), [page, preview]);
   const openThread = open?.kind === 'thread' ? pageThreads(page).find((thread) => thread.id === open.id) : undefined;
   // A thread that went away (deleted, an agent resolved it, another page) closes with it.
   useEffect(() => {
@@ -232,6 +238,7 @@ export const V2Comments = memo(function V2Comments(props: Props): React.JSX.Elem
         if (pressFoundOpen.current || latest.current.open || !canAdd()) return;
         compose(point, hostRef.current?.pickNode(point) ?? null);
       },
+      preview: (result, copy) => setPreview(result && !copy ? result.nodes : null),
     };
     return () => { apiRef.current = null; };
   }, [apiRef, hostRef, sectionRef, selectedNodeId, close]);
@@ -268,7 +275,7 @@ export const V2Comments = memo(function V2Comments(props: Props): React.JSX.Elem
       {threads.map((thread) => {
         const selected = open?.kind === 'thread' && open.id === thread.id;
         return (
-          <CommentPin key={thread.id} thread={thread} world={drag?.id === thread.id ? drag.world : thread.anchor.point}
+          <CommentPin key={thread.id} thread={thread} world={drag?.id === thread.id ? drag.world : riding?.get(thread.id) ?? thread.anchor.point}
             selected={selected} dragging={drag?.id === thread.id} actions={actions}>
             {selected && openThread ? (
               <ThreadPopover thread={openThread} readOnly={readOnly} now={now}

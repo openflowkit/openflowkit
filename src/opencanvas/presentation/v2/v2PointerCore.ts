@@ -109,7 +109,8 @@ export interface V2PointerOptions {
   readonly openEditor: (nodeId: string, options?: { readonly isNew?: boolean }) => void;
   readonly openConnectorEditor: (connectorId: string, at: Point2d) => void;
   readonly onToolChange: (tool: V2Tool) => void;
-  readonly onTransformPreview?: (result: TransformResult | null) => void;
+  /** Each previewed frame of a move, resize or turn (`copy`: an ⌥-drag leaves the originals where they are); null when it ends. */
+  readonly onTransformPreview?: (result: TransformResult | null, copy?: boolean) => void;
   readonly snapToGrid?: boolean;
   readonly mintId: (prefix: string) => string;
   /**

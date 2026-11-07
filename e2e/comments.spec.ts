@@ -56,15 +56,16 @@ test('press C, click a node, type, Enter: a pin appears, survives a reload, and 
   expect(Math.abs(before.y + before.height - centre.y)).toBeLessThan(2);
   await shot(page, 'comment-pin');
 
-  // The shape moves, the pin goes with it.
+  // The shape moves, the pin goes with it: during the drag, not only on the drop.
   await page.keyboard.press('v');
   await page.mouse.move(centre.x - 30, centre.y + 10);
   await page.mouse.down();
   await page.mouse.move(centre.x + 70, centre.y + 90, { steps: 8 });
-  await page.mouse.up();
   await expect.poll(async () => ((await pin.boundingBox())!.x - before.x)).toBeGreaterThan(80);
-  const moved = (await pin.boundingBox())!;
-  expect(Math.round(moved.y - before.y)).toBeGreaterThan(70);
+  await page.mouse.up();
+  // Dropped: the document's anchor agrees with where the pin was drawn.
+  await expect.poll(async () => Math.round((await pin.boundingBox())!.y - before.y)).toBeGreaterThan(70);
+  await expect.poll(async () => ((await pin.boundingBox())!.x - before.x)).toBeGreaterThan(80);
 
   // The pin follows a pan of the camera as the shape does.
   const node = (await page.evaluate((nodeId) => window.__V2__!.getNodeRect(nodeId), id))!;

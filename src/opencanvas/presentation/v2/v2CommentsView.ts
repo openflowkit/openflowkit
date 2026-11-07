@@ -1,4 +1,8 @@
-// Pure helpers for the comment overlays: how a message's age reads, and the avatar a name gets.
+// Pure helpers for the comment overlays: how a message's age reads, the avatar a name gets, where a pin is drawn mid-drag.
+import type { Point2d } from '../../domain/geometry/types';
+import type { SceneNode, ScenePage } from '../../domain/document/types';
+import { pageThreads, pinOnNode } from '../../domain/threads/threads';
+import { buildNodeWorldMatrices } from '../../domain/scene/worldGeometry';
 
 /** Every human comment is written by this name until named commenters exist; the data model already carries it. */
 export const HUMAN_AUTHOR_NAME = 'User';
@@ -56,4 +60,26 @@ export function pinNudge(key: string, altKey: boolean, shiftKey: boolean): { rea
     case 'ArrowDown': return { x: 0, y: step };
     default: return null;
   }
+}
+
+const NO_PINS: ReadonlyMap<string, Point2d> = new Map();
+
+/**
+ * Where the pins on `page` are drawn while `nodes` (a drag, resize or turn being previewed) stand in for theirs: by thread id,
+ * only the pins that move. A pin follows its node's live world matrix by the same rule the document applies on drop (pinOnNode),
+ * so children of a dragged frame or group come along, and a pin whose node is not on the page stays where it was.
+ */
+export function pinsOnPreview(page: ScenePage, nodes: readonly SceneNode[]): ReadonlyMap<string, Point2d> {
+  const pinned = pageThreads(page).filter((thread) => thread.anchor.nodeId !== null && thread.anchor.offset !== null);
+  if (pinned.length === 0 || nodes.length === 0) return NO_PINS;
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  const matrices = buildNodeWorldMatrices({ ...page, nodes: page.nodes.map((node) => byId.get(node.id) ?? node) });
+  const moved = new Map<string, Point2d>();
+  for (const { id, anchor } of pinned) {
+    const matrix = matrices.get(anchor.nodeId!);
+    if (!matrix) continue;
+    const at = pinOnNode(matrix, anchor.offset!);
+    if (at.x !== anchor.point.x || at.y !== anchor.point.y) moved.set(id, at);
+  }
+  return moved;
 }
