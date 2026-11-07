@@ -571,3 +571,16 @@ describe('Structurizr and D2 in', () => {
     expect(lintDsl('a -> b\nx: { shape: cylinder; near: top-center }')).toMatchObject({ ok: true, converted: { from: 'd2', losses: [{ line: 2, message: 'near dropped' }] } });
   });
 });
+
+describe('create_diagram ids', () => {
+  it('create_diagram returns the id the frame was placed under when the compiled id was taken', async () => {
+    const run = await host();
+    const first = await run.run('create_diagram', { dsl: FLOW });
+    const second = await run.run('create_diagram', { dsl: FLOW });
+    const ids = [first, second].map(({ output }) => (output as { frameId: string }).frameId);
+    expect(new Set(ids).size).toBe(2);
+    expect(ids).toEqual([run.frame(0).id, run.frame(1).id]);
+    // The returned id reaches the second frame: the agent's next call works.
+    await expect(run.run('get_diagram', { frameId: ids[1] })).resolves.toMatchObject({ output: { frameId: ids[1] } });
+  });
+});

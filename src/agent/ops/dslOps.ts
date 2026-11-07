@@ -2,7 +2,7 @@
 // the host's layout port and land as ONE reversible page command; get/list
 // read the frames back, honest about drift and losses.
 import { z } from 'zod';
-import { buildDslPageCommand, nextDslFrameOrigin } from '../../opencanvas/application/dsl/dslPageCommand';
+import { buildDslPageCommand, nextDslFrameOrigin, placedFrameId } from '../../opencanvas/application/dsl/dslPageCommand';
 import { buildWorkspacePagesCommand, workspaceViewFrames, type WorkspacePagesOptions } from '../../opencanvas/application/dsl/architectureCommands';
 import { frameEdited, frameScene, dslFrames } from '../../dsl/frameScene';
 import { serializeLosses } from '../../dsl/losses';
@@ -118,7 +118,7 @@ export const createDiagram = defineOp({
     const compiled = requireDrawable(workspace.views[0]!.result);
     return {
       command: buildDslPageCommand(page, compiled),
-      output: { ...diagramOutput(page.id, compiled.frame.id, compiled), views: [], ...convertedOutput(source) },
+      output: { ...diagramOutput(page.id, placedFrameId(page, compiled), compiled), views: [], ...convertedOutput(source) },
     };
   },
 });
