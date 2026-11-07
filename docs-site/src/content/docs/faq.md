@@ -62,7 +62,7 @@ your machine; see [Self-hosting](/self-hosting/).
 
 | Direction | Formats |
 | --- | --- |
-| Open or import | OpenFlowKit `.json` (including files from version 1), Mermaid (`.mmd`, `.mermaid`), D2 (`.d2`), Structurizr DSL (`.dsl`), OpenFlow DSL (`.ofk`, `.txt`) |
+| Open or import | OpenFlowKit `.json` (including files from version 1), Mermaid (`.mmd`, `.mermaid`), D2 (`.d2`), Structurizr DSL (`.dsl`), OpenFlow DSL (`.ofk`, `.txt`), Excalidraw (`.excalidraw`) |
 | Export | PNG, SVG, PDF (through the print dialog), JSON; animated SVG, GIF, MP4 and WebM ([Animated export](/animated-export/)) |
 | Copy | PNG to the clipboard; a flowchart or sequence diagram as Mermaid text |
 
@@ -76,6 +76,14 @@ file on Home, or pass the text to an agent tool or `openflowkit convert`. Each c
 what it could not carry over instead of dropping it silently. Going back out, only flowcharts
 and sequence diagrams can be copied as Mermaid; there is no Structurizr or D2 export. See
 [Mermaid, Structurizr and D2 import](/mermaid-import/).
+
+## Can I bring in my Excalidraw drawings?
+
+Yes. On Home, click **Import** (or drop the file) and pick a `.excalidraw` file, or use
+**Open file…** in the editor. The drawing keeps its layout and its arrows stay tied to their
+shapes. Shapes copied in Excalidraw paste straight onto the canvas with `⌘V`. A toast names
+anything that didn't come across, such as hatched fills or groups. See
+[Local-first diagramming](/local-first-diagramming/#opening-and-importing-files).
 
 ## Which browsers does it support?
 

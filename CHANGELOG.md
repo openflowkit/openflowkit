@@ -11,6 +11,8 @@ separately; its changes are listed under *For developers* in each release.
 
 ### Added
 
+- **Import Excalidraw drawings.** **Import** takes `.excalidraw` files and shapes copied in Excalidraw paste onto the
+  canvas, each where it was drawn; the import names anything that didn't come across.
 - **Private repos in the browser.** On the "not found, or it is private" screen, **Private repo? Use a GitHub token**
   takes a fine-grained token with Contents read-only access; the files are then read through the GitHub API. The
   token stays in this tab.
@@ -20,6 +22,10 @@ separately; its changes are listed under *For developers* in each release.
   by the server. Off unless set.
 - **Connect agent: paste a prompt.** Step 1 can be a prompt you paste into your agent, which then adds OpenFlowKit
   itself, or the command, config or one-click link as before.
+- **`get_diagram` with `diffOnly`.** An agent that already holds the text it wrote can ask for just what changed on
+  the canvas: `dslDiff`, a unified diff of the canvas against the text it was drawn from, in place of the whole `dsl`. Both
+  sides are the canonical (re-serialized) text, so only real changes show. Line numbers refer to the canonical text
+  (what `get_diagram` returns without `diffOnly`), not your original source. Empty while the canvas matches the text.
 
 ### Changed
 

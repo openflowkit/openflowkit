@@ -39,13 +39,18 @@ report**, rather than pretending the diagram is empty.
 
 ## Opening and importing files
 
-Home → **Import** (or dropping files on Home) takes `.json`, plus diagram text in `.mmd`,
-`.mermaid`, `.d2`, `.dsl`, `.ofk` and `.txt` files. A text file (one at a time) opens as a new
-diagram; Mermaid, D2 and Structurizr are converted first. In the editor,
-the canvas menu's **Open file…** accepts a `.json` file:
+Home → **Import** (or dropping files on Home) takes `.json`, Excalidraw drawings (`.excalidraw`),
+plus diagram text in `.mmd`, `.mermaid`, `.d2`, `.dsl`, `.ofk` and `.txt` files. A text file (one at
+a time) opens as a new diagram; Mermaid, D2 and Structurizr are converted first. In the editor,
+the canvas menu's **Open file…** takes the same files. A `.json` file can be:
 
 - our own export, any schema version the app still supports — it is migrated on open;
 - a V1 OpenFlowKit file (`{ nodes, edges }`), projected onto the 2.0 document model one time.
+
+An Excalidraw drawing keeps its layout: each shape, arrow, text, freehand stroke, picture and
+frame lands where it was drawn, arrows stay tied to their shapes, and Excalidraw's default black
+ink follows the theme. Shapes copied in Excalidraw paste straight onto the canvas (`⌘V`). What
+has no counterpart (hatched fills, groups, filled lines, some arrowheads) is named in a toast.
 
 A document written by a newer app version opens read-only: the app preserves it instead of
 migrating it backwards. Opening never overwrites the document it came from: the file is saved
