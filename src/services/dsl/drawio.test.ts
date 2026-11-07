@@ -433,6 +433,7 @@ describe('draw.io colours in either theme', () => {
       box('black-on-pastel', 'fillColor=#dae8fc;fontColor=#000000;', 420, 0),
       box('black-on-teal', 'fillColor=#12b886;fontColor=#000000;', 560, 0),
       box('white-on-dark', 'fillColor=#333333;fontColor=#ffffff;', 700, 0),
+      box('black-on-deep', 'fillColor=#006666;fontColor=#000000;', 840, 0),
       box('hollow', 'fillColor=none;fontColor=#000000;', 0, 100),
       box('faint', 'fillColor=#a5d8ff;opacity=30;fontColor=#000000;', 140, 100),
       box('words', 'text;html=1;fontColor=#000000;', 280, 100),
@@ -461,16 +462,20 @@ describe('draw.io colours in either theme', () => {
     // Colours the author picked that read in both themes stay as picked.
     expect(nodes.get('black-on-teal')!.appearance.textColor).toBe('#000000');
     expect(nodes.get('white-on-dark')!.appearance.textColor).toBe('#ffffff');
+    // A deep fill stays solid in the dark theme, so the author's black on it stays as drawn.
+    expect(nodes.get('black-on-deep')!.appearance.textColor).toBe('#000000');
   });
 
   it('leaves draw.io’s default black lines to the theme, so they show on a dark canvas', async () => {
     const { document } = await open(model([
-      box('a', 'strokeColor=#000000;', 0, 0), box('b', 'strokeColor=#b85450;', 200, 0),
+      box('a', 'strokeColor=#000000;', 0, 0), box('b', 'strokeColor=#b85450;', 200, 0), box('c', 'strokeColor=#333333;', 400, 0),
       '<mxCell id="e" edge="1" source="a" target="b" parent="1" style="strokeColor=#000000;"><mxGeometry relative="1" as="geometry"/></mxCell>',
     ].join('')));
     const page = document.pages[0]!;
     expect(page.nodes.find((node) => node.id === 'a')!.appearance.stroke).not.toBe('#000000');
     expect(page.nodes.find((node) => node.id === 'b')!.appearance.stroke).toBe('#b85450');
+    // Near-black grey is draw.io's paper ink too: it follows the theme like black.
+    expect(page.nodes.find((node) => node.id === 'c')!.appearance.stroke).not.toBe('#333333');
     expect(page.connectors[0]!.appearance.stroke).toBeUndefined();
   });
 });

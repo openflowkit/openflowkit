@@ -12,7 +12,7 @@ import { CONTAINER_TITLE_HEIGHT } from '../../opencanvas/domain/nodes/nodeLabelB
 import { DEFAULT_NODE_SIZING_POLICY } from '../../opencanvas/domain/node-sizing/model';
 import { validateSceneDocumentV1 } from '../../opencanvas/domain/document/validation';
 import { resolveNodeStyle } from '../../opencanvas/domain/nodes/nodeStyle';
-import { darkInkReadsOn, paintOver } from '../../opencanvas/domain/color/adaptiveColor';
+import { DEFAULT_CANVAS_COLOR, darkInkReadsOn, paintOver } from '../../opencanvas/domain/color/adaptiveColor';
 import {
   drawioAnchor, drawioColor, drawioConnectorAppearance, drawioDarkInk, own, drawioErRelation, drawioImageUrl, drawioLabel, drawioNodeAppearance, drawioShape, drawioShapeName, type DrawioStyle,
 } from './drawioStyle';
@@ -68,6 +68,7 @@ const CONTAINER_KIND: Readonly<Record<string, string>> = { swimlane: 'swimlane',
 
 /** Our dark canvas: what shows through a see-through fill or a dark wash. */
 const DARK_CANVAS = '#191b19';
+const LIGHT_CANVAS = DEFAULT_CANVAS_COLOR;
 
 class PageBuilder {
   readonly cells = new Map<string, Cell>();
@@ -132,23 +133,28 @@ class PageBuilder {
   }
 
   /**
-   * draw.io's near-black ink is meant for a light page. It stays where it also reads on what our dark theme shows under
-   * the words (teal, a pastel lane seen through a washed white card); anywhere else it is left to the theme, so it turns
+   * draw.io's near-black ink is meant for a light page. It stays where the theme doesn't change what is under the words
+   * (a deep fill stays solid in both), or where it also reads on what our dark theme shows there (teal, a pastel lane seen through a washed white card); anywhere else it is left to the theme, so it turns
    * white on dark. What shows is the node's fill over its containers', bottom up: parents are placed before children,
    * so each backdrop is one lookup. ponytail: free text over a shape it isn't inside reads only its containers.
    */
   private inkForEitherTheme(): void {
     // Only containers and nodes with dark ink need a backdrop: resolving every node's style would slow a 50,000-cell file.
     const parents = new Set(this.nodes.map((node) => node.parentId));
-    const seen = new Map<string, string>();
+    const seen = new Map<string, { dark: string; light: string }>();
+    const over = (node: SceneNode, below: string, canvas: string) => {
+      if (node.kind === 'text') return below;
+      const { fill, opacity } = resolveNodeStyle(node, canvas);
+      return paintOver(fill, below, opacity);
+    };
     for (const [index, node] of this.nodes.entries()) {
       const ink = node.kind === 'text' ? node.content.customColor : node.appearance.textColor;
       if (!parents.has(node.id) && !drawioDarkInk(ink)) continue;
-      const below = (node.parentId && seen.get(node.parentId)) || DARK_CANVAS;
-      const { fill, opacity } = resolveNodeStyle(node, DARK_CANVAS);
-      const backdrop = node.kind === 'text' ? below : paintOver(fill, below, opacity);
+      const below = (node.parentId && seen.get(node.parentId)) || { dark: DARK_CANVAS, light: LIGHT_CANVAS };
+      const backdrop = { dark: over(node, below.dark, DARK_CANVAS), light: over(node, below.light, LIGHT_CANVAS) };
       seen.set(node.id, backdrop);
-      if (darkInkReadsOn(backdrop)) continue;
+      // Under words the theme doesn't change (a deep fill stays solid in both), the ink stays as the author drew it.
+      if (backdrop.dark === backdrop.light || darkInkReadsOn(backdrop.dark)) continue;
       if (node.kind === 'text' && drawioDarkInk(node.content.customColor)) {
         const { customColor: _ink, ...content } = node.content;
         this.nodes[index] = { ...node, content };

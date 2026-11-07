@@ -108,5 +108,7 @@ describe('drawioDarkInk', () => {
     expect(drawioNodeAppearance({ strokeColor: '#000000' }).stroke).toBeUndefined();
     expect(drawioNodeAppearance({ strokeColor: '#B85450' }).stroke).toBe('#b85450');
     expect(drawioConnectorAppearance({ strokeColor: '#000' }).stroke).toBeUndefined();
+    expect(drawioConnectorAppearance({ strokeColor: '#333333' }).stroke).toBeUndefined();
+    expect(drawioConnectorAppearance({ strokeColor: '#666666' }).stroke).toBe('#666666');
   });
 });

@@ -92,10 +92,10 @@ export function drawioColor(value: string | undefined): string | undefined {
   return /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(value) ? value.toLowerCase() : undefined;
 }
 
-/** A line colour: draw.io's default black is left unset, so lines follow our theme and show on a dark canvas. */
+/** A line colour: draw.io's default black (and near-black grey) is left unset, so lines follow our theme and show on a dark canvas. */
 const drawioLine = (value: string | undefined): string | undefined => {
   const color = drawioColor(value);
-  return color === '#000000' || color === '#000' ? undefined : color;
+  return drawioDarkInk(color) ? undefined : color;
 };
 
 /** A near-black grey (`#000` to `#555`): the ink draw.io writes by default, meant for a light page. */
