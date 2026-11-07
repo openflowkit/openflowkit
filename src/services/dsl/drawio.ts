@@ -66,6 +66,8 @@ const CONTAINER_KIND: Readonly<Record<string, string>> = { swimlane: 'swimlane',
 
 class PageBuilder {
   readonly cells = new Map<string, Cell>();
+  /** Parent id → its cells in file order, built once so nothing rescans the page. */
+  private readonly children = new Map<string, Cell[]>();
   readonly layers: SceneLayer[] = [];
   readonly nodes: SceneNode[] = [];
   readonly connectors: SceneConnector[] = [];
@@ -80,22 +82,23 @@ class PageBuilder {
     for (const cell of cells) {
       if (this.cells.has(cell.id)) { loss(`two cells share the id “${cell.id}”, so the later one was left out`); continue; }
       this.cells.set(cell.id, cell);
+      if (cell.parent !== null) {
+        const siblings = this.children.get(cell.parent);
+        if (siblings) siblings.push(cell);
+        else this.children.set(cell.parent, [cell]);
+      }
     }
   }
 
   build(): void {
     const root = [...this.cells.values()].find((cell) => cell.parent === null) ?? [...this.cells.values()].find((cell) => !this.cells.has(cell.parent ?? ''));
     // Only cells whose parent chain ends at the page's root are drawn; a loop or a missing parent never reaches it.
-    const reachesRoot = (cell: Cell): boolean => {
-      const seen = new Set<string>();
-      for (let at: Cell | undefined = cell; at && !seen.has(at.id); ) {
-        seen.add(at.id);
-        if (at.parent === root?.id) return true;
-        at = at.parent ? this.cells.get(at.parent) : undefined;
-      }
-      return false;
-    };
-    const stranded = [...this.cells.values()].filter((cell) => cell !== root && !reachesRoot(cell)).length;
+    // One walk down from the root finds them all, with a list for a stack so deep nesting can't overflow.
+    const attached = new Set<string>();
+    for (const queue = root ? [root.id] : []; queue.length; ) {
+      for (const child of this.childrenOf(queue.pop()!)) if (!attached.has(child.id)) { attached.add(child.id); queue.push(child.id); }
+    }
+    const stranded = this.cells.size - (root ? 1 : 0) - attached.size;
     if (stranded) {
       this.loss(stranded === 1
         ? '1 shape or connector sits in a parent loop or under a missing parent, so it was left out'
@@ -111,8 +114,8 @@ class PageBuilder {
       });
     }
     if (!this.layers.length) this.layers.push({ id: DEFAULT_SCENE_LAYER_ID, name: 'Default', visible: true, locked: false });
-    for (const [index, layer] of layerCells.entries()) this.addChildren(layer.id, null, layerIdOf(index, layer));
-    for (const cell of this.cells.values()) if (cell.edge && reachesRoot(cell)) this.addConnector(cell);
+    for (const [index, layer] of layerCells.entries()) this.addTree(layer.id, layerIdOf(index, layer));
+    for (const cell of this.cells.values()) if (cell.edge && attached.has(cell.id)) this.addConnector(cell);
     if (this.rerouted) this.loss(this.rerouted === 1 ? '1 right-angle connector is re-routed, so its bends may move' : `${this.rerouted} right-angle connectors are re-routed, so their bends may move`);
     if (this.libraryImages) {
       this.loss(`${this.libraryImages === 1 ? '1 picture comes' : `${this.libraryImages} pictures come`} from draw.io’s own image library, so ${this.libraryImages === 1 ? 'it is' : 'they are'} drawn as a box`);
@@ -122,13 +125,17 @@ class PageBuilder {
     }
   }
 
-  private childrenOf(id: string): Cell[] {
-    return [...this.cells.values()].filter((cell) => cell.parent === id);
+  private childrenOf(id: string): readonly Cell[] {
+    return this.children.get(id) ?? [];
   }
 
-  private addChildren(parentCellId: string, parentNodeId: string | null, layerId: string): void {
-    for (const cell of this.childrenOf(parentCellId)) {
-      if (cell.vertex) this.addNode(cell, parentNodeId, layerId);
+  /** A layer's shapes, each before its own children (so they draw on top), walked with a list for a stack. */
+  private addTree(layerCellId: string, layerId: string): void {
+    const pending = (parentCellId: string, parentNodeId: string | null) =>
+      this.childrenOf(parentCellId).filter((cell) => cell.vertex).reverse().map((cell) => ({ cell, parentNodeId }));
+    for (const stack = pending(layerCellId, null); stack.length; ) {
+      const { cell, parentNodeId } = stack.pop()!;
+      if (this.addNode(cell, parentNodeId, layerId)) stack.push(...pending(cell.id, cell.id));
     }
   }
 
@@ -165,9 +172,10 @@ class PageBuilder {
     return drawioLabel(this.valueOf(cell), cell.style) || cell.id;
   }
 
-  private addNode(cell: Cell, parentId: string | null, layerId: string): void {
+  /** Adds the cell's node; true when its children belong inside it. */
+  private addNode(cell: Cell, parentId: string | null, layerId: string): boolean {
     const geometry = cell.geometry;
-    if (!geometry) { this.loss(`“${this.labelOf(cell)}”: a shape without a position was left out`); return; }
+    if (!geometry) { this.loss(`“${this.labelOf(cell)}”: a shape without a position was left out`); return false; }
     const style = this.inherited(cell);
     const name = drawioShapeName(style);
     const label = drawioLabel(this.valueOf(cell), style);
@@ -175,7 +183,8 @@ class PageBuilder {
     let width = Math.max(1, geometry.width || 120);
     let height = Math.max(1, geometry.height || 60);
     const hasChildren = this.childrenOf(cell.id).some((child) => child.vertex);
-    const page: ScenePage = { id: '', name: '', diagramKind: 'flowchart', layers: this.layers, nodes: this.nodes, connectors: [], metadata: {}, extensions: {} };
+    // The node factories scan `page.nodes` for the next z-index, which `base` sets anyway: an empty page keeps this one pass.
+    const page: ScenePage = { id: '', name: '', diagramKind: 'flowchart', layers: this.layers, nodes: [], connectors: [], metadata: {}, extensions: {} };
     const base = { parentId, layerId, zIndex: this.nodes.length };
     // draw.io turns a shape about its centre; ours turn about the top-left corner, so the corner moves.
     // draw.io's triangle points east unless `direction` says otherwise; ours points north. Turning it east or
@@ -214,7 +223,7 @@ class PageBuilder {
       if (shape.kind === 'text' && !imageUrl) {
         // draw.io's `text` style sets its words top-left unless the cell says otherwise.
         this.addText({ ...cell, style: { align: 'left', verticalAlign: 'top', ...style } }, label, base, rotation);
-        return;
+        return false;
       }
       // A label set outside its shape (a checkbox's beside it, an icon's below) becomes its own text there;
       // a picture's always does, since our image node draws no label.
@@ -241,7 +250,7 @@ class PageBuilder {
       }
     }
     this.nodeIds.add(cell.id);
-    this.addChildren(cell.id, cell.id, layerId);
+    return true;
   }
 
   /**
@@ -257,7 +266,7 @@ class PageBuilder {
     const measured = measure(label);
     const box = { ...geometry!, ...this.placed(cell, geometry!) };
     // Wrapped text still never splits a word in draw.io: the box is at least its longest word wide.
-    const widest = style.whiteSpace === 'wrap' ? Math.max(...label.split(/\s+/).map((word) => measure(word).width)) : measured.width;
+    const widest = style.whiteSpace === 'wrap' ? label.split(/\s+/).reduce((most, word) => Math.max(most, measure(word).width), 0) : measured.width;
     // A text node wraps 8px inside each side. ponytail: the portable measure runs a few percent under the
     // canvas font, hence the 5% — measure with the canvas font if labels still break.
     const fit = (measuredWidth: number) => Math.ceil(measuredWidth * 1.05) + 20;

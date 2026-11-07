@@ -277,3 +277,35 @@ describe('draw.io import fits ordinary documents', () => {
     expect(result.losses).toEqual(expect.arrayContaining(['draw.io’s “constructor” shape is drawn as a box', 'draw.io’s “toString” shape is drawn as a box']));
   });
 });
+
+describe('big and deep draw.io files', () => {
+  const wrap = (cells: string[]) => `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${cells.join('')}</root></mxGraphModel>`;
+  const vertex = (id: string, parent: string, style = '') =>
+    `<mxCell id="${id}" value="${id}" style="${style}" vertex="1" parent="${parent}"><mxGeometry x="10" y="10" width="80" height="40" as="geometry"/></mxCell>`;
+
+  it('opens 50,000 cells in groups, with connectors, in one pass', async () => {
+    const cells: string[] = [];
+    for (let group = 0; group < 1_000; group += 1) {
+      cells.push(vertex(`g${group}`, '1', 'group'));
+      for (let box = 0; box < 25; box += 1) {
+        cells.push(vertex(`g${group}b${box}`, `g${group}`));
+        if (box) cells.push(`<mxCell id="g${group}e${box}" edge="1" source="g${group}b${box - 1}" target="g${group}b${box}" parent="g${group}"><mxGeometry relative="1" as="geometry"/></mxCell>`);
+      }
+    }
+    const text = wrap(cells);
+    const started = performance.now();
+    const { document } = await open(text);
+    expect(performance.now() - started).toBeLessThan(2_000);
+    expect(document.pages[0]!.nodes).toHaveLength(26_000);
+    expect(document.pages[0]!.connectors).toHaveLength(24_000);
+  });
+
+  it('opens groups nested 5,000 deep and a 100,000-word wrapped label without overflowing the stack', async () => {
+    const cells = [vertex('n0', '1')];
+    for (let depth = 1; depth < 5_000; depth += 1) cells.push(vertex(`n${depth}`, `n${depth - 1}`));
+    const words = Array.from({ length: 100_000 }, () => 'word').join(' ');
+    cells.push(`<mxCell id="t" value="${words}" style="text;whiteSpace=wrap" vertex="1" parent="1"><mxGeometry width="80" height="40" as="geometry"/></mxCell>`);
+    const { document } = await open(wrap(cells));
+    expect(document.pages[0]!.nodes).toHaveLength(5_001);
+  });
+});
