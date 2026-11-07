@@ -176,18 +176,37 @@ export function drawioConnectorAppearance(style: DrawioStyle): JsonObject {
   return appearance;
 }
 
+/** `<script>` and `<style>` bodies are code, not words: cut in one forward scan (a regex here goes quadratic on unclosed tags). */
+function withoutCode(value: string): string {
+  const lower = value.toLowerCase();
+  const opening = /<(script|style)\b/g;
+  let kept = '';
+  let at = 0;
+  for (let match = opening.exec(lower); match; match = opening.exec(lower)) {
+    kept += value.slice(at, match.index);
+    const close = lower.indexOf(`</${match[1]}`, match.index);
+    if (close === -1) return kept;
+    const end = lower.indexOf('>', close);
+    at = end === -1 ? value.length : end + 1;
+    opening.lastIndex = at;
+  }
+  return kept + value.slice(at);
+}
+
 /** A label as plain text: draw.io's `html=1` labels lose their markup, keeping line breaks. */
 export function drawioLabel(value: string | undefined, style: DrawioStyle): string {
   if (!value) return '';
   if (style.html !== '1') return value.trim();
   // A block (`Global<div>Partnerships</div>`) starts and ends a line: its edges mark a break, and the run of
   // marks between two blocks is one break. `<br>` is a break of its own, so `<br><br>` keeps its blank line.
-  const text = value
+  // Source whitespace collapses as a browser's would; `[^<>]` keeps a run of unclosed `<` linear, not quadratic.
+  const text = withoutCode(value)
+    .replace(/\s+/g, ' ')
     .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/?(div|p|li|h[1-6])\b[^>]*>/gi, '\ue000')
-    .replace(/<[^>]*>/g, '')
-    .replace(/\ue000+/g, '\n');
-  return decodeEntities(text).replace(/\u00a0/g, ' ').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+    .replace(/<\/?(div|p|li|ul|ol|h[1-6])\b[^<>]*>/gi, '\ue000')
+    .replace(/<[^<>]*>/g, '')
+    .replace(/ ?\ue000[\ue000 ]*/g, '\n');
+  return decodeEntities(text).replace(/\u00a0/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 /** Where draw.io pinned a line to a shape (`exitX/exitY` or `entryX/entryY`, 0 to 1): a side when on the outline, else a point inside. */

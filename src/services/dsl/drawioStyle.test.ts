@@ -77,4 +77,22 @@ describe('draw.io styles', () => {
     expect(drawioLabel('One<br><br>Two', html)).toBe('One\n\nTwo');
     expect(drawioLabel('  <b>as written</b> ', {})).toBe('<b>as written</b>');
   });
+
+  it('reads an html label the way a browser lays it out', () => {
+    const html = { html: '1' };
+    expect(drawioLabel('one\n  two   three', html)).toBe('one two three');
+    expect(drawioLabel('<ul><li>Apples</li><li>Pears</li></ul>', html)).toBe('Apples\nPears');
+    expect(drawioLabel('<style>b{color:red}</style><script>alert(1)</script>Kept', html)).toBe('Kept');
+    expect(drawioLabel('&lt;b&gt; stays text', html)).toBe('<b> stays text');
+    expect(drawioLabel('plain\nkeeps lines', {})).toBe('plain\nkeeps lines');
+  });
+
+  it('reads a hostile html label in linear time', () => {
+    const started = performance.now();
+    expect(drawioLabel('<'.repeat(200_000), { html: '1' })).toBe('<'.repeat(200_000));
+    expect(drawioLabel('<script>'.repeat(50_000) + 'x', { html: '1' })).toBe('');
+    expect(drawioLabel('<style></style>'.repeat(50_000) + 'y', { html: '1' })).toBe('y');
+    drawioLabel('<div>'.repeat(100_000) + '&amp;'.repeat(100_000), { html: '1' });
+    expect(performance.now() - started).toBeLessThan(500);
+  });
 });
