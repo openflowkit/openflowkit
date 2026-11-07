@@ -700,3 +700,28 @@ describe('Structurizr and D2 in', () => {
     expect(lintDsl('a -> b\nx: { shape: cylinder; near: top-center }')).toMatchObject({ ok: true, converted: { from: 'd2', losses: [{ line: 2, message: 'near dropped' }] } });
   });
 });
+
+describe('ids and palette across create, get and update', () => {
+  it('create_diagram returns the id the frame was placed under when the compiled id was taken', async () => {
+    const run = await host();
+    const first = await run.run('create_diagram', { dsl: FLOW });
+    const second = await run.run('create_diagram', { dsl: FLOW });
+    const ids = [first, second].map(({ output }) => (output as { frameId: string }).frameId);
+    expect(new Set(ids).size).toBe(2);
+    expect(ids).toEqual([run.frame(0).id, run.frame(1).id]);
+    // The returned id reaches the second frame: the agent's next call works.
+    await expect(run.run('get_diagram', { frameId: ids[1] })).resolves.toMatchObject({ output: { frameId: ids[1] } });
+  });
+
+  it('a palette named only by the op survives get_diagram then update_diagram with its text', async () => {
+    const run = await host();
+    const made = await run.run('create_diagram', { dsl: FLOW, palette: 'paper' });
+    const frameId = (made.output as { frameId: string }).frameId;
+    const fillOf = () => run.page().nodes.find((node) => node.content.label === 'Client')!.appearance.fill;
+    const drawn = fillOf();
+    const read = await run.run('get_diagram', { frameId });
+    await run.run('update_diagram', { frameId, dsl: (read.output as { dsl: string }).dsl });
+    expect(fillOf()).toBe(drawn);
+    expect(run.frame().metadata.dsl).toMatchObject({ appearance: { palette: 'paper' } });
+  });
+});
