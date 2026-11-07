@@ -143,7 +143,10 @@ test('the toolbar button shows how many threads are open, and the panel lists th
   await open(page);
   // Three are open (#1, #2, #4); #3 is resolved.
   const button = page.getByRole('button', { name: /^Threads, 3 open$/ });
-  await expect(button).toHaveAttribute('data-count', '3');
+  // The count is drawn on the button: a small neutral pill reading 3.
+  const badge = await button.evaluate((el) => { const after = getComputedStyle(el, '::after'); return { content: after.content, width: parseFloat(after.width), display: after.display }; });
+  expect(badge).toMatchObject({ content: '"3"', display: expect.not.stringMatching(/^none$/) });
+  expect(badge.width).toBeGreaterThan(8);
   await button.click();
   await expect(cards(page)).toHaveCount(3);
   // #1 replied 10m ago, #4 30m ago, #2 2h ago.

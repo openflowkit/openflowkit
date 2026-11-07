@@ -1004,6 +1004,13 @@
 .ofk-copy-feedback { display: block; color: var(--ofk-secondary); font-size: 11px; margin-top: 8px; }
 /* Rail: live dot on the agent button while connected. */
 .ofk-v2-workspace-rail .ofk-icon-button[data-live] { position: relative; }
+/* Rail: the open-thread count on the Threads button, a small neutral pill (the label carries it for screen readers). */
+.ofk-v2-workspace-rail .ofk-icon-button[data-count] { position: relative; }
+.ofk-v2-workspace-rail .ofk-icon-button[data-count]::after {
+  content: attr(data-count); position: absolute; top: 1px; right: 0; min-width: 16px; height: 16px; box-sizing: border-box; padding: 0 4px;
+  border-radius: 8px; background: var(--ofk-inverse); color: var(--ofk-onInverse); box-shadow: 0 0 0 2px var(--ofk-surface);
+  font-size: 10px; font-weight: 600; line-height: 16px; text-align: center; font-variant-numeric: tabular-nums; pointer-events: none;
+}
 .ofk-v2-workspace-rail .ofk-icon-button[data-live]::after { content: ''; position: absolute; top: 6px; right: 6px; width: 6px; height: 6px; border-radius: 50%; background: var(--ofk-success); box-shadow: 0 0 0 2px var(--ofk-surface); }
 
 /* Architecture model: one object, many views. */
