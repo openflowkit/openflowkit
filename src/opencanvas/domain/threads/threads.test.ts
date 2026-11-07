@@ -260,6 +260,9 @@ describe('comments and history', () => {
     session = undoSessionCommand(session, session.contentRevision);
     expect(page(session.document).name).toBe('Page 1');
     expect(page(session.document).threads).toHaveLength(1);
+    // A snapshot that differs only in its threads changes nothing a command can change.
+    const current = page(session.document);
+    expect(() => applyDocumentCommand(session.document, { kind: 'set-page', id: 'noop', label: 'Noop', pageId: 'page-1', before: current, after: { ...current, threads: [] } })).toThrow(/must change the page/);
   });
 
   it('deleting a page takes its threads; undoing the delete brings them back', () => {

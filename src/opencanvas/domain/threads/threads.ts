@@ -1,6 +1,6 @@
-// Threads pinned on a page. They are document data but not diagram content: commands never edit them
-// (page insert/remove keep a page's threads and renumber clashes, see withFreeThreadNumbers), so every
-// change goes through these functions and carryThreads keeps them across every command (applyDocumentCommand).
+// Threads pinned on a page. They are document data but not diagram content: commands never edit them, so every
+// change goes through these functions, and carryThreads keeps them across every command (applyDocumentCommand),
+// the one place that does: a page an undo brings back yields any id or number given out again since it went.
 import type { Point2d } from '../geometry/types';
 import { buildNodeWorldMatrices } from '../scene/worldGeometry';
 import { isIsoTimestamp } from '../document/validation';

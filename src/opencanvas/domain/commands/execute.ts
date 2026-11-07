@@ -1,6 +1,6 @@
 import type { SceneDocumentV1, ScenePage } from '../document/types';
 import { validateSceneDocumentV1 } from '../document/validation';
-import { carryThreads, withFreeThreadNumbers } from '../threads/threads';
+import { carryThreads } from '../threads/threads';
 import { areStructurallyEqual } from './equality';
 import type {
   AppliedDocumentCommand,
@@ -133,8 +133,9 @@ function applyRemoveLayer(
   return { document: next, inverse: { ...command, kind: 'insert-layer' } };
 }
 
-// Threads are not diagram content (see domain/threads): page preconditions ignore them, since threads
-// change outside history and a stored page copy holds the threads of its time.
+// Threads are not diagram content (see domain/threads): page commands ignore them, since threads change
+// outside history and a stored page copy holds the threads of its time. applyDocumentCommand puts the threads
+// of now back on every page (carryThreads), so the commands below need no thread rule of their own.
 function samePageContent(a: ScenePage | undefined, b: ScenePage): boolean {
   if (!a) return false;
   const { threads: _a, ...left } = a;
@@ -146,7 +147,7 @@ function applySetPage(document: SceneDocumentV1, command: SetPageCommand): Appli
   if (command.before.id !== command.after.id || command.pageId !== command.before.id) {
     throw new DocumentCommandError('set-page cannot change a page ID.');
   }
-  if (areStructurallyEqual(command.before, command.after)) {
+  if (samePageContent(command.before, command.after)) {
     throw new DocumentCommandError('set-page command must change the page.');
   }
   const index = document.pages.findIndex((page) => page.id === command.pageId);
@@ -154,10 +155,7 @@ function applySetPage(document: SceneDocumentV1, command: SetPageCommand): Appli
     throw new DocumentCommandError(`Page "${command.pageId}" precondition failed.`);
   }
   const pages = [...document.pages];
-  // The snapshot holds the threads of its time; the page keeps the ones it has now (numbers are unique across the document).
-  const { threads: _snapshot, ...shape } = command.after;
-  const current = document.pages[index]!;
-  pages[index] = current.threads ? { ...shape, threads: current.threads } : shape;
+  pages[index] = command.after;
   return {
     document: { ...document, pages },
     inverse: { ...command, before: command.after, after: command.before },
@@ -173,12 +171,10 @@ function applyInsertPage(
     throw new DocumentCommandError(`Page "${command.page.id}" already exists.`);
   }
   const pages = [...document.pages];
-  // A page coming back (undo of its removal) may hold thread numbers given out again since it went.
-  const page = withFreeThreadNumbers(document, command.page);
-  pages.splice(command.index, 0, page);
+  pages.splice(command.index, 0, command.page);
   return {
     document: { ...document, pages },
-    inverse: { ...command, kind: 'remove-page', page },
+    inverse: { ...command, kind: 'remove-page', page: command.page },
   };
 }
 
@@ -193,7 +189,6 @@ function applyRemovePage(
   }
   const pages = [...document.pages];
   pages.splice(command.index, 1);
-  // The inverse brings the page back with the threads it had when it went.
   return {
     document: { ...document, pages },
     inverse: { ...command, kind: 'insert-page', page: removed! },
