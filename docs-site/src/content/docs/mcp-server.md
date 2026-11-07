@@ -269,6 +269,7 @@ List threads — mirrors **Read threads** in a canvas gesture; read-only.
 | `threadId` | string *(optional)* |
 | `unanswered` | boolean *(default `false`)* |
 | `includeResolved` | boolean *(default `false`)* |
+| `limit` | number *(default `20`)* |
 
 ### `reply_to_thread`
 
