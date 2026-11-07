@@ -298,6 +298,22 @@ describe('comments and history', () => {
       expect(numbersById(session.document)).toEqual({ one: 1, three: 2, two: 3 });
     });
 
+    it('a page one step brings back yields its clashing numbers to the pages that kept theirs', () => {
+      // #1 on page 1, #2 on page 2. One step deletes page 2 and moves page 1 (remove, insert). A thread on page 1 gets #2. Undo.
+      let session = createDocumentSession(onPage(onPage(TWO_PAGES, 'page-1', 'one'), 'page-2', 'two'));
+      const [first, second] = session.document.pages;
+      session = commitSessionCommand(session, { kind: 'batch', id: 'tidy', label: 'Tidy', commands: [
+        { kind: 'remove-page', id: 'rm-2', label: 'Delete', index: 1, page: second! },
+        { kind: 'remove-page', id: 'rm-1', label: 'Move', index: 0, page: first! },
+        { kind: 'insert-page', id: 'add-1', label: 'Move', index: 0, page: first! },
+      ] }, session.contentRevision);
+      session = updateSessionThreads(session, (document) => onPage(document, 'page-1', 'three'), session.revision);
+      session = undoSessionCommand(session, session.contentRevision);
+      expect(numbersById(session.document)).toEqual({ one: 1, three: 2, two: 3 });
+      session = undoSessionCommand(redoSessionCommand(session, session.contentRevision), session.contentRevision + 1);
+      expect(numbersById(session.document)).toEqual({ one: 1, three: 2, two: 3 });
+    });
+
     it('a page snapshot taken before a thread was removed does not bring its numbers back', () => {
       // Rename page 1 (both snapshots hold #1), delete that thread, start another on page 2 (#1), undo the rename.
       let session = createDocumentSession(onPage(TWO_PAGES, 'page-1', 'T1'));

@@ -68,8 +68,9 @@ function refreshAnchors(page: ScenePage): ScenePage {
 
 /**
  * `next` with the threads of `current`: a command (a commit, an undo or redo, an agent op on a file) changes
- * shapes, never threads, even when it restores a whole page snapshot. Pages only in `next` keep their own.
- * Anchors then follow their nodes. Returns `next` itself when nothing changes.
+ * shapes, never threads, even when it restores a whole page snapshot. Pages only in `next` keep their own, but
+ * yield a number another page kept (withFreeThreadNumbers). Anchors then follow their nodes. Returns `next`
+ * itself when nothing changes.
  */
 export function carryThreads(next: SceneDocumentV1, current: SceneDocumentV1): SceneDocumentV1 {
   const currentById = new Map(current.pages.map((page) => [page.id, page]));
@@ -86,6 +87,16 @@ export function carryThreads(next: SceneDocumentV1, current: SceneDocumentV1): S
     result = refreshAnchors(result);
     if (result !== page) changed = true;
     return result;
+  });
+  // Pages only in `next` (inserted by this command) were numbered mid-batch, before the carry above gave the
+  // other pages their threads of now: they yield any number those hold. One at a time, so two of them never
+  // take the same free number.
+  pages.forEach((page, index) => {
+    if (currentById.has(page.id) || !page.threads) return;
+    const free = withFreeThreadNumbers({ ...next, pages: pages.filter((_, other) => other !== index) }, page);
+    if (free === page) return;
+    pages[index] = free;
+    changed = true;
   });
   return changed ? { ...next, pages } : next;
 }
