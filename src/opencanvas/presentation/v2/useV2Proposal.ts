@@ -90,7 +90,7 @@ export function useV2Proposal(options: V2ProposalOptions) {
       if (!changes.length) throw new Error('The diagram already matches this request.');
       const bound = next.flatMap((draft) => ('frameId' in draft && draft.frameId ? [draft.frameId] : []));
       const proposal = createProposal({
-        document, revision: contentRevision, source: request.source ?? 'byok', intent: request.intent,
+        document, contentRevision, source: request.source ?? 'byok', intent: request.intent,
         scope: { kind: request.scope ?? (bound.length ? 'selection' : 'page'), pageId, objectIds: bound },
         changes,
       });

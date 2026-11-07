@@ -47,17 +47,17 @@ async function threeChanges(document: SceneDocumentV1) {
 }
 
 async function build(document = fixture(), revision = 4) {
-  return createProposal({ document, revision, source: 'byok', scope: { kind: 'selection', pageId: 'page-1', objectIds: ['a'] },
+  return createProposal({ document, contentRevision: revision, source: 'byok', scope: { kind: 'selection', pageId: 'page-1', objectIds: ['a'] },
     intent: 'add-step-after-selection', changes: await threeChanges(document) });
 }
 
 describe('proposal session', () => {
   it('rejects empty and duplicate change sets', async () => {
     const document = fixture();
-    expect(createProposal({ document, revision: 0, source: 's', scope: PAGE, intent: 'test', changes: [] }).error?.code)
+    expect(createProposal({ document, contentRevision: 0, source: 's', scope: PAGE, intent: 'test', changes: [] }).error?.code)
       .toBe('INVALID_PROPOSAL');
     const [change] = await threeChanges(document);
-    expect(createProposal({ document, revision: 0, source: 's', scope: PAGE, intent: 'test', changes: [change, change] })
+    expect(createProposal({ document, contentRevision: 0, source: 's', scope: PAGE, intent: 'test', changes: [change, change] })
       .error?.code).toBe('INVALID_PROPOSAL');
   });
 
@@ -117,7 +117,7 @@ describe('proposal session', () => {
     session = updateSessionThreads(session, (document) => addThread(document, {
       pageId: 'page-1', threadId: 't1', nodeId: 'a', point: { x: 5, y: 5 },
       comment: { id: 'm1', author: { kind: 'human', name: 'Ada' }, body: 'Is this right?', createdAt: '2026-10-26T12:00:00.000Z' },
-    }), session.revision);
+    }));
     const command = applyCommand(proposal, session.contentRevision, session.document)!;
     session = commitSessionCommand(session, command, proposal.baseRevision);
     const nodeIds = (document: SceneDocumentV1) => document.pages[0]!.nodes.map(({ id }) => id);
@@ -137,7 +137,7 @@ describe('proposal session', () => {
       { id: 'k', explanation: 'Link.', command: connect(document, 'ab', 'a', 'b') },
       { id: 'd', explanation: 'Drop.', command: await agent('delete', { ids: ['z'] }, document) },
     ];
-    const proposal = createProposal({ document, revision: 0, source: 's', scope: PAGE, intent: 'test', changes });
+    const proposal = createProposal({ document, contentRevision: 0, source: 's', scope: PAGE, intent: 'test', changes });
     expect(proposal.error).toBeUndefined();
     const command = applyCommand(proposal, 0, document) as BatchDocumentCommand;
     expect(command.commands.every(({ kind }) => kind !== 'batch')).toBe(true);
