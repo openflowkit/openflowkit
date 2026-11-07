@@ -431,3 +431,18 @@ test('a card opened beside the selection bar is not cut by it', { tag: '@gate' }
   expect(y).toBeLessThan(Math.min(a.y + a.height, b.y + b.height));
   expect(await page.evaluate(([px, py]) => !!document.elementFromPoint(px!, py!)?.closest('[data-comment-open]'), [x, y])).toBe(true);
 });
+
+test('a focused comment field has one focus treatment: the field\'s, never an outline on the textarea', { tag: '@gate' }, async ({ page }) => {
+  const { centre } = await start(page);
+  await comment(page, centre, 'A thread to reply to');
+  await page.keyboard.press('v');
+  await page.locator('.ofk-comment-pin[data-thread-id]').click();
+  const reply = page.getByTestId('v2-comment-thread').getByRole('textbox', { name: 'Reply' });
+  await reply.click();
+  await reply.fill('typing');
+  await expect(reply).toBeFocused();
+  const outline = await reply.evaluate((el) => getComputedStyle(el).outlineStyle);
+  expect(outline).toBe('none');
+  const field = await reply.evaluate((el) => getComputedStyle(el.parentElement!).boxShadow);
+  expect(field).not.toBe('none');
+});
