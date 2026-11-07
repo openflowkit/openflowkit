@@ -11,6 +11,12 @@ const body = () => z.string().min(1).max(COMMENT_BODY_MAX).describe(`Plain text,
 const author = (context: OpContext): SceneCommentAuthor => ({ kind: 'agent', name: agentName(context.client) });
 const stamp = () => ({ id: crypto.randomUUID(), createdAt: new Date().toISOString() });
 
+function requireThread(document: OpContext['document'], threadId: string) {
+  const found = findThread(document, threadId);
+  if (!found) throw new ThreadError(`Unknown thread "${threadId}".`);
+  return found;
+}
+
 /** A body in a listing of several threads is cut past this many characters; one thread (`threadId`) reads in full. */
 export const LISTED_BODY_MAX = 500;
 
@@ -66,12 +72,12 @@ export const replyToThread = defineOp({
     + 'A new comment reopens a resolved thread. Takes no undo step.',
   schema: z.object({ threadId: z.string().min(1), body: body() }),
   async run({ threadId, body: text }, context) {
-    if (!findThread(context.document, threadId)) throw new ThreadError(`Unknown thread "${threadId}".`);
+    const { thread } = requireThread(context.document, threadId);
     const comment = { ...stamp(), author: author(context), body: text };
     return {
       command: null,
       threads: (document) => addComment(document, threadId, comment),
-      output: { threadId, commentId: comment.id },
+      output: { threadId, number: thread.number, commentId: comment.id },
     };
   },
 });
@@ -82,11 +88,11 @@ export const resolveThread = defineOp({
   description: 'Mark a thread resolved (it leaves the canvas but stays in the file), or reopen it with resolved: false.',
   schema: z.object({ threadId: z.string().min(1), resolved: z.boolean().default(true) }),
   async run({ threadId, resolved }, context) {
-    if (!findThread(context.document, threadId)) throw new ThreadError(`Unknown thread "${threadId}".`);
+    const { thread } = requireThread(context.document, threadId);
     return {
       command: null,
       threads: (document) => setThreadResolved(document, threadId, resolved),
-      output: { threadId, resolved },
+      output: { threadId, number: thread.number, resolved },
     };
   },
 });

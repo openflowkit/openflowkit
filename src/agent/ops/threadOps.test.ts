@@ -70,6 +70,8 @@ describe('thread ops, file mode', () => {
     expect(thread.resolved).toBe(false);
     expect(thread.comments.map(({ body }) => body)).toEqual(['first', 'again']);
     expect(thread.comments[1]!.author).toEqual({ kind: 'agent', name: 'Cursor' });
+    expect((await file(resolved, 'reply_to_thread', { threadId, body: 'and' })).output).toMatchObject({ threadId, number: 1 });
+    expect((await file(started, 'resolve_thread', { threadId })).output).toEqual({ threadId, number: 1, resolved: true });
     const reopened = (await file(resolved, 'resolve_thread', { threadId, resolved: false })).document;
     expect(pageThreads(reopened.pages[0]!)[0]!.resolved).toBe(false);
     await expect(file(started, 'reply_to_thread', { threadId: 'ghost', body: 'x' })).rejects.toThrow(/ghost/);

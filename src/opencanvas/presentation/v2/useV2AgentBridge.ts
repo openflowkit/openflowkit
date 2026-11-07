@@ -90,6 +90,17 @@ export function agentDid(op: string, input: unknown, label: string): string {
   }
 }
 
+/** What a thread write did, as a person would say it ("commented on #3"), after the agent's name; null for other ops. */
+export function agentCommented(op: string, output: unknown): string | null {
+  const { number, resolved } = (output && typeof output === 'object' ? output : {}) as { number?: unknown; resolved?: unknown };
+  if (typeof number !== 'number') return null;
+  switch (op) {
+    case 'start_thread': case 'reply_to_thread': return `commented on #${number}`;
+    case 'resolve_thread': return `${resolved === false ? 'reopened' : 'resolved'} #${number}`;
+    default: return null;
+  }
+}
+
 let tab = '';
 /** One id per tab, kept across reloads, so the server can tell this tab's polls from another's. */
 export function bridgeTabId(): string {
@@ -196,7 +207,7 @@ export function useV2AgentBridge(options: V2AgentBridgeOptions): V2AgentBridge {
         let result: { id: string; ok: boolean; output?: unknown; error?: string };
         try {
           const { command, output } = await runLiveAgentOp(() => optionsRef.current, request.op, request.input, request.pageId, undefined, request.client);
-          const did = command ? agentDid(request.op, request.input, command.label) : null;
+          const did = command ? agentDid(request.op, request.input, command.label) : agentCommented(request.op, output);
           setActivity((last) => ({ agent, doing: null, change: command && did ? { label: did, id: command.id } : last?.change ?? null }));
           optionsRef.current.onActivity(did ? `${agent} ${did}.` : `${agent} ran ${request.op}.`);
           result = { id: request.id, ok: true, output };
