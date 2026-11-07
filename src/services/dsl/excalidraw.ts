@@ -12,13 +12,15 @@ import { createShapeNode, type ShapeKind } from '../../opencanvas/domain/nodes/s
 import { cellRange } from '../../opencanvas/domain/scene/spatialIndex';
 import { measurePortableText } from '../../opencanvas/domain/text/measurement';
 import {
-  excalidrawColor, excalidrawConnectorAppearance, excalidrawFont, excalidrawHead, excalidrawNodeAppearance,
+  excalidrawColor, excalidrawConnectorAppearance, excalidrawFont, excalidrawHead, excalidrawNodeAppearance, excalidrawOpacity,
   excalidrawStrokeContent, excalidrawWordInk, finite, text, type ExcalidrawElement,
 } from './excalidrawStyle';
 
 // An Excalidraw drawing (`.excalidraw`, or the `excalidraw/clipboard` JSON its copy puts on the clipboard)
 // as OpenFlowKit nodes and connectors. A drawing is placed by hand, so it is mapped one element to one node,
-// never through DSL and the layout. What has no counterpart is listed in `losses`, never silently dropped.
+// never through DSL and the layout. What changes what the drawing shows (a fill, a head, a picture's crop, a
+// group, an element left out) is named in `losses`. The hand-drawn look comes across clean and unnamed: the
+// wobble (roughness), outline or filled heads, an elbow arrow's own route, and locks.
 
 export type ExcalidrawImport =
   | { readonly document: SceneDocumentV1; readonly losses: readonly string[] }
@@ -63,6 +65,15 @@ const pointsOf = (element: ExcalidrawElement): Point2d[] =>
 
 const lowest = (points: readonly Point2d[]): Point2d =>
   points.length ? { x: Math.min(...points.map((point) => point.x)), y: Math.min(...points.map((point) => point.y)) } : { x: 0, y: 0 };
+
+/** Excalidraw fills a line or stroke that closes on itself (its ends within 8 px), or a line it calls a polygon. */
+function filledLoop(element: ExcalidrawElement, points: readonly Point2d[]): boolean {
+  const fill = excalidrawColor(element.backgroundColor);
+  if (!fill || fill === 'transparent') return false;
+  const first = points[0];
+  const last = points[points.length - 1];
+  return element.polygon === true || (points.length >= 3 && Math.hypot(first!.x - last!.x, first!.y - last!.y) <= 8);
+}
 
 /** A line's or arrow's points, turned by its angle about their centre, as Excalidraw draws them. */
 function turnedPoints(element: ExcalidrawElement): Point2d[] {
@@ -146,7 +157,8 @@ class SceneBuilder {
     this.page = { layers: [{ id: layerId }], nodes: [] } as unknown as ScenePage;
     const groups = new Set<string>();
     for (const element of scene.elements) {
-      if (element.isDeleted === true || typeof element.id !== 'string') continue;
+      if (element.isDeleted === true) continue;
+      if (typeof element.id !== 'string' || !element.id.trim()) { this.lose('elements without an id were left out'); continue; }
       if (this.byId.has(element.id)) { this.lose('elements sharing an earlier element’s id were left out'); continue; }
       this.byId.set(element.id, element);
       if (element.type === 'text' && typeof element.containerId === 'string') {
@@ -245,6 +257,7 @@ class SceneBuilder {
       // Fixed-width text (autoResize false) is wrapped by Excalidraw to its box: those lines, not one long one.
       const label = wordsOf(element, element.autoResize === false);
       const fontSize = finite(element.fontSize, 20);
+      const alpha = excalidrawOpacity(element);
       const widest = Math.max(0, ...label.split('\n').map((line) => measurePortableText(line, { fontSize, fontWeight: 400 }).width));
       const width = Math.max(at.size.width + 16, Math.ceil(widest * (excalidrawFont(element.fontFamily) === 'hand' ? 1.25 : 1.05)) + 20);
       return {
@@ -256,13 +269,17 @@ class SceneBuilder {
           fontFamily: excalidrawFont(element.fontFamily), fontWeight: '400',
           ...(ink ? { customColor: ink } : {}),
         },
-        appearance: element.textAlign === 'left' ? { textAlign: 'start' } : element.textAlign === 'right' ? { textAlign: 'end' } : {},
+        appearance: {
+          ...(element.textAlign === 'left' ? { textAlign: 'start' } : element.textAlign === 'right' ? { textAlign: 'end' } : {}),
+          ...(alpha !== undefined ? { opacity: alpha } : {}),
+        },
         ports: [], metadata: {}, extensions: {},
       };
     }
     if (type === 'freedraw') {
       const points = pointsOf(element);
       const low = lowest(points);
+      if (filledLoop(element, points)) this.lose('filled lines are drawn as outlines');
       return {
         id: at.id, kind: 'pen', parentId: null, layerId: this.layerId, zIndex: 0,
         transform: { translation: at.at, rotationRadians: 0, scale: { x: 1, y: 1 } }, size: at.size,
@@ -273,7 +290,13 @@ class SceneBuilder {
     if (type === 'image') {
       const file = this.scene.files[text(element.fileId)] as { dataURL?: unknown } | undefined;
       const url = text(file?.dataURL);
-      if (/^data:image\//.test(url)) return createImageNode(this.page, { id: at.id, at: at.at, size: at.size, label: at.label || 'Image', url });
+      if (/^data:image\//.test(url)) {
+        const flipped = Array.isArray(element.scale) && element.scale.some((factor) => typeof factor === 'number' && factor < 0);
+        if (flipped || (element.crop && typeof element.crop === 'object')) this.lose('cropped or flipped pictures come in whole and unflipped');
+        const node = createImageNode(this.page, { id: at.id, at: at.at, size: at.size, label: at.label || 'Image', url });
+        const alpha = excalidrawOpacity(element);
+        return alpha === undefined ? node : { ...node, content: { ...node.content, transparency: alpha } };
+      }
       this.lose('a picture whose file isn’t in the drawing is drawn as a box');
     } else if (type === 'frame' || type === 'magicframe') {
       return {
@@ -299,6 +322,7 @@ class SceneBuilder {
     const y = finite(element.y);
     const points = turnedPoints(element);
     if (points.length < 2) { this.lose('an arrow without two points was left out'); return; }
+    if (element.type === 'line' && filledLoop(element, points)) this.lose('filled lines are drawn as outlines');
     const startId = bindingOf(element.startBinding);
     const endId = bindingOf(element.endBinding);
     const bound = (startId !== null && this.nodeIds.has(startId)) || (endId !== null && this.nodeIds.has(endId));

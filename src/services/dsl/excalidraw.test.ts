@@ -201,7 +201,9 @@ describe('excalidrawToDocument', () => {
     expect(labelled('CDN')).toMatchObject({ kind: 'text', content: { fontFamily: 'hand', fontSize: 20 } });
     const gateway = labelled('API\nGateway')!;
     expect(page!.connectors.filter((connector) => connector.target.nodeId === gateway.id)).toHaveLength(4);
-    expect(losses).toEqual(['groups come in as separate shapes (18 times)', 'hatched fills are drawn solid (17 times)']);
+    expect(losses).toEqual([
+      'groups come in as separate shapes (18 times)', 'hatched fills are drawn solid (17 times)', 'filled lines are drawn as outlines (3 times)',
+    ]);
   });
 
   it('opens real exports whose words and arrows are loose, not bound', () => {
@@ -242,6 +244,30 @@ describe('excalidrawToDocument', () => {
     expect(losses).toEqual([
       'links on shapes were left out', 'elements sharing an earlier element’s id were left out',
       'a second text bound to the same shape was left out', 'groups come in as separate shapes (2 times)',
+    ]);
+  });
+
+  it('names a fill it can’t draw, a cropped or flipped picture and an element without an id; keeps text and picture opacity', () => {
+    const loop = [[0, 0], [80, -40], [160, 0], [80, 60], [0, 0]];
+    const { document, losses } = open(file([
+      // Excalidraw fills a line or a stroke that closes on itself; ours draw only the outline.
+      { ...base, id: 'poly', type: 'line', x: 0, y: 0, width: 160, height: 100, backgroundColor: '#40c057', points: loop },
+      { ...base, id: 'blob', type: 'freedraw', x: 200, y: 0, width: 160, height: 100, backgroundColor: '#ffc9c9', points: loop },
+      { ...base, id: 'shape', type: 'line', x: 400, y: 0, width: 160, height: 40, backgroundColor: '#a5d8ff', polygon: true, points: [[0, 0], [80, 40], [160, 0]] },
+      // An open line has nothing to fill, whatever its background says.
+      { ...base, id: 'open', type: 'line', x: 0, y: 200, width: 160, height: 40, backgroundColor: '#40c057', points: [[0, 0], [80, 40], [160, 0]] },
+      { ...base, id: 'pic', type: 'image', x: 0, y: 300, width: 64, height: 64, fileId: 'f', opacity: 50, scale: [-1, 1], crop: null },
+      { ...base, id: 'cut', type: 'image', x: 100, y: 300, width: 64, height: 64, fileId: 'f', crop: { x: 0, y: 0, width: 32, height: 32 } },
+      { ...base, id: 'faint', type: 'text', x: 0, y: 400, width: 60, height: 25, text: 'faint', originalText: 'faint', opacity: 40 },
+      { ...base, id: '', type: 'rectangle', x: 0, y: 500, width: 10, height: 10 },
+      { ...base, id: 7, type: 'rectangle', x: 0, y: 500, width: 10, height: 10 },
+    ], { f: { dataURL: 'data:image/png;base64,iVBOR' } }));
+    const node = (id: string) => document.pages[0]!.nodes.find((candidate) => candidate.id === id)!;
+    expect(node('pic').content.transparency).toBe(0.5);
+    expect(node('faint').appearance.opacity).toBe(0.4);
+    expect(losses).toEqual([
+      'elements without an id were left out (2 times)', 'filled lines are drawn as outlines (3 times)',
+      'cropped or flipped pictures come in whole and unflipped (2 times)',
     ]);
   });
 

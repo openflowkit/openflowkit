@@ -38,6 +38,9 @@ export interface ExcalidrawElement {
   readonly endArrowhead?: unknown;
   readonly elbowed?: unknown;
   readonly fileId?: unknown;
+  readonly crop?: unknown;
+  readonly scale?: unknown;
+  readonly polygon?: unknown;
   readonly link?: unknown;
   readonly groupIds?: unknown;
 }
@@ -78,7 +81,8 @@ export function excalidrawFont(value: unknown): 'hand' | 'mono' | 'sans' {
   return 'sans';
 }
 
-const opacity = (element: ExcalidrawElement): number | undefined => {
+/** Excalidraw's 0–100 opacity as our 0–1, or undefined when fully opaque. */
+export const excalidrawOpacity = (element: ExcalidrawElement): number | undefined => {
   const value = finite(element.opacity, 100);
   return value < 100 ? Math.max(0, value) / 100 : undefined;
 };
@@ -92,7 +96,7 @@ export function excalidrawNodeAppearance(element: ExcalidrawElement, label?: Exc
   if (stroke) appearance.stroke = stroke;
   if (typeof element.strokeWidth === 'number') appearance.strokeWidth = finite(element.strokeWidth, 2);
   if (element.strokeStyle === 'dashed' || element.strokeStyle === 'dotted') appearance.strokeStyle = element.strokeStyle;
-  const alpha = opacity(element);
+  const alpha = excalidrawOpacity(element);
   if (alpha !== undefined) appearance.opacity = alpha;
   if (label) {
     // Default ink is the builder's call: it alone knows whether the fill stays solid on a dark canvas.
@@ -127,7 +131,7 @@ export function excalidrawConnectorAppearance(element: ExcalidrawElement): Recor
   if (stroke) appearance.stroke = stroke;
   if (typeof element.strokeWidth === 'number') appearance.strokeWidth = finite(element.strokeWidth, 2);
   if (element.strokeStyle === 'dashed' || element.strokeStyle === 'dotted') appearance.dashPattern = element.strokeStyle;
-  const alpha = opacity(element);
+  const alpha = excalidrawOpacity(element);
   if (alpha !== undefined) appearance.opacity = alpha;
   return appearance;
 }
@@ -135,7 +139,7 @@ export function excalidrawConnectorAppearance(element: ExcalidrawElement): Recor
 /** A freehand stroke's or loose line's paint, in the keys our pen and line nodes read from `content`. */
 export function excalidrawStrokeContent(element: ExcalidrawElement): JsonObject {
   const stroke = excalidrawInk(element.strokeColor);
-  const alpha = opacity(element);
+  const alpha = excalidrawOpacity(element);
   return {
     ...(stroke ? { strokeColor: stroke } : {}),
     strokeWidth: finite(element.strokeWidth, 2),
