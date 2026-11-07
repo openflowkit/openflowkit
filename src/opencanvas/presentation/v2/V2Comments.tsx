@@ -159,7 +159,6 @@ export const V2Comments = memo(function V2Comments(props: Props): React.JSX.Elem
   const [open, setOpen] = useState<Open | null>(null);
   const [now, setNow] = useState(() => Date.now());
   // The loop reads the refs when a frame runs, never during render.
-  // eslint-disable-next-line react-hooks/refs -- only handed over here; a frame reads them
   const [placement] = useState(() => placementFor(cameraRef, hostRef));
   useEffect(() => () => placement.stop(), [placement]);
   useEffect(() => subscribeCamera(() => placement.kick()), [placement, subscribeCamera]);
@@ -215,7 +214,6 @@ export const V2Comments = memo(function V2Comments(props: Props): React.JSX.Elem
   useEffect(() => { latest.current = { open, tool, readOnly, hidden, updateThreads }; });
   // Unsent text by box, kept for the editor's life; whether a click away has already warned about the open box's.
   const guard = useRef<DraftGuard>(FRESH_GUARD);
-  // eslint-disable-next-line react-hooks/refs -- only handed over here; a later keystroke writes it
   const [drafts] = useState(() => new CommentDrafts(() => { guard.current = typed(guard.current); }));
   useEffect(() => { guard.current = FRESH_GUARD; }, [open]);
   const pageId = page.id;
@@ -290,7 +288,6 @@ export const V2Comments = memo(function V2Comments(props: Props): React.JSX.Elem
 
   // A pin pressed and moved past DRAG_PX is carried with the pointer and dropped somewhere else: under a node it follows it, on empty canvas it is a page pin.
   const [drag, setDrag] = useState<{ id: string; world: Point2d } | null>(null);
-  // eslint-disable-next-line react-hooks/refs -- only handed over here; a pin's event reads them
   const [actions] = useState(() => pinActions(latest, sectionRef, hostRef, setDrag, setOpen));
 
   const message = useCallback((body: string) => ({ id: mintV2Id('msg'), author: HUMAN_AUTHOR, body, createdAt: new Date().toISOString() }), []);
