@@ -2,6 +2,7 @@ import { isJsonObject } from '../../../opencanvas/domain/document/json';
 import { UNTITLED_DOCUMENT_NAME } from '../../../opencanvas/domain/document/defaults';
 import type { SceneDocumentV1 } from '../../../opencanvas/domain/document/types';
 import { drawioToDocument, looksLikeDrawio } from '../../dsl/drawio';
+import { drawioFromPng, drawioFromSvg } from '../../dsl/drawioFile';
 import { documentFromFileText } from './openDocumentFile';
 import { isV1Backup, openV1Backup } from './v1Import';
 import type { V2DocumentRepository } from './v2Repository';
@@ -63,6 +64,13 @@ export function importSummary(report: ImportReport): string {
 }
 export const MAX_IMPORT_CHARS = 2_000_000;
 const withoutExtension = (name: string) => name.replace(/(\.drawio)?\.[^.]+$/i, '');
+const IMAGE = /\.(png|svg)$/i;
+
+/** The draw.io XML in a file — the file itself, or what a draw.io PNG or SVG export carries — else null. */
+async function drawioIn(file: File, text: string): Promise<string | null> {
+  if (/\.png$/i.test(file.name)) return drawioFromPng(new Uint8Array(await file.arrayBuffer()));
+  return looksLikeDrawio(text) ? text : drawioFromSvg(text);
+}
 const SOURCE = /\.(mmd|mermaid|d2|dsl|ofk|txt)$/i;
 
 /** "3 things didn’t come across: a; b; c." — the first few, so a toast stays readable. */
@@ -104,9 +112,11 @@ export async function importFiles(files: readonly File[], repository: V2Document
   // Anything that isn't a text diagram is read as JSON, as Open file… always did: a renamed backup still opens.
   for (const file of files.filter((candidate) => !SOURCE.test(candidate.name))) {
     try {
-      const text = await file.text();
-      if (looksLikeDrawio(text)) {
-        const imported = await drawioToDocument(text, mintId());
+      const text = /\.png$/i.test(file.name) ? '' : await file.text();
+      const drawio = await drawioIn(file, text);
+      if (drawio === null && IMAGE.test(file.name)) { problems.push(`${file.name}: It’s an image with no draw.io diagram in it.`); continue; }
+      if (drawio !== null) {
+        const imported = await drawioToDocument(drawio, mintId());
         if ('error' in imported) { problems.push(`${file.name}: ${imported.error}`); continue; }
         if (imported.losses.length) losses.push(`${file.name}: ${lossNote(imported.losses)}`);
         await save({ ...imported.document, name: withoutExtension(file.name) }, file.name);

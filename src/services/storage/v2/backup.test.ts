@@ -12,6 +12,8 @@ let counter = 0;
 const mint = () => `new-${(counter += 1)}`;
 // jsdom's File has no text().
 const fileOf = (text: string, name: string) => Object.assign(new File([text], name), { text: async () => text });
+// jsdom's File has no arrayBuffer(); a browser's does.
+const bytesOf = (bytes: Uint8Array, name: string) => Object.assign(new File([bytes], name), { arrayBuffer: async () => bytes.slice().buffer });
 const named = (id: string, name: string) => ({ ...createTestDocument(), id, name });
 
 beforeEach(async () => {
@@ -82,6 +84,21 @@ describe('importFiles', () => {
     expect(report.documents[0]!.pages).toHaveLength(2);
     expect(report).toMatchObject({ notes: [] });
     expect(report.losses).toEqual(['checkout.drawio: 1 thing didn’t come across: Services: draw.io’s “mxgraph.aws4.lambda_function” shape is drawn as a box.']);
+  });
+
+  it('opens the diagram a draw.io SVG or PNG export carries, named without .drawio', async () => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" content="${drawio.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')}"></svg>`;
+    const text = `mxfile\0${encodeURIComponent(drawio)}`;
+    const chunk = (type: string, data: number[]) => [0, 0, (data.length >> 8) & 255, data.length & 255, ...[...type].map((c) => c.charCodeAt(0)), ...data, 0, 0, 0, 0];
+    const png = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10, ...chunk('tEXt', [...text].map((c) => c.charCodeAt(0))), ...chunk('IEND', [])]);
+    const report = await importFiles([fileOf(svg, 'checkout.drawio.svg'), bytesOf(png, 'flow.drawio.png')], repository(), mint);
+    expect(report).toMatchObject({ count: 2, problems: [] });
+    expect(report.documents.map((document) => [document.name, document.pages.length])).toEqual([['checkout', 2], ['flow', 2]]);
+  });
+
+  it('says an image without a draw.io diagram has none', async () => {
+    const report = await importFiles([fileOf('<svg xmlns="http://www.w3.org/2000/svg"/>', 'logo.svg'), bytesOf(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]), 'shot.png')], repository(), mint);
+    expect(report).toMatchObject({ count: 0, problems: ['logo.svg: It’s an image with no draw.io diagram in it.', 'shot.png: It’s an image with no draw.io diagram in it.'] });
   });
 
   it('says why a broken draw.io file did not open', async () => {

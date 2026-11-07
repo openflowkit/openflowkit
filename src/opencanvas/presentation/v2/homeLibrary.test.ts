@@ -51,9 +51,10 @@ describe('homeLibrary', () => {
   });
 
   it('knows which files Import can open', () => {
-    expect([importKind('a.JSON'), importKind('flow.mmd'), importKind('x.d2'), importKind('w.dsl'), importKind('pic.png'), importKind('noext')])
+    expect([importKind('a.JSON'), importKind('flow.mmd'), importKind('x.d2'), importKind('w.dsl'), importKind('pic.jpg'), importKind('noext')])
       .toEqual(['json', 'source', 'source', 'source', null, null]);
-    expect([importKind('sketch.excalidraw'), importKind('map.drawio'), importKind('export.XML')]).toEqual(['json', 'json', 'json']);
+    expect([importKind('sketch.excalidraw'), importKind('map.drawio'), importKind('export.XML'), importKind('map.drawio.png'), importKind('map.drawio.svg')])
+      .toEqual(['json', 'json', 'json', 'json', 'json']);
   });
 
   it('filters by view and search, keeps saved order or sorts by name naturally', () => {
