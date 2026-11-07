@@ -1,0 +1,45 @@
+page "Page 1": 1 layer(s), 30 nodes, 13 connectors
+  section @340,290 480x430 fill transparent
+  section "AWS Cloud" @50,80 780x650 fill transparent
+  section "AWS Cloud" @850,80 270x650 fill transparent
+  process rectangle @90,140 78x78 fill #277116 ink #232f3e
+  text "Object" @90,220 78x19
+  process rectangle @210,140 75x78 fill #277116 ink #232f3e
+  text "Bucket" @210,220 75x19
+  process rectangle @1020,140 75x78 fill #277116 ink #232f3e
+  text "Bucket" @1020,220 75x19
+  process rectangle @370,310 78x78 fill #bc1356 ink #232f3e
+  text "AWS⏎CloudTrail" @368,390 83x33
+  process rectangle @480,310 78x78 fill #bc1356 ink #232f3e
+  text "Amazon⏎CloudWatch" @472,390 94x33
+  process rectangle @600,310 78x78 fill #bc1356 ink #232f3e
+  text "Amazon Simple⏎Notification Service" @564,390 150x33
+  process rectangle @723,310 78x78 fill #bc1356 ink #232f3e
+  text "Amazon Simple⏎Queue Service" @708,390 109x33
+  process rectangle @880,310 78x78 fill #bc1356 ink #232f3e
+  text "Amazon⏎CloudWatch" @872,390 94x33
+  process rectangle @1019,310 78x78 fill #bc1356 ink #232f3e
+  text "AWS⏎CloudTrail" @1016,390 83x33
+  process rectangle @599,450 78x78 fill #d05c17 ink #232f3e
+  text "AWS Lambda" @591,536 95x19
+  process rectangle @489,590 78x78 fill #5a30b5 ink #232f3e
+  text "Amazon Kinesis⏎Data Firehose" @472,670 113x33
+  process rectangle @710,590 78x78 fill #3334b9 ink #232f3e
+  text "Amazon⏎DynamoDB" @710,670 79x33
+  process rectangle @120,590 75x78 fill #277116 ink #232f3e
+  text "Bucket" @120,670 75x19
+  section @860,290 250x430 fill transparent
+  UEzPUAAOIrF-is8g5C7q-76 -> UEzPUAAOIrF-is8g5C7q-77 orthogonal, 0 bends
+  UEzPUAAOIrF-is8g5C7q-77 -> UEzPUAAOIrF-is8g5C7q-79 orthogonal, 0 bends
+  UEzPUAAOIrF-is8g5C7q-77 -> UEzPUAAOIrF-is8g5C7q-78 orthogonal, 0 bends
+  UEzPUAAOIrF-is8g5C7q-78 -> UEzPUAAOIrF-is8g5C7q-84 orthogonal, 0 bends
+  UEzPUAAOIrF-is8g5C7q-79 -> UEzPUAAOIrF-is8g5C7q-80 orthogonal, 0 bends
+  UEzPUAAOIrF-is8g5C7q-80 -> UEzPUAAOIrF-is8g5C7q-81 orthogonal, 0 bends
+  UEzPUAAOIrF-is8g5C7q-81 -> UEzPUAAOIrF-is8g5C7q-82 orthogonal, 0 bends
+  UEzPUAAOIrF-is8g5C7q-82 -> UEzPUAAOIrF-is8g5C7q-85 orthogonal, 0 bends
+  UEzPUAAOIrF-is8g5C7q-83 -> UEzPUAAOIrF-is8g5C7q-80 "Monitor template" orthogonal, 0 bends
+  UEzPUAAOIrF-is8g5C7q-84 -> UEzPUAAOIrF-is8g5C7q-83 orthogonal, 0 bends
+  UEzPUAAOIrF-is8g5C7q-85 -> UEzPUAAOIrF-is8g5C7q-86 orthogonal, 0 bends
+  UEzPUAAOIrF-is8g5C7q-85 -> UEzPUAAOIrF-is8g5C7q-87 orthogonal, 0 bends
+  UEzPUAAOIrF-is8g5C7q-86 -> UEzPUAAOIrF-is8g5C7q-98 orthogonal, 0 bends
+losses: 5 right-angle connectors are re-routed, so their bends may move; draw.io’s “mxgraph.aws4.object” shape is drawn as a box; draw.io’s “mxgraph.aws4.bucket_with_objects” shape is drawn as a box (2 shapes); draw.io’s “mxgraph.aws4.resourceIcon” shape is drawn as a box (9 shapes); draw.io’s “mxgraph.aws4.bucket” shape is drawn as a box; gradient fills are drawn solid (9 places); 15 label colours are changed so they read on a dark canvas

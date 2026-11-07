@@ -18,6 +18,7 @@ import {
 } from './drawioStyle';
 import { num, pageCells, pageModel, type Cell, type Geometry } from './drawioCells';
 import { parseXml } from './xmlReader';
+import { contrastRatio, readableTextOn } from '../../lib/colorUtils';
 
 // A draw.io file (`.drawio`, or its `.xml` export) as an OpenFlowKit document.
 // draw.io keeps exact positions, so this builds the scene directly instead of
@@ -140,13 +141,15 @@ class PageBuilder {
   }
 
   /**
-   * draw.io's near-black ink is meant for a light page. It stays where the theme doesn't change what is under the words
-   * (a deep fill stays solid in both), or where it also reads on what our dark theme shows there (teal, a pastel lane seen through a washed white card); anywhere else it is left to the theme, so it turns
-   * white on dark. What shows is the node's fill over its containers', bottom up: parents are placed before children,
+   * draw.io's ink is picked for a white page. It stays where the theme doesn't change what is under the words
+   * (a deep fill stays solid in both), or where it also reads on what our dark theme shows there (teal, a pastel lane
+   * seen through a washed white card); anywhere else it is left to the theme, so it turns white on dark. Near-black
+   * looks the same either way; a colour (AWS navy, red on a see-through fill) is counted in the report, since light
+   * loses it too. What shows is the node's fill over its containers', bottom up: parents are placed before children,
    * so each backdrop is one lookup. ponytail: free text over a shape it isn't inside reads only its containers.
    */
   private inkForEitherTheme(): void {
-    // Only containers and nodes with dark ink need a backdrop: resolving every node's style would slow a 50,000-cell file.
+    // Only containers and nodes with their own ink need a backdrop: resolving every node's style would slow a 50,000-cell file.
     const parents = new Set(this.nodes.map((node) => node.parentId));
     const seen = new Map<string, { dark: string; light: string }>();
     const over = (node: SceneNode, below: string, canvas: string) => {
@@ -154,21 +157,40 @@ class PageBuilder {
       const { fill, opacity } = resolveNodeStyle(node, canvas);
       return paintOver(fill, below, opacity);
     };
+    let recoloured = 0;
     for (const [index, node] of this.nodes.entries()) {
       const ink = node.kind === 'text' ? node.content.customColor : node.appearance.textColor;
-      if (!parents.has(node.id) && !drawioDarkInk(ink)) continue;
+      const hex = typeof ink === 'string' && ink.startsWith('#') ? ink : undefined;
+      if (!parents.has(node.id) && !hex) continue;
       const below = (node.parentId && seen.get(node.parentId)) || { dark: DARK_CANVAS, light: LIGHT_CANVAS };
       const backdrop = { dark: over(node, below.dark, DARK_CANVAS), light: over(node, below.light, LIGHT_CANVAS) };
       seen.set(node.id, backdrop);
       // Under words the theme doesn't change (a deep fill stays solid in both), the ink stays as the author drew it.
-      if (backdrop.dark === backdrop.light || darkInkReadsOn(backdrop.dark)) continue;
-      if (node.kind === 'text' && drawioDarkInk(node.content.customColor)) {
+      if (!hex || backdrop.dark === backdrop.light) continue;
+      if (drawioDarkInk(hex)) {
+        if (darkInkReadsOn(backdrop.dark)) continue;
+      } else {
+        if (contrastRatio(hex, backdrop.dark) >= Math.min(4.5, contrastRatio(hex, backdrop.light))) continue;
+        recoloured += 1;
+        // A see-through light fill turns mid-grey on the dark canvas, where the theme's white is lost too: dark ink
+        // reads there and on the light page, so it is fixed for both.
+        if (darkInkReadsOn(backdrop.dark) && darkInkReadsOn(backdrop.light)) {
+          this.nodes[index] = node.kind === 'text'
+            ? { ...node, content: { ...node.content, customColor: readableTextOn(backdrop.dark) } }
+            : { ...node, appearance: { ...node.appearance, textColor: readableTextOn(backdrop.dark) } };
+          continue;
+        }
+      }
+      if (node.kind === 'text') {
         const { customColor: _ink, ...content } = node.content;
         this.nodes[index] = { ...node, content };
-      } else if (node.kind !== 'text' && drawioDarkInk(node.appearance.textColor)) {
+      } else {
         const { textColor: _ink, ...appearance } = node.appearance;
         this.nodes[index] = { ...node, appearance };
       }
+    }
+    if (recoloured) {
+      this.loss(recoloured === 1 ? '1 label colour is changed so it reads on a dark canvas' : `${recoloured} label colours are changed so they read on a dark canvas`);
     }
   }
 

@@ -1,0 +1,54 @@
+page "Page 1": 1 layer(s), 31 nodes, 21 connectors
+  swimlane "Pool" @70,40 960x750
+  text "Pool" @70,40 960x20
+  swimlane "Lane 1" @0,20 160x730 in 77e6c97f196da883-1
+  text "Lane 1" @0,20 160x20 in 77e6c97f196da883-1
+  process rounded @20,65 100x60 fill #fdfdfb in 77e6c97f196da883-2
+  process rounded @20,155 100x60 fill #fdfdfb in 77e6c97f196da883-2
+  process rounded @30,560 100x60 fill #fdfdfb in 77e6c97f196da883-2
+  swimlane "Lane 2" @160,20 160x730 in 77e6c97f196da883-1
+  text "Lane 2" @160,20 160x20 in 77e6c97f196da883-1
+  process rounded @30,65 100x60 fill #fdfdfb in 77e6c97f196da883-3
+  swimlane "Lane 3" @320,20 160x730 in 77e6c97f196da883-1
+  text "Lane 3" @320,20 160x20 in 77e6c97f196da883-1
+  process rounded @30,155 100x60 fill #fdfdfb in 77e6c97f196da883-4
+  process diamond @40,240 80x60 fill #fdfdfb in 77e6c97f196da883-4
+  process rounded @30,560 100x60 fill #fdfdfb in 77e6c97f196da883-4
+  swimlane "Lane 4" @480,20 160x730 in 77e6c97f196da883-1
+  text "Lane 4" @480,20 160x20 in 77e6c97f196da883-1
+  process rounded @30,240 100x60 fill #fdfdfb in 77e6c97f196da883-5
+  process diamond @40,320 80x60 fill #fdfdfb in 77e6c97f196da883-5
+  process rounded @30,400 100x60 fill #fdfdfb in 77e6c97f196da883-5
+  process rounded @30,560 100x60 fill #fdfdfb in 77e6c97f196da883-5
+  process diamond @40,640 80x60 fill #fdfdfb in 77e6c97f196da883-5
+  swimlane "Lane 5" @640,20 160x730 in 77e6c97f196da883-1
+  text "Lane 5" @640,20 160x20 in 77e6c97f196da883-1
+  process rounded @30,400 100x60 fill #fdfdfb in 77e6c97f196da883-6
+  process rounded @30,480 100x60 fill #fdfdfb in 77e6c97f196da883-6
+  process rounded @30,560 100x60 fill #fdfdfb in 77e6c97f196da883-6
+  process rounded @30,640 100x60 fill #fdfdfb in 77e6c97f196da883-6
+  swimlane "Lane 6" @800,20 160x730 in 77e6c97f196da883-1
+  text "Lane 6" @800,20 160x20 in 77e6c97f196da883-1
+  process rounded @30,640 100x60 fill #fdfdfb in 77e6c97f196da883-7
+  77e6c97f196da883-8 -> 77e6c97f196da883-11 orthogonal, 0 bends
+  77e6c97f196da883-11 -> 77e6c97f196da883-9 orthogonal, 0 bends
+  77e6c97f196da883-9 -> 77e6c97f196da883-12 orthogonal, 0 bends
+  77e6c97f196da883-13 -> 77e6c97f196da883-9 orthogonal, 0 bends
+  77e6c97f196da883-16 -> 77e6c97f196da883-9 orthogonal, 0 bends
+  77e6c97f196da883-20 -> 77e6c97f196da883-9 orthogonal, 0 bends
+  77e6c97f196da883-13 -> 77e6c97f196da883-15 orthogonal, 0 bends
+  77e6c97f196da883-20 -> 77e6c97f196da883-23 orthogonal, 0 bends
+  77e6c97f196da883-23 -> 77e6c97f196da883-24 orthogonal, 0 bends
+  77e6c97f196da883-17 -> 77e6c97f196da883-18 orthogonal, 0 bends
+  77e6c97f196da883-22 -> 77e6c97f196da883-14 orthogonal, 0 bends
+  77e6c97f196da883-22 -> 77e6c97f196da883-19 orthogonal, 0 bends
+  77e6c97f196da883-22 -> 77e6c97f196da883-10 orthogonal, 0 bends
+  77e6c97f196da883-10 -> 77e6c97f196da883-19 orthogonal, 0 bends
+  77e6c97f196da883-14 -> 77e6c97f196da883-19 orthogonal, 0 bends
+  77e6c97f196da883-12 -> 77e6c97f196da883-13 orthogonal, 0 bends
+  77e6c97f196da883-15 -> 77e6c97f196da883-16 orthogonal, 0 bends
+  77e6c97f196da883-16 -> 77e6c97f196da883-17 orthogonal, 0 bends
+  77e6c97f196da883-19 -> 77e6c97f196da883-20 orthogonal, 0 bends
+  77e6c97f196da883-18 -> 77e6c97f196da883-21 orthogonal, 0 bends
+  77e6c97f196da883-21 -> 77e6c97f196da883-22 orthogonal, 0 bends
+losses: 5 right-angle connectors are re-routed, so their bends may move

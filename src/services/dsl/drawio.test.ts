@@ -466,6 +466,22 @@ describe('draw.io colours in either theme', () => {
     expect(nodes.get('black-on-deep')!.appearance.textColor).toBe('#000000');
   });
 
+  it('gives a coloured ink drawn for a white page to the theme where the dark canvas would hide it, and says so', async () => {
+    const { document, losses } = await open(model([
+      box('navy-words', 'text;html=1;fontColor=#232F3E;', 0, 0),
+      box('red-on-washed-blue', 'fillColor=#BAC8D3;opacity=40;fontColor=#AE4132;', 140, 0),
+      box('red-on-solid-blue', 'fillColor=#BAC8D3;fontColor=#AE4132;', 280, 0),
+      box('orange-on-dark', 'fillColor=#282828;fontColor=#F18808;', 420, 0),
+    ].join('')));
+    const nodes = new Map(document.pages[0]!.nodes.map((node) => [node.id, node]));
+    expect(nodes.get('navy-words')!.content.customColor).toBeUndefined();
+    expect(nodes.get('red-on-washed-blue')!.appearance.textColor).toBeUndefined();
+    // Where the colour reads in both themes, it stays as drawn.
+    expect(nodes.get('red-on-solid-blue')!.appearance.textColor).toBe('#ae4132');
+    expect(nodes.get('orange-on-dark')!.appearance.textColor).toBe('#f18808');
+    expect(losses).toContain('2 label colours are changed so they read on a dark canvas');
+  });
+
   it('leaves draw.io’s default black lines to the theme, so they show on a dark canvas', async () => {
     const { document } = await open(model([
       box('a', 'strokeColor=#000000;', 0, 0), box('b', 'strokeColor=#b85450;', 200, 0), box('c', 'strokeColor=#333333;', 400, 0),
