@@ -184,7 +184,8 @@ describe('op tools', () => {
       id, number, anchor: { nodeId: null, offset: null, point: { x: 0, y: 0 } }, resolved: false,
       comments: [{ id: `${id}-m`, author: { kind: 'human', name: 'Ada' }, body, createdAt: '2026-10-26T12:00:00.000Z' }],
     });
-    file.pages[0]!.threads = [thread('kept', 1, 'Keep me'), thread('twin', 1, 'Same number')];
+    // A thread with no pin is broken past repair (a clashing number would only be renumbered).
+    file.pages[0]!.threads = [thread('kept', 1, 'Keep me'), { ...thread('broken', 2, 'No pin'), anchor: null }];
     await writeFile(path, JSON.stringify(file), 'utf8');
 
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);

@@ -74,10 +74,12 @@ export function useDocumentSession(callbacks: DocumentSessionCallbacks) {
   // Threads change outside undo history (domain/threads). `change` throws ThreadError on bad input.
   const updateThreads = useCallback(
     (change: (document: SceneDocumentV1) => SceneDocumentV1) =>
-      advance((current) => updateSessionThreads(current, change, current.revision)),
+      advance((current) => updateSessionThreads(current, change)),
     [advance]
   );
   const forgetHistory = useCallback(() => advance(forgetSessionHistory), [advance]);
+  // The contentRevision at the time of the call, for an action offered now and run later (a toast's Undo).
+  const currentContentRevision = useCallback(() => sessionRef.current?.contentRevision ?? 0, []);
   const undo = useCallback(
     () =>
       advance(
@@ -100,6 +102,7 @@ export function useDocumentSession(callbacks: DocumentSessionCallbacks) {
     document: session?.document ?? null,
     revision: session?.revision ?? 0,
     contentRevision: session?.contentRevision ?? 0,
+    currentContentRevision,
     canUndo: session ? canUndoDocument(session.history) : false,
     canRedo: session ? canRedoDocument(session.history) : false,
     openDocument,

@@ -95,7 +95,7 @@ describe('comment threads', () => {
     expect(editComment(document, 't1', 't1-m1', ' Why is this here? ', at)).toBe(document);
     expect(moveThread(document, 't1', 'a', { x: 110, y: 120 })).toBe(document);
     const session = createDocumentSession(document);
-    expect(updateSessionThreads(session, (current) => setThreadResolved(current, 't1', false), 0)).toBe(session);
+    expect(updateSessionThreads(session, (current) => setThreadResolved(current, 't1', false))).toBe(session);
   });
 
   it('refuses empty, too long, unknown and duplicate input', () => {
@@ -219,7 +219,7 @@ describe('comments and history', () => {
     let session = createDocumentSession(createTestDocument({ nodes: [a] }));
     session = commitSessionCommand(session, move(a, 0, 0), session.contentRevision);
     const pastBefore = session.history.past;
-    session = updateSessionThreads(session, (document) => withThread(document), session.revision);
+    session = updateSessionThreads(session, (document) => withThread(document));
     expect(session.revision).toBe(2);
     expect(session.history.past).toBe(pastBefore);
     expect(session.history.present).toBe(session.document);
@@ -235,7 +235,7 @@ describe('comments and history', () => {
     let session = createDocumentSession(createTestDocument({ nodes: [a] }));
     session = commitSessionCommand(session, move(a, 0, 0), session.contentRevision);
     expect([session.revision, session.contentRevision]).toEqual([1, 1]);
-    session = updateSessionThreads(session, (document) => withThread(document), session.revision);
+    session = updateSessionThreads(session, (document) => withThread(document));
     expect([session.revision, session.contentRevision]).toEqual([2, 1]);
     // A step built before the comment still lands, and the comment stays.
     session = commitSessionCommand(session, move(page(session.document).nodes[0]!, 50, 50), 1);
@@ -249,23 +249,26 @@ describe('comments and history', () => {
 
   it('an unchanged comment update is not a revision', () => {
     const session = createDocumentSession(createTestDocument());
-    expect(updateSessionThreads(session, (document) => document, 0)).toBe(session);
+    expect(updateSessionThreads(session, (document) => document)).toBe(session);
   });
 
   it('a page snapshot (set-page) neither drops nor restores comments, and its undo still applies', () => {
     let session = createDocumentSession(createTestDocument({ nodes: [a] }));
     const before = page(session.document);
     session = commitSessionCommand(session, { kind: 'set-page', id: 'rename', label: 'Rename', pageId: 'page-1', before, after: { ...before, name: 'Renamed' } }, session.contentRevision);
-    session = updateSessionThreads(session, (document) => withThread(document), session.revision);
+    session = updateSessionThreads(session, (document) => withThread(document));
     session = undoSessionCommand(session, session.contentRevision);
     expect(page(session.document).name).toBe('Page 1');
     expect(page(session.document).threads).toHaveLength(1);
+    // A snapshot that differs only in its threads changes nothing a command can change.
+    const current = page(session.document);
+    expect(() => applyDocumentCommand(session.document, { kind: 'set-page', id: 'noop', label: 'Noop', pageId: 'page-1', before: current, after: { ...current, threads: [] } })).toThrow(/must change the page/);
   });
 
   it('deleting a page takes its threads; undoing the delete brings them back', () => {
     let session = createDocumentSession(onPage(TWO_PAGES, 'page-1', 't1'));
     // The threads at deletion time count, not the stale copy in the command.
-    session = updateSessionThreads(session, (document) => addComment(document, 't1', { id: 'm2', author: agent, body: 'later', createdAt: at }), session.revision);
+    session = updateSessionThreads(session, (document) => addComment(document, 't1', { id: 'm2', author: agent, body: 'later', createdAt: at }));
     session = commitSessionCommand(session, { kind: 'remove-page', id: 'rm', label: 'Delete', index: 0, page: page(TWO_PAGES) }, session.contentRevision);
     expect(findThread(session.document, 't1')).toBeUndefined();
     session = undoSessionCommand(session, session.contentRevision);
@@ -288,7 +291,7 @@ describe('comments and history', () => {
     it('a comment on an added page survives undo and redo of the add', () => {
       let session = createDocumentSession(TWO_PAGES);
       session = commitSessionCommand(session, insertPage2(), session.contentRevision);
-      session = updateSessionThreads(session, (document) => onPage(document, 'page-3', 'n1'), session.revision);
+      session = updateSessionThreads(session, (document) => onPage(document, 'page-3', 'n1'));
       session = redoSessionCommand(undoSessionCommand(session, session.contentRevision), session.contentRevision + 1);
       expect(threadIds(session.document)).toEqual(['n1']);
       // And the same again, so the entry redo stored holds up.
@@ -299,7 +302,7 @@ describe('comments and history', () => {
     it('a comment on a duplicated page survives undo and redo', () => {
       let session = createDocumentSession(onPage(TWO_PAGES, 'page-1', 't1'));
       session = commitSessionCommand(session, buildProductionDuplicatePageCommand(session.document, 'page-1', 'page-3'), session.contentRevision);
-      session = updateSessionThreads(session, (document) => onPage(document, 'page-3', 'n1'), session.revision);
+      session = updateSessionThreads(session, (document) => onPage(document, 'page-3', 'n1'));
       session = redoSessionCommand(undoSessionCommand(session, session.contentRevision), session.contentRevision + 1);
       expect(threadIds(session.document)).toEqual(['t1', 'n1']);
     });
@@ -308,7 +311,7 @@ describe('comments and history', () => {
       let session = createDocumentSession(onPage(TWO_PAGES, 'page-1', 't1'));
       session = commitSessionCommand(session, { kind: 'remove-page', id: 'rm', label: 'Delete', index: 0, page: page(session.document) }, session.contentRevision);
       session = undoSessionCommand(session, session.contentRevision);
-      session = updateSessionThreads(session, (document) => onPage(document, 'page-1', 'n1'), session.revision);
+      session = updateSessionThreads(session, (document) => onPage(document, 'page-1', 'n1'));
       session = redoSessionCommand(session, session.contentRevision);
       expect(threadIds(session.document)).toEqual([]);
       session = undoSessionCommand(session, session.contentRevision);
@@ -319,7 +322,7 @@ describe('comments and history', () => {
       // #1 on page 1, #2 on page 2. Remove page 2, start a thread on page 1 (it gets #2), undo the removal.
       let session = createDocumentSession(onPage(onPage(TWO_PAGES, 'page-1', 'one'), 'page-2', 'two'));
       session = commitSessionCommand(session, { kind: 'remove-page', id: 'rm', label: 'Delete', index: 1, page: session.document.pages[1]! }, session.contentRevision);
-      session = updateSessionThreads(session, (document) => onPage(document, 'page-1', 'three'), session.revision);
+      session = updateSessionThreads(session, (document) => onPage(document, 'page-1', 'three'));
       session = undoSessionCommand(session, session.contentRevision);
       expect(numbersById(session.document)).toEqual({ one: 1, three: 2, two: 3 });
       expect(validateSceneDocumentV1(session.document).success).toBe(true);
@@ -337,7 +340,7 @@ describe('comments and history', () => {
         { kind: 'remove-page', id: 'rm-1', label: 'Move', index: 0, page: first! },
         { kind: 'insert-page', id: 'add-1', label: 'Move', index: 0, page: first! },
       ] }, session.contentRevision);
-      session = updateSessionThreads(session, (document) => onPage(document, 'page-1', 'three'), session.revision);
+      session = updateSessionThreads(session, (document) => onPage(document, 'page-1', 'three'));
       session = undoSessionCommand(session, session.contentRevision);
       expect(numbersById(session.document)).toEqual({ one: 1, three: 2, two: 3 });
       session = undoSessionCommand(redoSessionCommand(session, session.contentRevision), session.contentRevision + 1);
@@ -349,19 +352,34 @@ describe('comments and history', () => {
       let session = createDocumentSession(onPage(TWO_PAGES, 'page-1', 'T1'));
       const before = page(session.document);
       session = commitSessionCommand(session, { kind: 'set-page', id: 'rename', label: 'Rename', pageId: 'page-1', before, after: { ...before, name: 'Renamed' } }, session.contentRevision);
-      session = updateSessionThreads(session, (document) => onPage(removeThread(document, 'T1'), 'page-2', 'T2'), session.revision);
+      session = updateSessionThreads(session, (document) => onPage(removeThread(document, 'T1'), 'page-2', 'T2'));
       session = undoSessionCommand(session, session.contentRevision);
       expect(page(session.document).name).toBe('Page 1');
       expect(numbersById(session.document)).toEqual({ T2: 1 });
       expect(validateSceneDocumentV1(session.document).success).toBe(true);
     });
 
+    // Ids are unique across the document too. The page coming back holds "x" twice over, before the carry: the
+    // result is valid only after it, so this also pins validation to run after the carry.
+    it('a page brought back yields a thread id given out again since it went', () => {
+      // Thread "x" on page 2. Delete page 2, start a thread "x" on page 1, undo the delete.
+      let session = createDocumentSession(onPage(TWO_PAGES, 'page-2', 'x'));
+      session = commitSessionCommand(session, { kind: 'remove-page', id: 'rm', label: 'Delete', index: 1, page: session.document.pages[1]! }, session.contentRevision);
+      session = updateSessionThreads(session, (document) => onPage(document, 'page-1', 'x'));
+      session = undoSessionCommand(session, session.contentRevision);
+      expect(session.document.pages.map((candidate) => (candidate.threads ?? []).map(({ id }) => id))).toEqual([['x'], ['x-2']]);
+      expect(numbersById(session.document)).toEqual({ x: 1, 'x-2': 2 });
+      // Redo takes it away again, and undo brings it back as it is now.
+      session = undoSessionCommand(redoSessionCommand(session, session.contentRevision), session.contentRevision + 1);
+      expect(threadIds(session.document)).toEqual(['x', 'x-2']);
+      expect(findThread(session.document, 'x-2')!.page.id).toBe('page-2');
+    });
   });
 
   it('refuses a thread change that would make the document invalid', () => {
     const session = createDocumentSession(withThread(createTestDocument({ nodes: [a] })));
     const reuse = (document: SceneDocumentV1) => addComment(document, 't1', { id: 't1-m1', author: agent, body: 'same id', createdAt: at });
-    expect(() => updateSessionThreads(session, reuse, session.revision)).toThrow(ThreadError);
+    expect(() => updateSessionThreads(session, reuse)).toThrow(ThreadError);
   });
 
   // A file-mode agent op applies its command with no history (runAgentOp): the thread rule holds there too.
