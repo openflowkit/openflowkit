@@ -6,7 +6,8 @@ import {
   pastePlacement,
   type ProductionClipboardSnapshot,
 } from '../../application/selection/clipboard';
-import { excalidrawScene, lossNote, readExcalidraw } from '../../../services/dsl/excalidraw';
+import { excalidrawScene, readExcalidraw } from '../../../services/dsl/excalidraw';
+import { lossNote } from '../../../services/dsl/lossNote';
 import type { ToastItem } from '../design-system';
 import {
   buildAlignCommand, buildDistributeCommand, buildFlipCommand, buildStepOrderCommand,

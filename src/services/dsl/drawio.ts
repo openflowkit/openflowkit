@@ -14,7 +14,7 @@ import { validateSceneDocumentV1 } from '../../opencanvas/domain/document/valida
 import { resolveNodeStyle } from '../../opencanvas/domain/nodes/nodeStyle';
 import { DEFAULT_CANVAS_COLOR, darkInkReadsOn, paintOver } from '../../opencanvas/domain/color/adaptiveColor';
 import {
-  drawioAnchor, drawioColor, drawioConnectorAppearance, drawioDarkInk, own, drawioErRelation, drawioImageUrl, drawioLabel, drawioNodeAppearance, drawioShape, drawioShapeName, type DrawioStyle,
+  drawioAnchor, drawioColor, drawioConnectorAppearance, drawioDarkInk, drawioStyleLosses, own, drawioErRelation, drawioImageUrl, drawioLabel, drawioNodeAppearance, drawioShape, drawioShapeName, type DrawioStyle,
 } from './drawioStyle';
 import { num, pageCells, pageModel, type Cell, type Geometry } from './drawioCells';
 import { parseXml } from './xmlReader';
@@ -80,6 +80,8 @@ class PageBuilder {
   private readonly nodeIds = new Set<string>();
   /** draw.io shape name → how many cells of it became a box, said once per name. */
   private readonly unknownShapes = new Map<string, number>();
+  /** A style we don't draw → how many shapes and connectors asked for it, said once per style. */
+  private readonly styleLosses = new Map<string, number>();
   private rerouted = 0;
   /** Pictures from draw.io's own image library: only its servers have them. */
   private libraryImages = 0;
@@ -129,7 +131,12 @@ class PageBuilder {
     for (const [name, count] of this.unknownShapes) {
       this.loss(`draw.io’s “${name}” shape is drawn as a box${count > 1 ? ` (${count} shapes)` : ''}`);
     }
+    for (const [message, count] of this.styleLosses) this.loss(count > 1 ? `${message} (${count} places)` : message);
     this.inkForEitherTheme();
+  }
+
+  private noteStyle(style: DrawioStyle, of: 'shape' | 'connector'): void {
+    for (const message of drawioStyleLosses(style, of)) this.styleLosses.set(message, (this.styleLosses.get(message) ?? 0) + 1);
   }
 
   /**
@@ -218,6 +225,7 @@ class PageBuilder {
     if (!geometry) { this.loss(`“${this.labelOf(cell)}”: a shape without a position was left out`); return false; }
     const style = this.inherited(cell);
     const name = drawioShapeName(style);
+    this.noteStyle(style, 'shape');
     const label = drawioLabel(this.valueOf(cell), style);
     const { x, y } = this.placed(cell, geometry);
     // A folded container opens unfolded, so its children sit inside it rather than spilling out.
@@ -388,6 +396,7 @@ class PageBuilder {
       return;
     }
     const style = cell.style;
+    this.noteStyle(style, 'connector');
     const orthogonal = /orthogonal|elbow|isometric|entityRelation/i.test(style.edgeStyle ?? '');
     const points = (cell.geometry?.points ?? []).map(toPage);
     if (orthogonal && points.length) this.rerouted += 1;

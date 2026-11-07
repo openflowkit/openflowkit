@@ -479,3 +479,20 @@ describe('draw.io colours in either theme', () => {
     expect(page.connectors[0]!.appearance.stroke).toBeUndefined();
   });
 });
+
+describe('what a draw.io file loses, named', () => {
+  const model = (cells: string) => `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${cells}</root></mxGraphModel>`;
+  const box = (id: string, style: string, x: number) =>
+    `<mxCell id="${id}" value="${id}" vertex="1" parent="1" style="${style}"><mxGeometry x="${x}" y="0" width="120" height="60" as="geometry"/></mxCell>`;
+
+  it('says once, with a count, each style it couldn’t keep', async () => {
+    const { losses } = await open(model([
+      box('a', 'shadow=1;gradientColor=#fff;', 0), box('b', 'shadow=1;', 200), box('c', 'rounded=1;', 400),
+      '<mxCell id="e" edge="1" source="a" target="b" parent="1" style="endArrow=box;"><mxGeometry relative="1" as="geometry"/></mxCell>',
+    ].join('')));
+    expect(losses).toEqual(expect.arrayContaining([
+      'shadows are left off (2 places)', 'gradient fills are drawn solid', 'draw.io’s “box” arrow head is drawn as an arrow',
+    ]));
+    expect(losses.some((loss) => loss.includes('rounded'))).toBe(false);
+  });
+});

@@ -1,7 +1,7 @@
 import {
   describe, expect, it } from 'vitest';
 import {
-  drawioColor, drawioDarkInk, drawioConnectorAppearance, drawioErRelation, drawioImageUrl, drawioLabel, drawioNodeAppearance, drawioShape, drawioShapeName, parseDrawioStyle,
+  drawioColor, drawioDarkInk, drawioStyleLosses, drawioConnectorAppearance, drawioErRelation, drawioImageUrl, drawioLabel, drawioNodeAppearance, drawioShape, drawioShapeName, parseDrawioStyle,
 } from './drawioStyle';
 
 describe('draw.io styles', () => {
@@ -110,5 +110,35 @@ describe('drawioDarkInk', () => {
     expect(drawioConnectorAppearance({ strokeColor: '#000' }).stroke).toBeUndefined();
     expect(drawioConnectorAppearance({ strokeColor: '#333333' }).stroke).toBeUndefined();
     expect(drawioConnectorAppearance({ strokeColor: '#666666' }).stroke).toBe('#666666');
+  });
+});
+
+describe('drawioStyleLosses', () => {
+  it('names each style a shape or line has that we don’t draw', () => {
+    expect(drawioStyleLosses(parseDrawioStyle('rounded=1;fillColor=#dae8fc;strokeColor=default;fontColor=none;fillColor2=x;fontFamily=Helvetica;'), 'shape')).toEqual([]);
+    expect(drawioStyleLosses(parseDrawioStyle(
+      'gradientColor=#7ea6e0;shadow=1;sketch=1;fillStyle=hatch;glass=1;fillColor=light-dark(#fff,#000);fontFamily=Comic Sans MS;'), 'shape')).toEqual([
+      'gradient fills are drawn solid', 'shadows are left off', 'the hand-drawn sketch look is drawn clean',
+      'hatched and patterned fills are drawn solid', 'the glass shine is left off',
+      'colours not written as #hex use the theme’s instead', 'the “Comic Sans MS” font is drawn in ours',
+    ]);
+    expect(drawioStyleLosses(parseDrawioStyle('gradientColor=none;shadow=0;fillStyle=solid;fillStyle=auto;'), 'shape')).toEqual([]);
+  });
+
+  it('names arrow heads we don’t draw, and only those', () => {
+    const heads = (style: string) => drawioStyleLosses(parseDrawioStyle(style), 'connector');
+    expect(heads('endArrow=classic;startArrow=block;')).toEqual([]);
+    expect(heads('endArrow=open;startArrow=oval;')).toEqual([]);
+    expect(heads('endArrow=diamondThin;startArrow=cross;')).toEqual([]);
+    expect(heads('endArrow=dash;startArrow=halfCircle;')).toEqual([
+      'draw.io’s “dash” arrow head is drawn as an arrow', 'draw.io’s “halfCircle” arrow head is drawn as an arrow',
+    ]);
+  });
+
+  it('reads a hostile style in linear time', () => {
+    const style = parseDrawioStyle(Array.from({ length: 100_000 }, (_, i) => `k${i}=v`).join(';') + ';shadow=1');
+    const started = performance.now();
+    expect(drawioStyleLosses(style, 'shape')).toEqual(['shadows are left off']);
+    expect(performance.now() - started).toBeLessThan(200);
   });
 });
