@@ -5,7 +5,7 @@ import { listThreads, replyToThread, resolveThread, startThread } from './thread
 import { findIconsFor, getSyntax, searchIcons } from './iconOps';
 import { exportDiagram, fitView, getDocument, listPages, screenshotDiagram } from './pipelineOps';
 import { addShape, deleteShapes, moveNodes, styleNodes } from './sceneOps';
-import { ZodEffects, ZodObject, type ZodRawShape, type ZodTypeAny } from 'zod';
+import { ZodObject, type ZodRawShape } from 'zod';
 import type { AgentOp } from './types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -41,13 +41,11 @@ export function findAgentOp(name: string): AnyAgentOp | null {
 
 /**
  * An op's input fields, for clients that advertise them (MCP tool schemas, CLI
- * help). A cross-field `.refine` wraps the object; the fields are inside it, and
- * the op still parses with the full schema, rule included.
+ * help). A cross-field `.refine` keeps the object; the op still parses with the
+ * full schema, rule included.
  */
 export function opInputShape(op: AnyAgentOp): ZodRawShape {
-  let schema: ZodTypeAny = op.schema;
-  while (schema instanceof ZodEffects) schema = schema.innerType();
-  return schema instanceof ZodObject ? schema.shape : {};
+  return op.schema instanceof ZodObject ? op.schema.shape : {};
 }
 
 export type { AgentOp, ExportedFile, ExportRequest, IconMatch, OpCapabilities, OpContext, OpOutcome } from './types';
