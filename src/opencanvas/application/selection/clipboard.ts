@@ -18,6 +18,11 @@ export function pastePlacement(snapshot: ProductionClipboardSnapshot, view: Boun
     x: transform.translation.x, y: transform.translation.y,
     width: size.width * transform.scale.x, height: size.height * transform.scale.y,
   }));
+  // Connectors' free ends and bends count too: arrows copied in Excalidraw without their shapes have nothing else.
+  for (const { source, target, waypoints } of snapshot.connectors) {
+    const free = [source, target].flatMap((end) => (end.nodeId === null && end.point ? [end.point] : []));
+    for (const point of [...free, ...waypoints]) boxes.push({ x: point.x, y: point.y, width: 0, height: 0 });
+  }
   if (boxes.length === 0) return STEP_PLACEMENT;
   const box = boxes.slice(1).reduce(unionBounds, boxes[0]!);
   const stepped = { ...box, x: box.x + PASTE_STEP.x, y: box.y + PASTE_STEP.y };
@@ -89,10 +94,10 @@ export function buildPasteProductionSelectionCommand(
   snapshot: ProductionClipboardSnapshot,
   createId: ClipboardIdFactory,
   placement: PastePlacement = STEP_PLACEMENT
-): { readonly command: DocumentCommand; readonly pastedNodeIds: readonly string[] } {
+): { readonly command: DocumentCommand; readonly pastedNodeIds: readonly string[]; readonly pastedConnectorIds: readonly string[] } {
   const { offset, keepParents } = placement;
   const matrices = buildNodeWorldMatrices(page);
-  if (snapshot.version !== 1 || snapshot.nodes.length === 0) throw new TypeError('Clipboard is empty or unsupported.');
+  if (snapshot.version !== 1 || snapshot.nodes.length + snapshot.connectors.length === 0) throw new TypeError('Clipboard is empty or unsupported.');
   const occupied = new Set([
     ...page.nodes.map(({ id }) => id), ...page.connectors.map(({ id }) => id),
   ]);
@@ -126,10 +131,12 @@ export function buildPasteProductionSelectionCommand(
   const end = (endpoint: SceneConnector['source']): SceneConnector['source'] => endpoint.nodeId === null
     ? { ...endpoint, point: endpoint.point && { x: endpoint.point.x + offset.x, y: endpoint.point.y + offset.y } }
     : { ...endpoint, nodeId: nodeIds.get(endpoint.nodeId)! };
+  const connectorIds: string[] = [];
   for (const connector of snapshot.connectors) {
     const id = createId('connector', connector.id);
     if (!id || occupied.has(id)) throw new TypeError('Paste ids must be unique.');
     occupied.add(id);
+    connectorIds.push(id);
     const pasted: SceneConnector = {
       ...structuredClone(connector), id, source: end(connector.source), target: end(connector.target),
       waypoints: connector.waypoints.map((point) => ({ x: point.x + offset.x, y: point.y + offset.y })),
@@ -139,5 +146,5 @@ export function buildPasteProductionSelectionCommand(
       connector: pasted });
   }
   return { command: { kind: 'batch', id: 'paste-selection', label: 'Paste selection', commands },
-    pastedNodeIds: [...nodeIds.values()] };
+    pastedNodeIds: [...nodeIds.values()], pastedConnectorIds: connectorIds };
 }

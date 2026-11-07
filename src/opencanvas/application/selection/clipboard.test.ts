@@ -127,6 +127,20 @@ describe('where a paste lands', () => {
     expect(pastePlacement(copyProductionSelection(page, ['n']), view)).toEqual({ offset: { x: 450 - 5000, y: 375 + 3000 }, keepParents: false });
   });
 
+  it('places arrows copied without shapes (Excalidraw) by their free ends, and pastes them as connectors', () => {
+    const free = (x: number, y: number) => ({ nodeId: null, portId: null, anchor: null, point: { x, y } });
+    const snapshot = { version: 1 as const, nodes: [], connectors: [{ id: 'go', source: free(5000, -3000), target: free(5200, -3000),
+      route: { kind: 'direct' as const, ownership: 'automatic' as const }, waypoints: [], labels: [],
+      appearance: {}, semantics: {}, metadata: {}, extensions: {} }] };
+    const placement = pastePlacement(snapshot, view);
+    // The 200 px arrow is centred on the view's (500, 400).
+    expect(placement).toEqual({ offset: { x: 400 - 5000, y: 400 + 3000 }, keepParents: false });
+    const document = createTestDocument({ nodes: [] });
+    const result = buildPasteProductionSelectionCommand(document.pages[0]!, snapshot, (kind) => `${kind}-1`, placement);
+    expect(result).toMatchObject({ pastedNodeIds: [], pastedConnectorIds: ['connector-1'] });
+    expect(applyDocumentCommand(document, result.command).document.pages[0]!.connectors[0]!.source.point).toEqual({ x: 400, y: 400 });
+  });
+
   it('a shape copied out of a section lands a step off where it is on the canvas, in that section (as ⌘D does), one undo', () => {
     const { ids: [copy], world, parent, undone, document } = paste(sections(), ['a']);
     expect(world(copy!)).toMatchObject({ x: 100 + 24 + 24, y: 100 + 56 + 24 });

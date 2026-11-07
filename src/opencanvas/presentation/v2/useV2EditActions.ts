@@ -6,7 +6,8 @@ import {
   pastePlacement,
   type ProductionClipboardSnapshot,
 } from '../../application/selection/clipboard';
-import { excalidrawScene, readExcalidraw } from '../../../services/dsl/excalidraw';
+import { excalidrawScene, lossNote, readExcalidraw } from '../../../services/dsl/excalidraw';
+import type { ToastItem } from '../design-system';
 import {
   buildAlignCommand, buildDistributeCommand, buildFlipCommand, buildStepOrderCommand,
 } from '../../domain/commands/arrangeNodes';
@@ -33,19 +34,25 @@ import { isModelPlacement } from '../../application/dsl/architectureCommands';
 
 const CLIPBOARD_FORMAT = 'openflowkit.selection';
 
-function parseClipboard(text: string): ProductionClipboardSnapshot | null {
+/** Shapes to paste, and what of them didn't come across (`excalidraw` when they were copied in Excalidraw). */
+interface ClipboardShapes {
+  readonly snapshot: ProductionClipboardSnapshot;
+  readonly excalidraw?: { readonly losses: readonly string[] };
+}
+
+function parseClipboard(text: string): ClipboardShapes | null {
   try {
     const parsed = JSON.parse(text) as ({ format?: string } & ProductionClipboardSnapshot) | null;
-    return parsed?.format === CLIPBOARD_FORMAT && Array.isArray(parsed.nodes) ? parsed : excalidrawClipboard(text);
+    return parsed?.format === CLIPBOARD_FORMAT && Array.isArray(parsed.nodes) ? { snapshot: parsed } : excalidrawClipboard(text);
   } catch { return null; }
 }
 
 /** Shapes copied in Excalidraw (`excalidraw/clipboard`) paste as ours, where they were drawn relative to each other. */
-function excalidrawClipboard(text: string): ProductionClipboardSnapshot | null {
+function excalidrawClipboard(text: string): ClipboardShapes | null {
   const scene = readExcalidraw(text);
   if (!scene) return null;
-  const { nodes, connectors } = excalidrawScene(scene);
-  return { version: 1, nodes, connectors };
+  const { nodes, connectors, losses } = excalidrawScene(scene);
+  return { snapshot: { version: 1, nodes, connectors }, excalidraw: { losses } };
 }
 
 interface V2EditActionsOptions {
@@ -58,6 +65,8 @@ interface V2EditActionsOptions {
   readonly applySelection: (selection: CanvasSelection) => void;
   readonly applyConnectorSelection: (connectorIds: readonly string[]) => void;
   readonly announce: (message: string) => void;
+  /** A toast: what a paste couldn't do, or what didn't come across from Excalidraw. */
+  readonly notify: (toast: ToastItem) => void;
   /** The canvas's visible world area: a paste whose spot is out of it lands in its middle. */
   readonly viewWorldBounds?: () => Bounds2d | null;
 }
@@ -156,18 +165,37 @@ export function useV2EditActions(options: V2EditActionsOptions) {
     return true;
   };
   const cutSelection = () => { if (copySelection()) deleteSelection(); };
-  /** ⌘V hands over the paste event's text: shapes when it is our JSON. With no text (the menu), the in-memory copy. True when it pasted. */
+  /**
+   * ⌘V hands over the paste event's text: shapes when it is our JSON or Excalidraw's. With no text (the menu), the in-memory
+   * copy. True when the text was shapes: pasted, or said why not, so the paste goes no further (never to an older copy).
+   */
   const pasteShapes = (text?: string): boolean => {
     const page = editablePage();
-    const snapshot = text === undefined || writingRef.current ? clipboardRef.current : parseClipboard(text);
-    if (!page || !snapshot || snapshot.nodes.length === 0) return false;
+    const memory = clipboardRef.current;
+    const shapes = text === undefined || writingRef.current ? (memory ? { snapshot: memory } : null) : parseClipboard(text);
+    if (!page || !shapes) return false;
+    const { snapshot, excalidraw } = shapes;
+    const note = excalidraw?.losses.length ? { description: lossNote(excalidraw.losses) } : {};
+    if (snapshot.nodes.length + snapshot.connectors.length === 0) {
+      options.notify({ id: 'paste-shapes', tone: 'info', title: 'Nothing to paste from Excalidraw', ...note });
+      return true;
+    }
     const view = options.viewWorldBounds?.();
-    const { command, pastedNodeIds } = buildPasteProductionSelectionCommand(page, snapshot, (kind) => options.mintId(kind),
-      ...(view ? [pastePlacement(snapshot, view)] : []));
-    options.commit(command);
-    options.applyConnectorSelection([]);
+    let pasted: ReturnType<typeof buildPasteProductionSelectionCommand>;
+    try {
+      pasted = buildPasteProductionSelectionCommand(page, snapshot, (kind) => options.mintId(kind),
+        ...(view ? [pastePlacement(snapshot, view)] : []));
+      options.commit(pasted.command);
+    } catch {
+      // Clipboard text is anyone's JSON: one the document refuses is said, not thrown. Nothing was changed.
+      options.notify({ id: 'paste-shapes', tone: 'danger', title: 'Couldn’t paste the copied shapes', description: 'They don’t make a valid diagram. Nothing was changed.' });
+      return true;
+    }
+    const { pastedNodeIds, pastedConnectorIds } = pasted;
     options.applySelection(replaceSelection(pastedNodeIds));
-    options.announce(`${pastedNodeIds.length} pasted.`);
+    options.applyConnectorSelection(pastedNodeIds.length ? [] : pastedConnectorIds);
+    options.announce(`${pastedNodeIds.length || pastedConnectorIds.length} pasted.`);
+    if (excalidraw?.losses.length) options.notify({ id: 'paste-shapes', tone: 'info', title: 'Pasted from Excalidraw', ...note });
     return true;
   };
   const hasClipboard = () => clipboardRef.current !== null;

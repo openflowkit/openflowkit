@@ -3,22 +3,30 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createTestDocument, createTestNode } from '../../testing/builders/documentBuilder';
 import { replaceSelection } from '../../application/selection/selection';
 import type { DocumentCommand } from '../../domain/commands/types';
+import { applyDocumentCommand } from '../../domain/commands/execute';
 import { useV2EditActions } from './useV2EditActions';
 
 function setup(nodeIds: readonly string[]) {
-  const page = createTestDocument({
+  const document = createTestDocument({
     nodes: [createTestNode('a'), createTestNode('b', { metadata: { model: { elementId: 'api' } } })],
-  }).pages[0]!;
-  const commit = vi.fn<(command: DocumentCommand) => void>();
+  });
+  const page = document.pages[0]!;
+  // Applied for real, so a paste the document would refuse throws here as it does in the editor.
+  const commit = vi.fn<(command: DocumentCommand) => void>((command) => { applyDocumentCommand(document, command); });
   const announce = vi.fn();
+  const notify = vi.fn();
   const applySelection = vi.fn();
+  const applyConnectorSelection = vi.fn();
   let minted = 0;
   const { result } = renderHook(() => useV2EditActions({
     commit, pageRef: { current: page }, selectionRef: { current: replaceSelection(nodeIds) }, selectedConnectorIds: [],
-    mintId: (prefix) => `${prefix}-${++minted}`, readOnly: false, applySelection, applyConnectorSelection: vi.fn(), announce,
+    mintId: (prefix) => `${prefix}-${++minted}`, readOnly: false, applySelection, applyConnectorSelection, announce, notify,
   }));
-  return { actions: result.current, commit, announce, applySelection };
+  return { actions: result.current, commit, announce, notify, applySelection, applyConnectorSelection };
 }
+
+const excalidraw = (elements: readonly object[]) => JSON.stringify({ type: 'excalidraw/clipboard', files: {}, elements });
+const arrow = { id: 'go', type: 'arrow', x: 0, y: 0, width: 100, height: 0, angle: 0, isDeleted: false, points: [[0, 0], [100, 0]] };
 
 describe('useV2EditActions paste', () => {
   it('pastes our own clipboard JSON from the paste event, and leaves other text alone', () => {
@@ -53,6 +61,46 @@ describe('useV2EditActions paste', () => {
     t.actions.copySelection();
     expect(t.actions.pasteShapes()).toBe(true);
     expect(t.commit).toHaveBeenCalledOnce();
+  });
+});
+
+describe('useV2EditActions paste from Excalidraw', () => {
+  it('pastes arrows copied without their shapes as free connectors, selected, in one step', () => {
+    const t = setup([]);
+    expect(t.actions.pasteShapes(excalidraw([arrow]))).toBe(true);
+    expect(t.commit).toHaveBeenCalledOnce();
+    const command = t.commit.mock.calls[0]![0];
+    expect(command.kind === 'batch' ? command.commands.map((child) => child.kind) : []).toEqual(['insert-connector']);
+    expect(t.applyConnectorSelection).toHaveBeenLastCalledWith([expect.stringMatching(/^connector-/)]);
+  });
+
+  it('says so when Excalidraw’s copy holds nothing to paste, and never pastes the older copy instead', async () => {
+    const t = setup(['a']);
+    Object.assign(navigator, { clipboard: { writeText: vi.fn(() => Promise.resolve()) } });
+    t.actions.copySelection();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(t.actions.pasteShapes(excalidraw([{ ...arrow, isDeleted: true }]))).toBe(true);
+    expect(t.commit).not.toHaveBeenCalled();
+    expect(t.notify).toHaveBeenCalledWith(expect.objectContaining({ title: 'Nothing to paste from Excalidraw' }));
+  });
+
+  it('names what didn’t come across, as the import does', () => {
+    const t = setup([]);
+    t.actions.pasteShapes(excalidraw([{ id: 'box', type: 'rectangle', x: 0, y: 0, width: 40, height: 40, isDeleted: false, groupIds: ['g'] }]));
+    expect(t.commit).toHaveBeenCalledOnce();
+    expect(t.notify).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'Pasted from Excalidraw', description: '1 thing didn’t come across: groups come in as separate shapes.',
+    }));
+  });
+});
+
+describe('useV2EditActions paste that the document refuses', () => {
+  it('says it couldn’t paste instead of throwing, and leaves the document as it was', () => {
+    const t = setup([]);
+    const loop = JSON.stringify({ format: 'openflowkit.selection', version: 1, connectors: [], nodes: [createTestNode('x', { parentId: 'x' })] });
+    expect(t.actions.pasteShapes(loop)).toBe(true);
+    expect(t.notify).toHaveBeenCalledWith(expect.objectContaining({ tone: 'danger', title: 'Couldn’t paste the copied shapes' }));
+    expect(t.applySelection).not.toHaveBeenCalled();
   });
 });
 
