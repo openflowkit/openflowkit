@@ -46,7 +46,6 @@ export function readExcalidraw(text: string): ExcalidrawScene | null {
   return { elements: scene.elements.filter((element): element is ExcalidrawElement => !!element && typeof element === 'object'), files };
 }
 
-
 /** True when `text` is an Excalidraw file or its clipboard JSON. */
 export const looksLikeExcalidraw = (text: string): boolean => readExcalidraw(text) !== null;
 

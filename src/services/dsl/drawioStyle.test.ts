@@ -122,6 +122,7 @@ describe('drawioStyleLosses', () => {
       'hatched and patterned fills are drawn solid', 'the glass shine is left off',
       'colours not written as #hex use the theme’s instead', 'the “Comic Sans MS” font is drawn in ours',
     ]);
+    expect(drawioStyleLosses(parseDrawioStyle('gradientColor=default;'), 'shape')).toEqual([]);
     expect(drawioStyleLosses(parseDrawioStyle('gradientColor=none;shadow=0;fillStyle=solid;fillStyle=auto;'), 'shape')).toEqual([]);
   });
 
@@ -130,6 +131,11 @@ describe('drawioStyleLosses', () => {
     expect(heads('endArrow=classic;startArrow=block;')).toEqual([]);
     expect(heads('endArrow=open;startArrow=oval;')).toEqual([]);
     expect(heads('endArrow=diamondThin;startArrow=cross;')).toEqual([]);
+    expect(heads('endArrow=circle;startArrow=circlePlus;')).toEqual([]);
+    expect(drawioConnectorAppearance(parseDrawioStyle('endArrow=circle;startArrow=circlePlus;'))).toMatchObject({ markerEnd: 'circle', markerStart: 'circle' });
+    // Entity-relation ends are drawn as a pair; one on its own is drawn as an arrow, and says so.
+    expect(heads('endArrow=ERmany;startArrow=ERmandOne;')).toEqual([]);
+    expect(heads('endArrow=ERmany;')).toEqual(['draw.io’s “ERmany” arrow head is drawn as an arrow']);
     expect(heads('endArrow=dash;startArrow=halfCircle;')).toEqual([
       'draw.io’s “dash” arrow head is drawn as an arrow', 'draw.io’s “halfCircle” arrow head is drawn as an arrow',
     ]);

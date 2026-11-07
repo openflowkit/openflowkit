@@ -148,7 +148,7 @@ export function drawioNodeAppearance(style: DrawioStyle): JsonObject {
 }
 
 /** Heads `marker` draws as themselves: an arrow, a circle, a diamond or a cross. */
-const DRAWN_HEADS = new Set(['', 'none', 'classic', 'classicThin', 'block', 'blockThin', 'open', 'openThin', 'openAsync', 'async', 'oval', 'cross']);
+const DRAWN_HEADS = new Set(['', 'none', 'classic', 'classicThin', 'block', 'blockThin', 'open', 'openThin', 'openAsync', 'async', 'oval', 'circle', 'circlePlus', 'cross']);
 /** Colour words draw.io writes that mean "the default" or "none", which we keep as the theme or as no paint. */
 const COLOUR_WORDS = new Set(['', 'default', 'none', 'swimlane', 'inherit']);
 /** Fonts close enough to ours that swapping them is no loss. */
@@ -160,7 +160,7 @@ const OUR_FONTS = new Set(['helvetica', 'arial', 'verdana', 'inter', 'sans-serif
  */
 export function drawioStyleLosses(style: DrawioStyle, of: 'shape' | 'connector'): string[] {
   const losses: string[] = [];
-  if (style.gradientColor && style.gradientColor !== 'none') losses.push('gradient fills are drawn solid');
+  if (style.gradientColor && style.gradientColor !== 'none' && style.gradientColor !== 'default') losses.push('gradient fills are drawn solid');
   if (style.shadow === '1') losses.push('shadows are left off');
   if (style.sketch === '1' || style.comic === '1') losses.push('the hand-drawn sketch look is drawn clean');
   if (style.fillStyle && style.fillStyle !== 'solid' && style.fillStyle !== 'auto') losses.push('hatched and patterned fills are drawn solid');
@@ -170,8 +170,10 @@ export function drawioStyleLosses(style: DrawioStyle, of: 'shape' | 'connector')
   const font = style.fontFamily?.trim();
   if (font && !OUR_FONTS.has(font.toLowerCase())) losses.push(`the “${font}” font is drawn in ours`);
   if (of === 'connector') {
+    // Entity-relation ends are drawn only as a pair; one on its own is drawn as an arrow.
+    const relation = drawioErRelation(style) !== null;
     for (const head of [style.endArrow, style.startArrow]) {
-      if (head !== undefined && !DRAWN_HEADS.has(head) && !head.startsWith('diamond') && !head.startsWith('ER')) {
+      if (head !== undefined && !DRAWN_HEADS.has(head) && !head.startsWith('diamond') && !(relation && head.startsWith('ER'))) {
         losses.push(`draw.io’s “${head}” arrow head is drawn as an arrow`);
       }
     }
@@ -183,7 +185,7 @@ export function drawioStyleLosses(style: DrawioStyle, of: 'shape' | 'connector')
 function marker(value: string | undefined, fallback: string | null): string | null {
   const name = value ?? fallback;
   if (name === null || name === 'none' || name === '') return null;
-  if (name === 'oval') return 'circle';
+  if (name === 'oval' || name === 'circle' || name === 'circlePlus') return 'circle';
   if (name.startsWith('diamond')) return 'diamond';
   if (name === 'cross') return 'cross';
   return 'arrow';

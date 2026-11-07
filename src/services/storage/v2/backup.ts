@@ -74,7 +74,6 @@ async function drawioIn(file: File, text: string): Promise<string | null> {
 }
 const SOURCE = /\.(mmd|mermaid|d2|dsl|ofk|txt)$/i;
 
-
 /**
  * The one way files open, from Home's Import and the editor's Open file…: our .json (one diagram, a v2 backup, a v1
  * backup) is saved as new diagrams (every file gets fresh ids, so a diagram already here is kept beside its copy);
