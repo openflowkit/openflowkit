@@ -1,4 +1,4 @@
-import { darkInkReadsOn, fillOverCanvas } from '../../opencanvas/domain/color/adaptiveColor';
+import { darkInkReadsOn, paintOver } from '../../opencanvas/domain/color/adaptiveColor';
 import { createDefaultSceneLayer, DEFAULT_SCENE_LAYER_ID, UNTITLED_DOCUMENT_NAME } from '../../opencanvas/domain/document/defaults';
 import type { JsonObject } from '../../opencanvas/domain/document/json';
 import {
@@ -117,25 +117,21 @@ function turnedPoints(element: ExcalidrawElement): Point2d[] {
   }));
 }
 
-/** Our dark canvas: what the dark theme washes a white fill to, and what shows through a see-through one. */
+/** Our dark canvas: what shows through a see-through fill or a dark wash, under everything else. */
 const DARK_CANVAS = '#191b19';
 
-/**
- * Whether Excalidraw's default black reads better than our dark theme's white on this fill, as the dark canvas shows it.
- * A white or paper fill washes to the canvas; a see-through one lets the canvas through (#a5d8ff at 30% is slate grey).
- */
-function blackReadsOnDark(node: SceneNode): boolean {
-  if (typeof node.appearance.fill !== 'string' || node.appearance.fill === 'transparent') return false;
+/** Whether Excalidraw's default black reads better than our dark theme's white on `node`'s fill, drawn over `below`. */
+function blackReadsOnDark(node: SceneNode, below: string): boolean {
   const { fill, opacity } = resolveNodeStyle(node, DARK_CANVAS);
-  return fill.startsWith('#') && darkInkReadsOn(fillOverCanvas(fill, DARK_CANVAS, opacity));
+  return darkInkReadsOn(paintOver(fill, below, opacity));
 }
 
 const FILL_CELL = 256;
 /** A shape covering more cells than this (a page-sized backdrop) goes on a short list instead of into every cell. */
 const MAX_FILL_CELLS = 256;
 
-/** A filled shape's box in Excalidraw's space, and its place in the drawing order: a later one lies on top. */
-interface Fill { readonly box: Bounds2d; readonly node: SceneNode; readonly order: number }
+/** A filled shape's box in Excalidraw's space, its fill as the dark theme draws it, and its place in the drawing order. */
+interface Fill { readonly box: Bounds2d; readonly fill: string; readonly opacity: number; readonly order: number }
 
 /** Filled shapes placed so far, filed by the cells they cover in Excalidraw's own space: what lies under a word is a lookup, not a scan. */
 class FillIndex {
@@ -144,7 +140,8 @@ class FillIndex {
   private count = 0;
 
   add(box: Bounds2d, node: SceneNode): void {
-    const fill = { box, node, order: this.count++ };
+    const { fill: paint, opacity } = resolveNodeStyle(node, DARK_CANVAS);
+    const fill = { box, fill: paint, opacity, order: this.count++ };
     const [minX, minY, maxX, maxY] = cellRange(fill.box, FILL_CELL);
     if (!((maxX - minX + 1) * (maxY - minY + 1) <= MAX_FILL_CELLS)) { this.wide.push(fill); return; }
     for (let x = minX; x <= maxX; x += 1) {
@@ -156,18 +153,15 @@ class FillIndex {
     }
   }
 
-  /** The topmost filled shape under `point`: the words sit on it, whatever lies below (a white card on a pastel zone). */
-  top(point: Point2d): SceneNode | undefined {
-    let top: Fill | undefined;
+  /**
+   * What the dark theme shows at `point`: every fill under it painted bottom up over the canvas. A white card is a faint
+   * wash there, so a pastel zone under it still shows; a see-through fill lets what is below through.
+   */
+  seenOnDark(point: Point2d): string {
     const cell = this.cells.get(`${Math.floor(point.x / FILL_CELL)}:${Math.floor(point.y / FILL_CELL)}`) ?? [];
-    for (const list of [cell, this.wide]) {
-      for (const fill of list) {
-        const { box } = fill;
-        const under = point.x >= box.x && point.x <= box.x + box.width && point.y >= box.y && point.y <= box.y + box.height;
-        if (under && (!top || fill.order > top.order)) top = fill;
-      }
-    }
-    return top?.node;
+    const under = [...cell, ...this.wide].filter(({ box }) =>
+      point.x >= box.x && point.x <= box.x + box.width && point.y >= box.y && point.y <= box.y + box.height);
+    return under.sort((a, b) => a.order - b.order).reduce((below, { fill, opacity }) => paintOver(fill, below, opacity), DARK_CANVAS);
   }
 }
 
@@ -264,7 +258,9 @@ class SceneBuilder {
     const bound = this.labels.get(id);
     // A rectangle wraps its own label to its width; a diamond or an ellipse draws it on one line, so it keeps Excalidraw's lines.
     const label = bound ? wordsOf(bound, type === 'diamond' || type === 'ellipse') : '';
-    const node = this.nodeFor(element, type, { id, at: { x, y }, size: { width, height }, label, bound });
+    // What the dark theme shows under the element's words, from the fills placed before it: their ink is chosen against it.
+    const below = type === 'text' || bound ? this.fills.seenOnDark({ x: finite(element.x) + width / 2, y: finite(element.y) + height / 2 }) : DARK_CANVAS;
+    const node = this.nodeFor(element, type, { id, at: { x, y }, size: { width, height }, label, bound, below });
     // A node drawn wider than the element (free text) grows away from the edge its words are set against,
     // keeping its 8px margin outside the element: from the centre unless aligned left or right.
     const grown = node.size.width - width;
@@ -281,7 +277,7 @@ class SceneBuilder {
 
   private nodeFor(
     element: ExcalidrawElement, type: string,
-    at: { id: string; at: Point2d; size: { width: number; height: number }; label: string; bound: ExcalidrawElement | undefined },
+    at: { id: string; at: Point2d; size: { width: number; height: number }; label: string; bound: ExcalidrawElement | undefined; below: string },
   ): SceneNode {
     // Own keys only: a hand-edited "constructor" falls back to a box instead of reading Object's.
     const shape = Object.hasOwn(SHAPES, type) ? SHAPES[type] : undefined;
@@ -293,14 +289,12 @@ class SceneBuilder {
       }
       const node = createShapeNode(this.page, { kind: rounded ? 'rounded' : circle ? 'circle' : shape, id: at.id, at: at.at, size: at.size,
         label: at.label, appearance: excalidrawNodeAppearance(element, at.bound) });
-      const ink = at.bound && node.appearance.textColor === undefined ? excalidrawWordInk(at.bound.strokeColor, blackReadsOnDark(node)) : undefined;
+      const ink = at.bound && node.appearance.textColor === undefined ? excalidrawWordInk(at.bound.strokeColor, blackReadsOnDark(node, at.below)) : undefined;
       return ink ? { ...node, appearance: { ...node.appearance, textColor: ink } } : node;
     }
     if (type === 'text') {
-      // Default ink follows the theme, except where black reads on the topmost fill drawn below it, as the dark canvas shows it.
-      const centre = { x: finite(element.x) + at.size.width / 2, y: finite(element.y) + at.size.height / 2 };
-      const under = this.fills.top(centre);
-      const ink = excalidrawWordInk(element.strokeColor, !!under && blackReadsOnDark(under));
+      // Default ink follows the theme, except where black reads on what the dark theme shows under the words.
+      const ink = excalidrawWordInk(element.strokeColor, darkInkReadsOn(at.below));
       // Excalidraw's box is exactly its words; ours keeps 8px clear each side and draws handwriting in a wider
       // face, so the box widens about the same centre. ponytail: the margin is guessed — measure the canvas face if words break.
       // Fixed-width text (autoResize false) is wrapped by Excalidraw to its box: those lines, not one long one.

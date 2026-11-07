@@ -64,9 +64,9 @@ export function excalidrawInk(value: unknown): string | undefined {
 }
 
 /**
- * Ink for words: a colour the author picked stays. Excalidraw's default black stays too where the words sit on a fill
- * where black reads in our dark theme (black on teal reads; the theme's white would not); anywhere else (the canvas,
- * a white box the dark theme washes to the canvas, a see-through fill) it is left to the theme, so it turns white on dark.
+ * Ink for words: a colour the author picked stays. Excalidraw's default black stays too where black reads on what our
+ * dark theme shows under the words (teal, or a pastel zone seen through a washed white card); anywhere else (the canvas,
+ * a white box on it, a see-through fill on it) it is left to the theme, so it turns white on dark.
  */
 export function excalidrawWordInk(value: unknown, blackReads: boolean): string | undefined {
   const picked = excalidrawInk(value);

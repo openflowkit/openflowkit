@@ -5,7 +5,7 @@ import { resolveBasicNodePresentation } from './basicNodePresentation';
 import { resolveContainerNodePresentation } from './containerNodePresentation';
 import { resolveNodeStroke, type NodeStrokeStyle } from './nodeStroke';
 import { optionalPresentationString } from './nodePresentationValues';
-import { darkWashFill, fillOverCanvas, isDarkCanvas, resolveAdaptiveInk, WASH_SUB_INK } from '../color/adaptiveColor';
+import { darkWashFill, isDarkCanvas, paintOver, resolveAdaptiveInk, WASH_SUB_INK } from '../color/adaptiveColor';
 import { hasExplicitColor, nodePaletteName, PALETTE_KEYS, paletteResolver } from './nodePalette';
 import { widgetLabelBox } from './widgetNodePresentation';
 import { framePresetOf } from './framePreset';
@@ -241,7 +241,7 @@ function computeNodeStyle(node: SceneNode, canvasColor?: string): NodeStyle {
   // except as a dark-canvas wash.
   const opacity = clampNumber(a.opacity, { min: 0, max: 1 }, 1);
   const textBackdrop = defaults.labelOnCanvas || fill === 'transparent' || darkWash ? canvasColor
-    : fill.startsWith('#') ? (canvasColor === undefined ? fill : fillOverCanvas(fill, canvasColor, opacity)) : undefined;
+    : fill.startsWith('#') ? (canvasColor === undefined ? fill : paintOver(fill, canvasColor, opacity)) : undefined;
   const textColor = canvasColor !== undefined && textBackdrop !== undefined
     ? resolveAdaptiveInk(explicitTextColor, textBackdrop)
     : paint(a.textColor, defaults.text);

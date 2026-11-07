@@ -16,9 +16,16 @@ export function numericColorToHex(color: number): string {
   return `#${Math.max(0, Math.min(0xffffff, color)).toString(16).padStart(6, '0')}`;
 }
 
-/** A fill as it shows over `canvas` at `opacity` (0–1): through a see-through fill, the canvas shows. */
-export const fillOverCanvas = (fill: string, canvas: string, opacity: number): string =>
-  (opacity < 1 ? mixHex(fill, canvas, 1 - opacity) : fill);
+/**
+ * A fill as it shows over `below` (the canvas, or what is drawn under it) at `opacity` (0–1): a see-through fill and a
+ * dark wash (rgba at 8%) let what is below show through; `transparent`, or anything not a colour, shows it whole.
+ */
+export function paintOver(fill: string, below: string, opacity: number): string {
+  const rgba = /^rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d.]+)\s*\)$/.exec(fill);
+  if (rgba) return mixHex(rgbToHex(Number(rgba[1]), Number(rgba[2]), Number(rgba[3])), below, 1 - Number(rgba[4]) * opacity);
+  if (!fill.startsWith('#')) return below;
+  return opacity < 1 ? mixHex(fill, below, 1 - opacity) : fill;
+}
 
 /** Whether dark ink reads better than white on `backdrop`, by contrast (teal takes dark ink, slate grey white). */
 export const darkInkReadsOn = (backdrop: string): boolean => readableTextOn(backdrop) !== '#ffffff';

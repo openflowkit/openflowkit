@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { SceneDocumentV1 } from '../../opencanvas/domain/document/types';
 import { resolveNodeStyle } from '../../opencanvas/domain/nodes/nodeStyle';
-import { contrastRatio, mixHex } from '../../lib/colorUtils';
+import { contrastRatio, mixHex, rgbToHex } from '../../lib/colorUtils';
 import { excalidrawScene, excalidrawToDocument, looksLikeExcalidraw, readExcalidraw } from './excalidraw';
 import architecture from './fixtures/excalidraw/architecture.excalidraw?raw';
 import dbSchema from './fixtures/excalidraw/db-schema.excalidraw?raw';
@@ -127,24 +127,33 @@ describe('excalidrawToDocument', () => {
       box('under-white', 0, 150, '#ffffff'), words('on-white', 20, 178, 'free on white'),
       box('under-blue', 200, 150, '#a5d8ff'), words('on-blue', 220, 178, 'free on blue'),
       words('loose', 400, 178, 'free on the canvas'),
-      // A white card on a pastel zone: the words sit on the card, the topmost fill, not on the zone below it.
+      // White cards on a pastel zone. In the dark theme a white card is an 8% wash, so the zone shows through it: the words
+      // on it, free or bound, sit on yellow. So do the words of an unfilled box on the zone.
       { ...box('zone', 0, 300, '#ffec99'), width: 560, height: 160 },
       box('card', 20, 320, '#ffffff'), words('on-card', 40, 348, 'free on a card'),
+      box('card2', 200, 320, '#ffffff'), words('card2-label', 220, 348, 'bound', 'card2'),
+      box('ring', 380, 320, 'transparent'), words('ring-label', 400, 348, 'ring', 'ring'),
       // A see-through fill shows the dark canvas through it: #a5d8ff at 30% is a slate grey there.
       box('faint', 600, 150, '#a5d8ff', 30), words('faint-label', 620, 178, 'faint', 'faint'),
       box('under-faint', 600, 300, '#a5d8ff', 30), words('on-faint', 620, 328, 'free on faint'),
     ]));
     const node = (id: string) => document.pages[0]!.nodes.find((candidate) => candidate.id === id)!;
     for (const canvas of ['#191b19', '#f7f7f5']) {
-      // What the words sit on: a fill that stays solid, seen through at its opacity, else the canvas (a wash is 8% over it).
-      const backdrop = (id: string) => {
+      // What shows under the words: each fill below them, bottom up, painted over what is under it at its opacity (a dark
+      // wash is rgba at 8%), starting from the canvas: what the renderer draws there.
+      const paint = (below: string, id: string) => {
         const { fill, opacity } = resolveNodeStyle(node(id), canvas);
-        return fill.startsWith('#') ? mixHex(fill, canvas, 1 - opacity) : canvas;
+        const rgba = /^rgba\((\d+),(\d+),(\d+),([\d.]+)\)$/.exec(fill.replace(/\s/g, ''));
+        if (rgba) return mixHex(rgbToHex(Number(rgba[1]), Number(rgba[2]), Number(rgba[3])), below, 1 - Number(rgba[4]) * opacity);
+        return fill.startsWith('#') ? mixHex(fill, below, 1 - opacity) : below;
       };
-      for (const [id, under] of [['plain', 'plain'], ['white', 'white'], ['short', 'short'], ['teal', 'teal'],
-        ['on-white', 'under-white'], ['on-blue', 'under-blue'], ['loose', 'loose'], ['on-card', 'card'],
-        ['faint', 'faint'], ['on-faint', 'under-faint']] as const) {
-        expect(contrastRatio(resolveNodeStyle(node(id), canvas).textColor, backdrop(under)), `${id} on ${canvas}`).toBeGreaterThanOrEqual(4.5);
+      const cases: readonly (readonly [string, readonly string[]])[] = [['plain', ['plain']], ['white', ['white']], ['short', ['short']],
+        ['teal', ['teal']], ['on-white', ['under-white']], ['on-blue', ['under-blue']], ['loose', []],
+        ['on-card', ['zone', 'card']], ['card2', ['zone', 'card2']], ['ring', ['zone', 'ring']],
+        ['faint', ['faint']], ['on-faint', ['under-faint']]];
+      for (const [id, stack] of cases) {
+        const backdrop = stack.reduce(paint, canvas);
+        expect(contrastRatio(resolveNodeStyle(node(id), canvas).textColor, backdrop), `${id} on ${canvas}`).toBeGreaterThanOrEqual(4.5);
       }
     }
   });
