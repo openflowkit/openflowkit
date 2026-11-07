@@ -227,7 +227,7 @@ views { view context of Shop; view container of Shop }
 
     const read = await run.run('get_diagram', { frameId: run.frame().id, since: revision });
     expect(read.output).toMatchObject({
-      revision: next, edited: false, dsl: 'flowchart\nA -> B\nB -> C [red]', dslDiffNote: expect.stringMatching(/redrawn from other text/),
+      revision: next, edited: false, dsl: 'flowchart\nA -> B\nB -> C [red]', dslDiffNote: expect.stringMatching(/is not this diagram's current revision/),
     });
     expect(read.output).not.toHaveProperty('dslDiff');
     expect((await run.run('get_diagram', { frameId: run.frame().id, since: next })).output).toMatchObject({ revision: next, dslDiff: '' });
@@ -242,6 +242,36 @@ views { view context of Shop; view container of Shop }
     expect(next.revision).not.toBe(revision);
     const read = await run.run('get_diagram', { frameId: run.frame().id, since: revision });
     expect(read.output).toMatchObject({ dsl: 'flowchart\nA -> B432382' });
+    expect(read.output).not.toHaveProperty('dslDiff');
+  });
+
+  // A revision that is not this frame's, for whatever reason (another frame's, a mistyped one), is not a redraw claim.
+  it('says the revision given is not the current one, without guessing why', async () => {
+    const run = await host();
+    const { revision } = (await run.run('create_diagram', { dsl: 'flowchart\nA -> B' })).output as { revision: string };
+    const read = await run.run('get_diagram', { frameId: run.frame().id, since: 'garbage' });
+    expect(read.output).toMatchObject({
+      revision, dsl: 'flowchart\nA -> B',
+      dslDiffNote: `Not compared: revision garbage is not this diagram's current revision (${revision}), so this is the whole text.`,
+    });
+  });
+
+  // A frame with no authored text (made before frames kept it) has no revision; `since` gets the whole text and why.
+  it('has a null revision, and returns the whole text for since, on a frame with no authored text', async () => {
+    const run = await host();
+    await run.run('create_diagram', { dsl: 'flowchart\nA -> B' });
+    const document = run.document();
+    const page = document.pages[0]!;
+    const nodes = page.nodes.map((node) => {
+      if (node.kind !== 'frame') return node;
+      const { source: _source, ...dsl } = node.metadata.dsl as Record<string, unknown>;
+      return { ...node, metadata: { ...node.metadata, dsl } } as typeof node;
+    });
+    const bare = { ...document, pages: [{ ...page, nodes }, ...document.pages.slice(1)] } as SceneDocumentV1;
+    const read = await resolveAgentOpCommand(op('get_diagram'), { since: 'anything' }, { ...run.context(), document: bare });
+    expect(read.output).toMatchObject({
+      revision: null, dsl: expect.stringContaining('A -> B'), dslDiffNote: 'Not compared: this frame has no authored text to compare the canvas against.',
+    });
     expect(read.output).not.toHaveProperty('dslDiff');
   });
 
@@ -277,7 +307,7 @@ views { view context of Shop; view container of Shop }
     expect(await generate('flowchart\ntitle: One\nA -> B', 'pastel')).toMatchObject({ revision, dslDiff: '' });
     // A new title alone leaves every shape as it was: the scene hash stays, the revision must not.
     const retitled = await generate('flowchart\ntitle: Two\nA -> B', 'pastel');
-    expect(retitled).toMatchObject({ dsl: 'flowchart\ntitle: Two\nA -> B', dslDiffNote: expect.stringMatching(/redrawn from other text/) });
+    expect(retitled).toMatchObject({ dsl: 'flowchart\ntitle: Two\nA -> B', dslDiffNote: expect.stringMatching(/is not this diagram's current revision/) });
     expect(retitled.revision).not.toBe(revision);
     const repainted = await generate('flowchart\ntitle: Two\nA -> B', 'mono');
     expect(repainted.revision).not.toBe(retitled.revision);
