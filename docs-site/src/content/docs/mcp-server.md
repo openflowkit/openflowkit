@@ -268,6 +268,7 @@ List threads — mirrors **Read threads** in a canvas gesture; read-only.
 | --- | --- |
 | `pageId` | string *(optional)* |
 | `threadId` | string *(optional)* |
+| `after` | string *(optional)* |
 | `unanswered` | boolean *(default `false`)* |
 | `includeResolved` | boolean *(default `false`)* |
 | `limit` | number *(default `20`)* |

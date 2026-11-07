@@ -174,6 +174,58 @@ describe('thread ops, file mode', () => {
     expect(one.threads[0]!.comments[0]!.truncated).toBeUndefined();
   });
 
+  // PR #103 review: every comment of every listed thread came back, so one 5,000-comment thread made a list megabytes.
+  it('list_threads shows the first comment and the latest few, and counts the ones left out', async () => {
+    const document = (await file(await drawn(), 'start_thread', { point: { x: 0, y: 0 }, body: 'first' })).document;
+    const [thread] = pageThreads(document.pages[0]!);
+    const comments = Array.from({ length: 5000 }, (_, index) => ({
+      id: `c${index}`, author: { kind: 'human' as const, name: 'Ann' }, body: `${index} ${'y'.repeat(COMMENT_BODY_MAX - 10)}`, createdAt: '2026-10-26T12:00:00.000Z',
+    }));
+    const page = { ...document.pages[0]!, threads: [{ ...thread!, comments: [thread!.comments[0]!, ...comments] }] };
+    const big = { ...document, pages: [page] };
+    type Listed = { threads: { comments: { id: string }[]; omitted?: number }[] };
+    const listed = (await file(big, 'list_threads', {})).output as Listed;
+    expect(listed.threads[0]!.comments.map(({ id }) => id)).toEqual([thread!.comments[0]!.id, 'c4997', 'c4998', 'c4999']);
+    expect(listed.threads[0]!.omitted).toBe(4997);
+    expect(JSON.stringify(listed).length).toBeLessThan(5000);
+    const one = (await file(big, 'list_threads', { threadId: thread!.id })).output as Listed;
+    expect(one.threads[0]!.comments).toHaveLength(51);
+    expect(one.threads[0]!.comments[0]!.id).toBe(thread!.comments[0]!.id);
+    expect(one.threads[0]!.comments.at(-1)!.id).toBe('c4999');
+    expect(one.threads[0]!.omitted).toBe(4950);
+    expect(JSON.stringify(one).length).toBeLessThan(51 * (COMMENT_BODY_MAX + 200));
+    // A short thread is whole, with nothing to count.
+    expect(((await file(document, 'list_threads', {})).output as Listed).threads[0]).not.toHaveProperty('omitted');
+  });
+
+  // PR #103 review: `more` counted threads past `limit` that only a filter could reach.
+  it('list_threads lists the threads after a given one, in the same order, even once that one is resolved', async () => {
+    let document = await drawn();
+    for (let index = 0; index < 5; index += 1) {
+      document = (await file(document, 'start_thread', { point: { x: index, y: 0 }, body: `t${index}` })).document;
+    }
+    const ids = pageThreads(document.pages[0]!).map(({ id }) => id);
+    type Listed = { threads: { id: string }[]; more: number };
+    const list = async (input: object) => (await file(document, 'list_threads', input)).output as Listed;
+    const first = await list({ limit: 2 });
+    expect(first).toEqual({ threads: [expect.objectContaining({ id: ids[0] }), expect.objectContaining({ id: ids[1] })], more: 3 });
+    // The agent resolves what it read; the next page starts after it all the same.
+    document = (await file(document, 'resolve_thread', { threadId: ids[1]! })).document;
+    const second = await list({ limit: 2, after: ids[1] });
+    expect(second.threads.map(({ id }) => id)).toEqual([ids[2], ids[3]]);
+    expect(second.more).toBe(1);
+    expect((await list({ limit: 2, after: ids[3] })).threads.map(({ id }) => id)).toEqual([ids[4]]);
+    await expect(list({ after: 'ghost' })).rejects.toThrow(/Unknown thread "ghost"/);
+    await expect(list({ after: ids[0], threadId: ids[1] })).rejects.toThrow(/threadId or after/);
+  });
+
+  it('list_threads cuts a long body between characters, never inside an emoji', async () => {
+    const body = `${'x'.repeat(LISTED_BODY_MAX - 1)}👍🏽 and more ${'z'.repeat(600)}`;
+    const document = (await file(await drawn(), 'start_thread', { point: { x: 0, y: 0 }, body })).document;
+    const listed = (await file(document, 'list_threads', {})).output as { threads: { comments: { body: string; truncated?: true }[] }[] };
+    expect(listed.threads[0]!.comments[0]).toEqual(expect.objectContaining({ body: `${'x'.repeat(LISTED_BODY_MAX - 1)}…`, truncated: true }));
+  });
+
   // The pin point is a cached position: every command, on a file too, moves it with the node (applyDocumentCommand).
   it('list_threads reports where a pinned node is now, after a move on the file', async () => {
     let document = await drawn();

@@ -55,11 +55,11 @@ separately; its changes are listed under *For developers* in each release.
   diagram was redrawn from other text after it (in Edit as code, or by another agent), `get_diagram` returns the whole
   text and says so, instead of an empty diff.
 - **Comment threads for agents.** `list_threads` reads the threads pinned on the canvas (`unanswered: true` for the
-  ones waiting on the agent, `threadId` for one in full); `reply_to_thread`, `resolve_thread` and `start_thread` write
-  them, live or on a file, signed with the agent's name and taking no undo step. A page keeps its threads in
-  `pages[].threads`, and a `.openflow.json` saved with `openflow_save` or the CLI's `--doc` keeps them, as the app's
-  own copy does; JSON export (unless **Include comments** is ticked), share links, `get_diagram` and the `export` op
-  leave them out. `get_document` and `list_pages` report `openThreads`.
+  ones waiting on the agent, `after` for the next page, `threadId` for one with its bodies uncut); `reply_to_thread`,
+  `resolve_thread` and `start_thread` write them, live or on a file, signed with the agent's name and taking no undo
+  step. A page keeps its threads in `pages[].threads`, and a `.openflow.json` saved with `openflow_save` or the CLI's
+  `--doc` keeps them, as the app's own copy does; JSON export (unless **Include comments** is ticked), share links,
+  `get_diagram` and the `export` op leave them out. `get_document` and `list_pages` report `openThreads`.
 
 ### For developers: MCP server and CLI 0.2.4 (on npm since 2026-10-13, tag `mcp-v0.2.4`)
 
