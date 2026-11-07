@@ -277,6 +277,32 @@ test('unsent text is never lost: a click away warns first, and a closed thread k
   expect(await threads(page)).toMatchObject([{ comments: [{ body: 'First' }] }]);
 });
 
+test('a card opens in the free canvas: never under an open panel, and whole near the bottom', { tag: '@gate' }, async ({ page }) => {
+  await start(page);
+  await page.getByRole('toolbar', { name: 'Workspace', exact: true }).getByRole('button', { name: 'Connect agent', exact: true }).click();
+  const panel = (await page.getByRole('complementary', { name: 'Connect agent' }).boundingBox())!;
+  // A pin just left of the panel: the card would run under it on the right, so it opens on the left.
+  await page.getByTestId('v2-canvas').focus();
+  await page.keyboard.press('c');
+  await page.mouse.click(panel.x - 140, 300);
+  const composer = page.getByRole('dialog', { name: 'New comment' });
+  await expect(composer).toBeVisible();
+  expect((await composer.boundingBox())!.x + (await composer.boundingBox())!.width).toBeLessThanOrEqual(panel.x);
+  await composer.getByRole('textbox', { name: 'Comment' }).fill('Beside the panel');
+  await composer.getByRole('textbox', { name: 'Comment' }).press('Enter');
+  // A thread near the bottom slides up so its reply box shows.
+  await page.mouse.click(400, 730);
+  await page.getByRole('dialog', { name: 'New comment' }).getByRole('textbox', { name: 'Comment' }).fill('Low on the page');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('v');
+  await page.getByTestId('v2-comment-pin').nth(1).getByRole('button').click();
+  const card = page.getByTestId('v2-comment-thread');
+  await expect(card.getByRole('textbox', { name: 'Reply' })).toBeVisible();
+  const box = (await card.boundingBox())!;
+  expect(box.y + box.height).toBeLessThanOrEqual(800);
+  await shot(page, 'comment-card-near-bottom');
+});
+
 test('a thread is placed, written and sent with the keyboard alone', async ({ page }) => {
   const { id, centre } = await start(page);
   await page.getByTestId('v2-canvas').focus();

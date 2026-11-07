@@ -1474,7 +1474,8 @@
 .ofk-comment-avatar svg { width: 60%; height: 60%; }
 
 .ofk-comment-card {
-  position: absolute; left: 38px; top: -34px; box-sizing: border-box; width: 320px; max-width: min(320px, 86vw);
+  /* Beside the pin, inside the free canvas: v2CommentPlacement sets the side and --ofk-card-top. */
+  position: absolute; left: 38px; top: var(--ofk-card-top, -34px); box-sizing: border-box; width: 320px; max-width: min(320px, 86vw);
   display: grid; gap: 8px; padding: 10px; border-radius: 12px; background: var(--ofk-surface); color: var(--ofk-text);
   border: 1px solid var(--ofk-border); font-size: 13px; line-height: 1.4; pointer-events: auto; cursor: default;
   box-shadow: 0 8px 28px rgb(0 0 0 / .25);

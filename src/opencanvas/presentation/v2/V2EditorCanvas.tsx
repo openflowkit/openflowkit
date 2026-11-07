@@ -120,6 +120,7 @@ export function V2EditorCanvas(p: EditorCanvasProps): React.JSX.Element {
         onOpenDrawing={p.repoDrawing ? () => { p.openDrawingRef.current(); } : undefined} /> : null}
       <V2Comments page={p.page} sectionRef={p.sectionRef} hostRef={p.hostRef} cameraRef={p.camera.cameraRef} subscribeCamera={p.camera.subscribe}
         selectedNodeId={selectedNodeId} apiRef={commentApi} tool={p.tool} readOnly={p.comments.readOnly} hidden={map.active}
+        panelsKey={[panels.workspace, panels.shortcutsOpen, panels.chartId, panels.treeOpen, panels.motionOpen].join()}
         updateThreads={p.comments.updateThreads} />
       {p.agentCursor}
       {map.start ? (

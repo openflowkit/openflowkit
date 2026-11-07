@@ -30,7 +30,7 @@ function Harness(props: { readonly initial: SceneDocumentV1; readonly tool: V2To
     <section ref={sectionRef} tabIndex={-1} data-testid="section">
       <button type="button" data-testid="context-bar-button">Fill colour</button>
       <V2Comments page={page} sectionRef={sectionRef} hostRef={hostRef} cameraRef={cameraRef} subscribeCamera={() => () => undefined}
-        selectedNodeId={() => null} apiRef={api} tool={props.tool} readOnly={false} hidden={false}
+        selectedNodeId={() => null} apiRef={api} tool={props.tool} readOnly={false} hidden={false} panelsKey=""
         updateThreads={(change) => setDoc((current) => { const next = change(current); props.onDoc?.(next); return next; })} />
     </section>
   );

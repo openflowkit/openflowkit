@@ -10,6 +10,7 @@ import { Avatar, CommentComposer, DraftsContext, ThreadPopover } from './V2Comme
 import { mintV2Id } from './v2Document';
 import { HUMAN_AUTHOR_NAME, keyboardSpot, pinNudge } from './v2CommentsView';
 import { Placement } from './v2CommentPlacement';
+import { clearance } from './map/mapMode';
 import type { V2Tool } from './v2ToolCatalog';
 import { CommentDrafts, draftKey, FRESH_GUARD, outsideClick, typed, type DraftGuard } from './v2DraftGuard';
 
@@ -23,13 +24,14 @@ export interface V2CommentApi {
   readonly click: (point: Point2d) => void;
 }
 
-const placementFor = (cameraRef: RefObject<CanvasCamera>, sectionRef: RefObject<HTMLElement | null>): Placement =>
-  new Placement(() => cameraRef.current, () => sectionRef.current?.clientWidth ?? Infinity);
+// A card opens in the canvas the side panels and floating chrome leave free, as the camera frames things there.
+const placementFor = (cameraRef: RefObject<CanvasCamera>, hostRef: RefObject<PixiRendererHost | null>): Placement =>
+  new Placement(() => cameraRef.current, () => (hostRef.current ? clearance(hostRef.current) : null));
 
 const PlacementContext = createContext<Placement | null>(null);
 
-/** Children sit at a world point; the tip of whatever is inside is the origin. */
-function Anchored(props: { readonly world: Point2d; readonly className?: string; readonly children: ReactNode; readonly testId?: string }): React.JSX.Element {
+/** Children sit at a world point; the tip of whatever is inside is the origin. `card`: an open card is among them. */
+function Anchored(props: { readonly world: Point2d; readonly card?: boolean; readonly className?: string; readonly children: ReactNode; readonly testId?: string }): React.JSX.Element {
   const placement = useContext(PlacementContext);
   const ref = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
@@ -43,6 +45,10 @@ function Anchored(props: { readonly world: Point2d; readonly className?: string;
   useLayoutEffect(() => {
     if (ref.current) placement?.move(ref.current, props.world);
   }, [placement, props.world]);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (el) placement?.setCard(el, props.card ? el.querySelector<HTMLElement>('[data-comment-open]') : null);
+  }, [placement, props.card]);
   return <div ref={ref} className={`ofk-comment-anchor ${props.className ?? ''}`} data-testid={props.testId}>{props.children}</div>;
 }
 
@@ -65,6 +71,8 @@ interface Props {
   readonly readOnly: boolean;
   /** The canvas shows another page than the one holding the threads (Map): their coordinates mean nothing there. */
   readonly hidden: boolean;
+  /** Changes when a side panel opens or closes: the free canvas an open card stays inside changed. */
+  readonly panelsKey: string;
   readonly updateThreads: (change: (document: SceneDocumentV1) => SceneDocumentV1) => void;
 }
 
@@ -92,10 +100,11 @@ export function V2Comments(props: Props): React.JSX.Element | null {
   const [now, setNow] = useState(() => Date.now());
   // The loop reads the refs when a frame runs, never during render.
   // eslint-disable-next-line react-hooks/refs -- only handed over here; a frame reads them
-  const [placement] = useState(() => placementFor(cameraRef, sectionRef));
+  const [placement] = useState(() => placementFor(cameraRef, hostRef));
   useEffect(() => () => placement.stop(), [placement]);
   useEffect(() => subscribeCamera(() => placement.kick()), [placement, subscribeCamera]);
-  // A narrower section can put a card on the wrong side of its pin with the camera still.
+  // A panel that opens or a narrower section can leave a card under the panel or on the wrong side, with the camera still.
+  useEffect(() => { placement.kick(); }, [placement, props.panelsKey]);
   useEffect(() => {
     const section = sectionRef.current;
     if (!section || typeof ResizeObserver === 'undefined') return;
@@ -260,7 +269,7 @@ export function V2Comments(props: Props): React.JSX.Element | null {
         const lead = thread.comments[0]!;
         const selected = open?.kind === 'thread' && open.id === thread.id;
         return (
-          <Anchored key={thread.id} world={drag?.id === thread.id ? drag.world : thread.anchor.point} className="ofk-comment-pinned" testId="v2-comment-pin">
+          <Anchored key={thread.id} world={drag?.id === thread.id ? drag.world : thread.anchor.point} card={selected && openThread !== undefined} className="ofk-comment-pinned" testId="v2-comment-pin">
             <button type="button" className="ofk-comment-pin" data-comment-ui data-thread-id={thread.id} data-selected={selected || undefined} data-kind={lead.author.kind}
               aria-label={`Comment by ${lead.author.name}${thread.comments.length > 1 ? `, ${thread.comments.length} messages` : ''}`}
               aria-expanded={selected} data-dragging={drag?.id === thread.id || undefined} {...pinHandlers(thread.id)}
@@ -287,7 +296,7 @@ export function V2Comments(props: Props): React.JSX.Element | null {
         );
       })}
       {open?.kind === 'composer' ? (
-        <Anchored world={open.world} className="ofk-comment-pinned" testId="v2-comment-composer">
+        <Anchored world={open.world} card className="ofk-comment-pinned" testId="v2-comment-composer">
           <span className="ofk-comment-pin" data-ghost><Avatar kind="human" name={HUMAN_AUTHOR_NAME} size={22} /></span>
           <CommentComposer pageId={page.id} onSend={create} onCancel={close} />
         </Anchored>
