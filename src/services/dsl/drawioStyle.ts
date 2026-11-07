@@ -92,6 +92,20 @@ export function drawioColor(value: string | undefined): string | undefined {
   return /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(value) ? value.toLowerCase() : undefined;
 }
 
+/** A line colour: draw.io's default black is left unset, so lines follow our theme and show on a dark canvas. */
+const drawioLine = (value: string | undefined): string | undefined => {
+  const color = drawioColor(value);
+  return color === '#000000' || color === '#000' ? undefined : color;
+};
+
+/** A near-black grey (`#000` to `#555`): the ink draw.io writes by default, meant for a light page. */
+export function drawioDarkInk(value: unknown): boolean {
+  if (typeof value !== 'string' || !/^#[0-9a-f]{3}([0-9a-f]{3})?$/.test(value)) return false;
+  const hex = value.length === 4 ? value.replace(/[0-9a-f]/g, (digit) => digit + digit) : value;
+  const [r, g, b] = [1, 3, 5].map((at) => Number.parseInt(hex.slice(at, at + 2), 16));
+  return Math.max(r!, g!, b!) <= 0x55 && Math.max(r!, g!, b!) - Math.min(r!, g!, b!) <= 8;
+}
+
 const finite = (value: string | undefined): number | undefined => {
   if (value === undefined || value === '') return undefined;
   const parsed = Number(value);
@@ -104,7 +118,7 @@ export function drawioNodeAppearance(style: DrawioStyle): JsonObject {
   // Paint the cell doesn't set is left to the theme, which pairs fill and ink in light and dark alike.
   const bare = BARE.has(drawioShapeName(style));
   const fill = bare ? 'transparent' : drawioColor(style.fillColor);
-  const stroke = bare ? 'transparent' : drawioColor(style.strokeColor);
+  const stroke = bare ? 'transparent' : drawioLine(style.strokeColor);
   const text = drawioColor(style.fontColor);
   if (fill) appearance.fill = fill;
   if (stroke) appearance.stroke = stroke;
@@ -166,7 +180,7 @@ export function drawioConnectorAppearance(style: DrawioStyle): JsonObject {
   const start = marker(style.startArrow, null);
   if (end) appearance.markerEnd = end;
   if (start) appearance.markerStart = start;
-  const stroke = drawioColor(style.strokeColor);
+  const stroke = drawioLine(style.strokeColor);
   if (stroke && stroke !== 'transparent') appearance.stroke = stroke;
   const strokeWidth = finite(style.strokeWidth);
   if (strokeWidth !== undefined) appearance.strokeWidth = strokeWidth;

@@ -3,6 +3,9 @@ import { describe, expect, it } from 'vitest';
 import type { SceneDocumentV1 } from '../../opencanvas/domain/document/types';
 import { DEFAULT_SCENE_LAYER_ID } from '../../opencanvas/domain/document/defaults';
 import { validateSceneDocumentV1 } from '../../opencanvas/domain/document/validation';
+import { resolveNodeStyle } from '../../opencanvas/domain/nodes/nodeStyle';
+import { paintOver } from '../../opencanvas/domain/color/adaptiveColor';
+import { contrastRatio } from '../../lib/colorUtils';
 import { drawioToDocument, looksLikeDrawio } from './drawio';
 import flow from './fixtures/drawio/flow.drawio?raw';
 
@@ -38,7 +41,9 @@ describe('drawioToDocument', () => {
       appearance: { fill: '#d5e8d4', stroke: '#82b366' },
     });
     expect(byId.get('check')!.content.shape).toBe('diamond');
-    expect(byId.get('pay')).toMatchObject({ content: { shape: 'rounded', label: 'Take\npayment' }, appearance: { fontWeight: 700, textColor: '#333333' } });
+    expect(byId.get('pay')).toMatchObject({ content: { shape: 'rounded', label: 'Take\npayment' }, appearance: { fontWeight: 700 } });
+    // Its #333333 was meant for a light page: on an unset fill it follows the theme.
+    expect(byId.get('pay')!.appearance.textColor).toBeUndefined();
     expect(byId.get('db')!.content.shape).toBe('cylinder');
   });
 
@@ -412,5 +417,60 @@ describe('big and deep draw.io files', () => {
     cells.push(`<mxCell id="t" value="${words}" style="text;whiteSpace=wrap" vertex="1" parent="1"><mxGeometry width="80" height="40" as="geometry"/></mxCell>`);
     const { document } = await open(wrap(cells));
     expect(document.pages[0]!.nodes).toHaveLength(5_001);
+  });
+});
+
+describe('draw.io colours in either theme', () => {
+  const model = (cells: string) => `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${cells}</root></mxGraphModel>`;
+  const box = (id: string, style: string, x: number, y: number, parent = '1', w = 120, h = 60) =>
+    `<mxCell id="${id}" value="${id}" vertex="1" parent="${parent}" style="${style}"><mxGeometry x="${x}" y="${y}" width="${w}" height="${h}" as="geometry"/></mxCell>`;
+
+  it('keeps every label readable on what is painted under it, light and dark', async () => {
+    const { document } = await open(model([
+      box('plain', 'rounded=0;whiteSpace=wrap;html=1;', 0, 0),
+      box('defaults', 'fillColor=default;strokeColor=default;fontColor=default;', 140, 0),
+      box('black-on-white', 'fillColor=#ffffff;fontColor=#000000;strokeColor=#000000;', 280, 0),
+      box('black-on-pastel', 'fillColor=#dae8fc;fontColor=#000000;', 420, 0),
+      box('black-on-teal', 'fillColor=#12b886;fontColor=#000000;', 560, 0),
+      box('white-on-dark', 'fillColor=#333333;fontColor=#ffffff;', 700, 0),
+      box('hollow', 'fillColor=none;fontColor=#000000;', 0, 100),
+      box('faint', 'fillColor=#a5d8ff;opacity=30;fontColor=#000000;', 140, 100),
+      box('words', 'text;html=1;fontColor=#000000;', 280, 100),
+      box('lane', 'swimlane;fillColor=#fff2cc;fontColor=#000000;', 0, 200, '1', 600, 200),
+      box('in-lane', 'fillColor=none;fontColor=#000000;', 20, 60, 'lane'),
+      box('words-in-lane', 'text;html=1;fontColor=#000000;', 160, 60, 'lane'),
+      box('white-in-lane', 'fillColor=#ffffff;fontColor=#000000;', 300, 60, 'lane'),
+    ].join('')));
+    const nodes = new Map(document.pages[0]!.nodes.map((node) => [node.id, node]));
+    // What shows under each label: its own fill over its containers' fills, bottom up, over the canvas.
+    const stacks: Record<string, readonly string[]> = {
+      plain: ['plain'], defaults: ['defaults'], 'black-on-white': ['black-on-white'], 'black-on-pastel': ['black-on-pastel'],
+      'black-on-teal': ['black-on-teal'], 'white-on-dark': ['white-on-dark'], hollow: ['hollow'], faint: ['faint'], words: [],
+      'in-lane': ['lane', 'in-lane'], 'words-in-lane': ['lane'], 'white-in-lane': ['lane', 'white-in-lane'],
+    };
+    for (const canvas of ['#191b19', '#f7f7f5']) {
+      const paint = (below: string, id: string) => {
+        const { fill, opacity } = resolveNodeStyle(nodes.get(id)!, canvas);
+        return paintOver(fill, below, opacity);
+      };
+      for (const [id, stack] of Object.entries(stacks)) {
+        const backdrop = stack.reduce(paint, canvas);
+        expect(contrastRatio(resolveNodeStyle(nodes.get(id)!, canvas).textColor, backdrop), `${id} on ${canvas}`).toBeGreaterThanOrEqual(4.5);
+      }
+    }
+    // Colours the author picked that read in both themes stay as picked.
+    expect(nodes.get('black-on-teal')!.appearance.textColor).toBe('#000000');
+    expect(nodes.get('white-on-dark')!.appearance.textColor).toBe('#ffffff');
+  });
+
+  it('leaves draw.io’s default black lines to the theme, so they show on a dark canvas', async () => {
+    const { document } = await open(model([
+      box('a', 'strokeColor=#000000;', 0, 0), box('b', 'strokeColor=#b85450;', 200, 0),
+      '<mxCell id="e" edge="1" source="a" target="b" parent="1" style="strokeColor=#000000;"><mxGeometry relative="1" as="geometry"/></mxCell>',
+    ].join('')));
+    const page = document.pages[0]!;
+    expect(page.nodes.find((node) => node.id === 'a')!.appearance.stroke).not.toBe('#000000');
+    expect(page.nodes.find((node) => node.id === 'b')!.appearance.stroke).toBe('#b85450');
+    expect(page.connectors[0]!.appearance.stroke).toBeUndefined();
   });
 });
