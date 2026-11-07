@@ -4,9 +4,8 @@
 import { z } from 'zod';
 import { buildDslPageCommand, nextDslFrameOrigin, placedFrameId } from '../../opencanvas/application/dsl/dslPageCommand';
 import { buildWorkspacePagesCommand, workspaceViewFrames, type WorkspacePagesOptions } from '../../opencanvas/application/dsl/architectureCommands';
-import { frameEdited, frameScene, dslFrames } from '../../dsl/frameScene';
+import { frameEdited, frameScene, frameText, dslFrames } from '../../dsl/frameScene';
 import { serializeLosses } from '../../dsl/losses';
-import { serialize } from '../../dsl/serialize';
 import { dslFrameMeta } from '../../dsl/sceneMeta';
 import { applyDocumentCommand } from '../../opencanvas/domain/commands/execute';
 import type { CompileResult, CompileWorkspaceResult } from '../../dsl/compile';
@@ -192,7 +191,8 @@ export const getDiagram = defineOp({
   name: 'get_diagram',
   title: 'Read diagram',
   description: 'The DSL text of one diagram frame: what was authored while the canvas still matches it, else text regenerated '
-    + 'from the canvas (`edited: true`). `canvasEdits` lists what was changed on the canvas against the authored text: '
+    + 'from the canvas (`edited: true`); either way it names the palette, so the text alone redraws the diagram. '
+    + '`canvasEdits` lists what was changed on the canvas against the authored text: '
     + 'recolours, moves, resizes, renames, icons, rewired or bent connectors, and shapes added or removed. Each has `carry`: '
     + 'attributes to merge into that node\'s existing `[ … ]` list (one list per node) to keep the edit, or null when the '
     + 'language cannot say it. `canvasEdits` is null, with `canvasEditsNote` saying why, when it could not be compared. '
@@ -223,7 +223,7 @@ export const getDiagram = defineOp({
         losses,
         canvasEdits: compared.edits,
         ...(compared.note ? { canvasEditsNote: compared.note } : {}),
-        dsl: edited || typeof meta.source !== 'string' ? serialize(scene) : meta.source,
+        dsl: frameText(scene),
       },
     };
   },
