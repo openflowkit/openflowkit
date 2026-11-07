@@ -1,6 +1,6 @@
 // Threads pinned on a page. They are document data but not diagram content: commands never edit them
 // (page insert/remove keep a page's threads and renumber clashes, see withFreeThreadNumbers), so every
-// change goes through these functions and carryThreads keeps them across a history step.
+// change goes through these functions and carryThreads keeps them across every command (applyDocumentCommand).
 import type { Point2d } from '../geometry/types';
 import { buildNodeWorldMatrices } from '../scene/worldGeometry';
 import {
@@ -67,9 +67,9 @@ function refreshAnchors(page: ScenePage): ScenePage {
 }
 
 /**
- * `next` with the threads of `current`: a history step (commit, undo, redo) changes shapes, never threads,
- * even when it restores a whole page snapshot. Pages only in `next` keep their own. Anchors then follow
- * their nodes. Returns `next` itself when nothing changes.
+ * `next` with the threads of `current`: a command (a commit, an undo or redo, an agent op on a file) changes
+ * shapes, never threads, even when it restores a whole page snapshot. Pages only in `next` keep their own.
+ * Anchors then follow their nodes. Returns `next` itself when nothing changes.
  */
 export function carryThreads(next: SceneDocumentV1, current: SceneDocumentV1): SceneDocumentV1 {
   const currentById = new Map(current.pages.map((page) => [page.id, page]));

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { StaleSessionRevisionError, commitSessionCommand, createDocumentSession, redoSessionCommand, undoSessionCommand, updateSessionThreads } from '../../application/session/session';
 import { createTestDocument, createTestNode } from '../../testing/builders/documentBuilder';
+import { applyDocumentCommand } from '../commands/execute';
 import type { DocumentCommand } from '../commands/types';
 import { COMMENT_BODY_MAX, type SceneDocumentV1, type SceneNode } from '../document/types';
 import { validateSceneDocumentV1 } from '../document/validation';
@@ -315,6 +316,13 @@ describe('comments and history', () => {
     const session = createDocumentSession(withThread(createTestDocument({ nodes: [a] })));
     const reuse = (document: SceneDocumentV1) => addComment(document, 't1', { id: 't1-m1', author: agent, body: 'same id', createdAt: at });
     expect(() => updateSessionThreads(session, reuse, session.revision)).toThrow(ThreadError);
+  });
+
+  // A file-mode agent op applies its command with no history (runAgentOp): the thread rule holds there too.
+  it('a command applied outside history moves pins with their nodes', () => {
+    const document = withThread(createTestDocument({ nodes: [a] }));
+    const moved = applyDocumentCommand(document, move(a, 300, 400)).document;
+    expect(page(moved).threads![0]!.anchor.point).toEqual({ x: 310, y: 420 });
   });
 
   it('carryThreads returns the same document when nothing changes', () => {
