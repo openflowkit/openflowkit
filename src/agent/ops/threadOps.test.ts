@@ -171,6 +171,16 @@ describe('thread ops, file mode', () => {
     expect(one.threads[0]!.comments[0]!.truncated).toBeUndefined();
   });
 
+  // The pin point is a cached position: every command, on a file too, moves it with the node (applyDocumentCommand).
+  it('list_threads reports where a pinned node is now, after a move on the file', async () => {
+    let document = await drawn();
+    const node = document.pages[0]!.nodes.find((candidate) => candidate.kind !== 'frame')!;
+    document = (await file(document, 'start_thread', { nodeId: node.id, point: { x: 1, y: 2 }, body: 'here' })).document;
+    document = (await file(document, 'move', { ids: [node.id], delta: { x: 100, y: 50 } })).document;
+    const listed = (await file(document, 'list_threads', {})).output as { threads: { point: { x: number; y: number } }[] };
+    expect(listed.threads[0]!.point).toEqual({ x: 101, y: 52 });
+  });
+
   it('get_document and list_pages count open threads', async () => {
     let document = await drawn();
     document = (await file(document, 'start_thread', { point: { x: 0, y: 0 }, body: 'a' })).document;
