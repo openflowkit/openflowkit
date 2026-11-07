@@ -12,13 +12,12 @@ import { CONTAINER_TITLE_HEIGHT } from '../../opencanvas/domain/nodes/nodeLabelB
 import { DEFAULT_NODE_SIZING_POLICY } from '../../opencanvas/domain/node-sizing/model';
 import { validateSceneDocumentV1 } from '../../opencanvas/domain/document/validation';
 import { resolveNodeStyle } from '../../opencanvas/domain/nodes/nodeStyle';
-import { DEFAULT_CANVAS_COLOR, darkInkReadsOn, paintOver } from '../../opencanvas/domain/color/adaptiveColor';
+import { DEFAULT_CANVAS_COLOR, contrastRatio, darkInkReadsOn, paintOver, readableTextOn } from '../../opencanvas/domain/color/adaptiveColor';
 import {
   drawioAnchor, drawioColor, drawioConnectorAppearance, drawioDarkInk, drawioStyleLosses, own, drawioErRelation, drawioImageUrl, drawioLabel, drawioNodeAppearance, drawioShape, drawioShapeName, type DrawioStyle,
 } from './drawioStyle';
 import { num, pageCells, pageModel, type Cell, type Geometry } from './drawioCells';
 import { parseXml } from './xmlReader';
-import { contrastRatio, readableTextOn } from '../../lib/colorUtils';
 
 // A draw.io file (`.drawio`, or its `.xml` export) as an OpenFlowKit document.
 // draw.io keeps exact positions, so this builds the scene directly instead of

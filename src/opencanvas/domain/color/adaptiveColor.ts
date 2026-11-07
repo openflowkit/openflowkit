@@ -1,5 +1,7 @@
 import { getContrastText, mixHex, normalizeHex, readableTextOn, rgbToHex } from '../../../lib/colorUtils';
 
+export { contrastRatio, readableTextOn } from '../../../lib/colorUtils';
+
 const AUTO_COLOR = 'auto' as const;
 export const DEFAULT_CANVAS_COLOR = '#f7f7f5';
 
