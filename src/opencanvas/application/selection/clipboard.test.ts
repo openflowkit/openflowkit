@@ -93,6 +93,20 @@ describe('production clipboard', () => {
     const zIndexes = command.kind === 'batch' ? command.commands.map((child) => (child.kind === 'insert-node' ? child.node.zIndex : 0)) : [];
     expect([zIndexes[0], zIndexes.at(-1)]).toEqual([150_000, 169_999]);
   });
+
+  it('refuses ids that repeat within one paste, not only ids already on the page', () => {
+    const page = createTestDocument({ nodes: [] }).pages[0]!;
+    const free = { nodeId: null, portId: null, anchor: null };
+    const line = { id: 'line', source: { ...free, point: { x: 0, y: 0 } }, target: { ...free, point: { x: 10, y: 0 } },
+      route: { kind: 'direct' as const, ownership: 'automatic' as const }, waypoints: [], labels: [],
+      appearance: {}, semantics: {}, metadata: {}, extensions: {} };
+    const twoNodes = { version: 1 as const, nodes: [createTestNode('a'), createTestNode('b')], connectors: [] };
+    const twoLines = { version: 1 as const, nodes: [], connectors: [line, { ...line, id: 'line-2' }] };
+    const nodeAndLine = { version: 1 as const, nodes: [createTestNode('a')], connectors: [line] };
+    for (const snapshot of [twoNodes, twoLines, nodeAndLine]) {
+      expect(() => buildPasteProductionSelectionCommand(page, snapshot, () => 'same')).toThrow('Paste ids must be unique.');
+    }
+  });
 });
 
 describe('where a paste lands', () => {
