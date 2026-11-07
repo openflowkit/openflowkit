@@ -1,4 +1,5 @@
 import type { JsonObject } from '../../opencanvas/domain/document/json';
+import { normalizeHex } from '../../lib/colorUtils';
 
 // Excalidraw's element paint (strokeColor, backgroundColor, strokeStyle, opacity…) and arrowheads,
 // read into the appearance keys OpenFlowKit draws. What has no counterpart is named for the importer.
@@ -45,16 +46,28 @@ export const finite = (value: unknown, fallback = 0): number =>
 
 export const text = (value: unknown): string => (typeof value === 'string' ? value : '');
 
-/** `#1e1e1e` / `#abc` as our lower-case hex; `transparent` stays; anything else is unset (the theme's). */
+/** `#1E1E1E` / `#abc` as our six-digit lower-case hex (so `#fff` is the white our dark theme washes); `transparent` stays; anything else is unset. */
 export function excalidrawColor(value: unknown): string | undefined {
   if (value === 'transparent') return 'transparent';
-  return typeof value === 'string' && /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(value) ? value.toLowerCase() : undefined;
+  return typeof value === 'string' && /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(value) ? normalizeHex(value) ?? undefined : undefined;
 }
 
 /** Line and text ink: Excalidraw's default black is left unset, so it follows our theme as it follows Excalidraw's. */
 export function excalidrawInk(value: unknown): string | undefined {
   const ink = excalidrawColor(value);
-  return ink === 'transparent' || ink === '#1e1e1e' || ink === '#000000' || ink === '#000' ? undefined : ink;
+  return ink === 'transparent' || ink === '#1e1e1e' || ink === '#000000' ? undefined : ink;
+}
+
+/**
+ * Ink for words: a colour the author picked stays. Excalidraw's default black stays too where the words sit on a fill
+ * that keeps its colour in our dark theme (black on teal reads; the theme's white would not); anywhere else (the canvas,
+ * a white box the dark theme washes to the canvas) it is left to the theme, so it turns white on dark.
+ */
+export function excalidrawWordInk(value: unknown, onSolidFill: boolean): string | undefined {
+  const picked = excalidrawInk(value);
+  if (picked || !onSolidFill) return picked;
+  const ink = excalidrawColor(value);
+  return ink === 'transparent' ? undefined : ink;
 }
 
 /** Excalidraw's font numbers: 1 Virgil, 5 Excalifont and 8 Comic Shanns are handwriting; 3 Cascadia is code. */
@@ -81,8 +94,9 @@ export function excalidrawNodeAppearance(element: ExcalidrawElement, label?: Exc
   const alpha = opacity(element);
   if (alpha !== undefined) appearance.opacity = alpha;
   if (label) {
-    const ink = excalidrawColor(label.strokeColor);
-    if (ink && ink !== 'transparent') appearance.textColor = ink;
+    // Default ink is the builder's call: it alone knows whether the fill stays solid on a dark canvas.
+    const ink = excalidrawInk(label.strokeColor);
+    if (ink) appearance.textColor = ink;
     if (typeof label.fontSize === 'number') appearance.fontSize = finite(label.fontSize, 16);
     appearance.fontFamily = excalidrawFont(label.fontFamily);
     if (label.textAlign === 'left') appearance.textAlign = 'start';

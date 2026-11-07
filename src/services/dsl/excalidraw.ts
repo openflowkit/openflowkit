@@ -7,11 +7,12 @@ import {
 import { validateSceneDocumentV1 } from '../../opencanvas/domain/document/validation';
 import type { Point2d } from '../../opencanvas/domain/geometry/types';
 import { createImageNode } from '../../opencanvas/domain/nodes/imageNode';
+import { resolveNodeStyle } from '../../opencanvas/domain/nodes/nodeStyle';
 import { createShapeNode, type ShapeKind } from '../../opencanvas/domain/nodes/shapeNode';
 import { measurePortableText } from '../../opencanvas/domain/text/measurement';
 import {
-  excalidrawColor, excalidrawConnectorAppearance, excalidrawFont, excalidrawHead, excalidrawInk, excalidrawNodeAppearance,
-  excalidrawStrokeContent, finite, text, type ExcalidrawElement,
+  excalidrawColor, excalidrawConnectorAppearance, excalidrawFont, excalidrawHead, excalidrawNodeAppearance,
+  excalidrawStrokeContent, excalidrawWordInk, finite, text, type ExcalidrawElement,
 } from './excalidrawStyle';
 
 // An Excalidraw drawing (`.excalidraw`, or the `excalidraw/clipboard` JSON its copy puts on the clipboard)
@@ -77,6 +78,13 @@ function turnedPoints(element: ExcalidrawElement): Point2d[] {
     y: centre.y + (x - centre.x) * sin + (y - centre.y) * cos,
   }));
 }
+
+/** Our dark canvas; the style only asks whether the canvas is dark. */
+const DARK_CANVAS = '#191b19';
+
+/** A painted fill that keeps its colour on a dark canvas. White and paper fills don't: the dark theme washes them to the canvas. */
+const solidOnDark = (node: SceneNode): boolean => typeof node.appearance.fill === 'string' && node.appearance.fill !== 'transparent'
+  && resolveNodeStyle(node, DARK_CANVAS).fill.startsWith('#');
 
 const bindingOf = (value: unknown): string | null => {
   if (!value || typeof value !== 'object') return null;
@@ -167,13 +175,14 @@ class SceneBuilder {
     this.nodeIds.add(id);
   }
 
-  /** Whether a filled shape already placed covers this box's centre. */
+  /** Whether a shape already placed, whose fill stays solid on a dark canvas, covers this box's centre. */
   private onFill(at: Point2d, size: { width: number; height: number }): boolean {
     const x = at.x + size.width / 2;
     const y = at.y + size.height / 2;
-    return this.nodes.some(({ transform: { translation }, size: box, appearance }) =>
-      typeof appearance.fill === 'string' && appearance.fill !== 'transparent'
-      && x >= translation.x && x <= translation.x + box.width && y >= translation.y && y <= translation.y + box.height);
+    return this.nodes.some((node) => {
+      const { transform: { translation }, size: box } = node;
+      return x >= translation.x && x <= translation.x + box.width && y >= translation.y && y <= translation.y + box.height && solidOnDark(node);
+    });
   }
 
   private nodeFor(
@@ -188,12 +197,14 @@ class SceneBuilder {
       if (element.fillStyle && element.fillStyle !== 'solid' && excalidrawColor(element.backgroundColor) !== 'transparent') {
         this.lose('hatched fills are drawn solid');
       }
-      return createShapeNode(page, { kind: rounded ? 'rounded' : circle ? 'circle' : shape, id: at.id, at: at.at, size: at.size,
+      const node = createShapeNode(page, { kind: rounded ? 'rounded' : circle ? 'circle' : shape, id: at.id, at: at.at, size: at.size,
         label: at.label, appearance: excalidrawNodeAppearance(element, at.bound) });
+      const ink = at.bound && node.appearance.textColor === undefined ? excalidrawWordInk(at.bound.strokeColor, solidOnDark(node)) : undefined;
+      return ink ? { ...node, appearance: { ...node.appearance, textColor: ink } } : node;
     }
     if (type === 'text') {
-      // Default ink follows the theme, except on a filled shape drawn below it, where dark ink stays readable.
-      const ink = this.onFill(at.at, at.size) ? excalidrawColor(element.strokeColor) : excalidrawInk(element.strokeColor);
+      // Default ink follows the theme, except over a fill drawn below it that stays solid on dark, where dark ink stays readable.
+      const ink = excalidrawWordInk(element.strokeColor, this.onFill(at.at, at.size));
       // Excalidraw's box is exactly its words; ours keeps 8px clear each side and draws handwriting in a wider
       // face, so the box widens about the same centre. ponytail: the margin is guessed — measure the canvas face if words break.
       const label = text(element.originalText) || text(element.text);

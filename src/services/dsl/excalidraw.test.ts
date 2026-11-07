@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { SceneDocumentV1 } from '../../opencanvas/domain/document/types';
+import { resolveNodeStyle } from '../../opencanvas/domain/nodes/nodeStyle';
+import { contrastRatio } from '../../lib/colorUtils';
 import { excalidrawToDocument, looksLikeExcalidraw, readExcalidraw } from './excalidraw';
 import architecture from './fixtures/excalidraw/architecture.excalidraw?raw';
 import dbSchema from './fixtures/excalidraw/db-schema.excalidraw?raw';
@@ -88,6 +90,35 @@ describe('excalidrawToDocument', () => {
     const color = (id: string) => document.pages[0]!.nodes.find((node) => node.id === id)!.content.customColor;
     expect(color('on')).toBe('#1e1e1e');
     expect(color('off')).toBeUndefined();
+  });
+
+  it('keeps every label readable on the dark canvas as on the light one', () => {
+    const words = (id: string, x: number, y: number, label: string, containerId: string | null = null) =>
+      ({ ...base, id, type: 'text', x, y, width: 120, height: 25, text: label, originalText: label, fontSize: 20, containerId });
+    const box = (id: string, x: number, y: number, backgroundColor: string) =>
+      ({ ...base, id, type: 'rectangle', x, y, width: 160, height: 80, backgroundColor });
+    const { document } = open(file([
+      // Excalidraw's default shape has no fill; white boxes wash to the canvas in our dark theme; teal and blue stay.
+      box('plain', 0, 0, 'transparent'), words('plain-label', 20, 28, 'plain', 'plain'),
+      box('white', 200, 0, '#ffffff'), words('white-label', 220, 28, 'white', 'white'),
+      box('short', 400, 0, '#fff'), words('short-label', 420, 28, 'short', 'short'),
+      box('teal', 600, 0, '#15aabf'), words('teal-label', 620, 28, 'teal', 'teal'),
+      box('under-white', 0, 150, '#ffffff'), words('on-white', 20, 178, 'free on white'),
+      box('under-blue', 200, 150, '#a5d8ff'), words('on-blue', 220, 178, 'free on blue'),
+      words('loose', 400, 178, 'free on the canvas'),
+    ]));
+    const node = (id: string) => document.pages[0]!.nodes.find((candidate) => candidate.id === id)!;
+    for (const canvas of ['#191b19', '#f7f7f5']) {
+      // What the words sit on: a fill that stays solid, else the canvas (a wash is 8% over it).
+      const backdrop = (id: string) => {
+        const fill = resolveNodeStyle(node(id), canvas).fill;
+        return fill.startsWith('#') ? fill : canvas;
+      };
+      for (const [id, under] of [['plain', 'plain'], ['white', 'white'], ['short', 'short'], ['teal', 'teal'],
+        ['on-white', 'under-white'], ['on-blue', 'under-blue'], ['loose', 'loose']] as const) {
+        expect(contrastRatio(resolveNodeStyle(node(id), canvas).textColor, backdrop(under)), `${id} on ${canvas}`).toBeGreaterThanOrEqual(4.5);
+      }
+    }
   });
 
   it('binds arrows to the shapes they were drawn between, with their label, bends and heads', () => {
