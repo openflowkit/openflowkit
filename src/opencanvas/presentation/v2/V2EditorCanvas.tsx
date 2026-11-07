@@ -57,7 +57,7 @@ interface EditorCanvasProps {
     readonly updateThreads: (change: (document: SceneDocumentV1) => SceneDocumentV1) => void;
     readonly readOnly: boolean;
     readonly toast: (toast: ToastItem) => void;
-  };
+  } & Pick<ComponentProps<typeof V2Comments>, 'request' | 'onOpenThreadChange' | 'unread'>;
   readonly labelEditing: ReturnType<typeof useV2LabelEditing>;
   readonly connectorLabel: ReturnType<typeof useV2ConnectorLabelEditing>;
   readonly iconActions: ReturnType<typeof useV2IconActions>;
@@ -123,7 +123,8 @@ export function V2EditorCanvas(p: EditorCanvasProps): React.JSX.Element {
       <V2Comments page={p.page} sectionRef={p.sectionRef} hostRef={p.hostRef} cameraRef={p.camera.cameraRef} subscribeCamera={p.camera.subscribe}
         selectedNodeId={selectedNodeId} apiRef={commentApi} tool={p.tool} readOnly={p.comments.readOnly} hidden={map.active}
         panelsKey={[panels.workspace, panels.shortcutsOpen, panels.chartId, panels.treeOpen, panels.motionOpen].join()}
-        toast={p.comments.toast} updateThreads={p.comments.updateThreads} />
+        toast={p.comments.toast} updateThreads={p.comments.updateThreads} request={p.comments.request} onOpenThreadChange={p.comments.onOpenThreadChange}
+        unread={p.comments.unread} />
       {p.agentCursor}
       {map.start ? (
         <V2MapStart busy={code.generating} onStartModel={() => { void code.startFrom(C4_STARTER, { openPanel: false }).then(counted('created_template')); p.setModelPanelOnStart(true); }}

@@ -1004,6 +1004,13 @@
 .ofk-copy-feedback { display: block; color: var(--ofk-secondary); font-size: 11px; margin-top: 8px; }
 /* Rail: live dot on the agent button while connected. */
 .ofk-v2-workspace-rail .ofk-icon-button[data-live] { position: relative; }
+/* Rail: the open-thread count on the Threads button, a small neutral pill (the label carries it for screen readers). */
+.ofk-v2-workspace-rail .ofk-icon-button[data-count] { position: relative; }
+.ofk-v2-workspace-rail .ofk-icon-button[data-count]::after {
+  content: attr(data-count); position: absolute; top: 1px; right: 0; min-width: 16px; height: 16px; box-sizing: border-box; padding: 0 4px;
+  border-radius: 8px; background: var(--ofk-inverse); color: var(--ofk-onInverse); box-shadow: 0 0 0 2px var(--ofk-surface);
+  font-size: 10px; font-weight: 600; line-height: 16px; text-align: center; font-variant-numeric: tabular-nums; pointer-events: none;
+}
 .ofk-v2-workspace-rail .ofk-icon-button[data-live]::after { content: ''; position: absolute; top: 6px; right: 6px; width: 6px; height: 6px; border-radius: 50%; background: var(--ofk-success); box-shadow: 0 0 0 2px var(--ofk-surface); }
 
 /* Architecture model: one object, many views. */
@@ -1532,3 +1539,43 @@
   .ofk-comment-pin { transition: none; }
   .ofk-comment-card[data-wiggle] { animation: none; outline: 2px solid var(--ofk-danger); }
 }
+
+/* Threads panel: search and filter on top, a list of thread cards. A card is one button (the whole row opens the thread) with its actions beside it. */
+.ofk-v2 .ofk-threads-panel .ofk-panel-body { display: flex; flex-direction: column; min-height: 0; padding: 0; overflow: hidden; }
+.ofk-threads-bar { flex: none; display: flex; align-items: center; gap: 4px; padding: 10px 12px 8px 16px; }
+.ofk-threads-search { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 10px; color: var(--ofk-muted); background: var(--ofk-surface); border: 1px solid var(--ofk-border); border-radius: 8px; }
+/* The focus treatment of the AI assistant's prompt box and the comment fields. */
+.ofk-threads-search:focus-within { border-color: var(--ofk-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ofk-accent) 18%, transparent); }
+.ofk-threads-search svg { width: 16px; height: 16px; flex: none; }
+.ofk-threads-search input { flex: 1; min-width: 0; padding: 0; font: inherit; font-size: 13px; color: var(--ofk-text); background: none; border: 0; outline: none; }
+.ofk-threads-bar .ofk-icon-button { flex: none; color: var(--ofk-secondary); }
+.ofk-threads-bar .ofk-icon-button[data-active] { color: var(--ofk-text); background: color-mix(in srgb, var(--ofk-text) 9%, transparent); }
+.ofk-threads-list { flex: 1; min-height: 0; margin: 0; padding: 0 8px 12px; overflow-y: auto; list-style: none; display: flex; flex-direction: column; gap: 2px; }
+.ofk-threads-card { position: relative; border-radius: 10px; }
+.ofk-threads-card:hover, .ofk-threads-card:focus-within, .ofk-threads-card[data-menu-open] { background: color-mix(in srgb, var(--ofk-text) 6%, transparent); }
+/* Selected is a neutral lift, never the brand colour, as a tree row's. */
+.ofk-threads-card[data-selected] { background: color-mix(in srgb, var(--ofk-text) 9%, transparent); }
+.ofk-threads-card-main { display: grid; grid-template-columns: 28px minmax(0, 1fr); gap: 10px; align-items: start; width: 100%; box-sizing: border-box; padding: 10px 12px 10px 10px; font: inherit; color: var(--ofk-text); text-align: start; background: none; border: 0; border-radius: inherit; cursor: pointer; }
+.ofk-threads-card-main:focus-visible { outline: 2px solid var(--ofk-focus); outline-offset: -2px; }
+.ofk-threads-card-text { display: grid; gap: 2px; min-width: 0; }
+.ofk-threads-card-where { display: flex; align-items: center; gap: 6px; min-width: 0; padding-inline-end: 64px; font-size: 12px; color: var(--ofk-muted); }
+.ofk-threads-card-where > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ofk-threads-card-state { flex: none; padding: 0 6px; font-size: 11px; border-radius: 99px; background: color-mix(in srgb, var(--ofk-success) 18%, transparent); color: var(--ofk-success); }
+.ofk-threads-card-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--ofk-accent); }
+.ofk-threads-card-meta { display: flex; align-items: baseline; gap: 6px; font-size: 13px; }
+.ofk-threads-card-meta strong { font-weight: 600; }
+.ofk-threads-card-meta time { font-size: 12px; color: var(--ofk-muted); }
+.ofk-threads-card-body { display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; font-size: 13px; line-height: 1.4; overflow-wrap: anywhere; white-space: pre-wrap; }
+.ofk-threads-card-replies { font-size: 12px; font-weight: 500; color: var(--ofk-accent); }
+.ofk-threads-card[data-unread] .ofk-threads-card-meta strong { font-weight: 700; }
+.ofk-threads-card[data-resolved] .ofk-threads-card-main > .ofk-comment-avatar, .ofk-threads-card[data-resolved] .ofk-threads-card-body { opacity: .55; }
+.ofk-threads-card-actions { position: absolute; top: 6px; inset-inline-end: 6px; display: flex; gap: 0; opacity: 0; transition: opacity .1s ease; }
+.ofk-threads-card:hover .ofk-threads-card-actions, .ofk-threads-card:focus-within .ofk-threads-card-actions, .ofk-threads-card[data-menu-open] .ofk-threads-card-actions { opacity: 1; }
+.ofk-threads-card-actions .ofk-icon-button { width: 28px; height: 28px; min-width: 28px; min-height: 28px; color: var(--ofk-secondary); }
+@media (hover: none) { .ofk-threads-card-actions { opacity: 1; } }
+.ofk-threads-empty { flex: 1; display: grid; place-items: center; padding-bottom: 32px; }
+@media (prefers-reduced-motion: reduce) { .ofk-threads-card-actions { transition: none; } }
+
+/* A pin with news carries a dot; a resolved thread opened from the panel is shown dimmed. */
+.ofk-comment-pin[data-unread]::after { content: ''; position: absolute; top: -3px; right: -3px; width: 10px; height: 10px; box-sizing: border-box; border-radius: 50%; background: var(--ofk-accent); border: 2px solid var(--ofk-surface); }
+.ofk-comment-pin[data-resolved] { opacity: .6; filter: grayscale(.6); }

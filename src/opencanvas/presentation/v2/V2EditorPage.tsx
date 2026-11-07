@@ -4,12 +4,11 @@ import { replaceSelection } from '../../application/selection/selection';
 import { useDocumentSession } from '../../application/session/useDocumentSession';
 import type { PixiRendererHost, PixiRendererStatus } from '../../infrastructure/pixi/PixiRendererHost';
 import { createV2Repository } from '../../../services/storage/v2/v2Repository';
-import { dslFrames } from '../../../dsl/frameScene';
 import type { LandingDirection } from '../../domain/camera/readableLanding';
 import { archFrameOf, placedElementId } from '../../../dsl/model/model';
 import type { SceneDocumentV1 } from '../../domain/document/types';
 import { AgentCursor, SystemRoot, ToastRegion, withToast, type ToastItem } from '../design-system';
-import { V2CanvasWelcome, V2WorkspaceRail } from './V2Workspace';
+import { V2CanvasWelcome } from './V2Workspace';
 import type { V2CommentApi } from './V2Comments';
 import { V2EditorCanvas } from './V2EditorCanvas';
 import { V2EditorChrome } from './V2EditorChrome';
@@ -20,7 +19,6 @@ import { V2EditorSidePanels } from './V2EditorSidePanels';
 import type { ContextMenuTarget } from './V2ContextMenu';
 import { V2LoadCenter } from './V2LoadCenter';
 import { BrandLoader } from './BrandLoader';
-import { isEditableTarget } from './pointerOperations';
 import { useV2Appearance } from './useV2Appearance';
 import { useV2Architecture } from './useV2Architecture';
 import { useV2ArchitectureActions } from './useV2ArchitectureActions';
@@ -41,7 +39,6 @@ import { useV2Find } from './useV2Find';
 import { useV2GuardedCommit } from './useV2GuardedCommit';
 import { useV2History } from './useV2History';
 import { useV2IconActions } from './useV2IconActions';
-import { keyOwnedByTarget } from './useV2Keyboard';
 import { useV2ActivePage } from './useV2ActivePage';
 import { useV2BodyFocusForward } from './useV2BodyFocusForward';
 import { useV2MapHandoff } from './useV2MapHandoff';
@@ -57,6 +54,8 @@ import { useV2MapMode } from './map/useV2MapMode';
 import { useV2RepoDocument } from './useV2RepoDocument';
 import { BadRepoAddress } from './map/V2RepoMapState';
 import { useV2Pages } from './useV2Pages';
+import { useV2Threads } from './useV2Threads';
+import { codeToggle } from './v2CodeToggle';
 import { useV2Panels } from './useV2Panels';
 import type { V2GestureApi } from './v2PointerGestures';
 import { useV2Preferences } from './useV2Preferences';
@@ -172,13 +171,7 @@ export function V2EditorPage({ shared }: { readonly shared?: V2SharedView } = {}
     onViews: setPendingPageId, pushToast, dismissToast, announce: setAnnouncement,
     focusCanvas, forgetHistory: session.forgetHistory,
   });
-  // The page's diagram opens as itself (the selected one, or the only one); else a new diagram.
-  const toggleCode = () => {
-    if (panels.workspace === 'code') { panels.closeWorkspace(); return; }
-    const frames = page ? dslFrames(page) : [];
-    const frame = frames.find((candidate) => selectionRef.current.nodeIds.includes(candidate.id)) ?? (frames.length === 1 ? frames[0] : undefined);
-    if (frame) code.openFrame(frame.id); else code.openNew();
-  };
+  const toggleCode = codeToggle({ panels, page, selectionRef, code });
   // Map's start screen is for a document that is editable and has no model on any page (a model page elsewhere keeps the old rule).
   const modelled = useMemo(() => session.document?.pages.some((candidate) => archFrameOf(candidate) !== null) ?? false, [session.document]);
   // A model being written (the start screen's action) keeps Map on until its page is the one on screen (generating, then the page switch pending).
@@ -360,6 +353,10 @@ export function V2EditorPage({ shared }: { readonly shared?: V2SharedView } = {}
     showDrawing, setActivePageId, writable, landingDirection, toastZoomedToRead, setAnnouncement, pushToast,
   });
 
+  const threads = useV2Threads({
+    session, page, setActivePageId, panels, camera, rendererReady, map, lockedMapPageId: repo.lockedPageId, preferences, updatePreferences, pushToast,
+    readOnly: docReadOnly,
+  });
   const input = useV2EditorInput({
     hostRef, pageRef, sectionRef, selectionRef, readOnlyRef, drawCommit, applySelection, applyConnectorSelection, setAnnouncement,
     pushToast, setTool, openEditor, openChart, editLocked, editActions, code, preferences, updatePreferences,
@@ -374,7 +371,7 @@ export function V2EditorPage({ shared }: { readonly shared?: V2SharedView } = {}
   const handleKeyDown = useV2EditorKeyboard({
     toolRef, commentApiRef, editingRef: labelEditing.editingRef, pageRef, selectionRef, gestureApiRef, setTool, setSpacePan, input, editActions, architectureActions, camera, connectorLabel,
     panels, selectionApi, map, find, viewPage, selectedElementId, selectedConnectorIds, docReadOnly, editLocked, undo, redo, escapePanel,
-    openEditor, selectNodes, fitAll, toggleCode, backToMap,
+    openEditor, selectNodes, fitAll, toggleCode, backToMap, playback, endFlow,
   });
 
   const { setExported, transient, feedback, tips, runTip } = useV2EditorHints({
@@ -390,17 +387,7 @@ export function V2EditorPage({ shared }: { readonly shared?: V2SharedView } = {}
         style={{ backgroundColor: canvasColor }}
         data-workspace-open={panels.workspace !== null || panels.shortcutsOpen || panels.motionOpen || chartPanelNode !== null}
         data-left-open={panels.treeOpen}
-        onKeyDown={(event) => {
-          // A focused control (a tree, a button) keeps its own arrows and Space; a playing flow takes the rest.
-          if (playback.flow && !keyOwnedByTarget(event)) {
-            if (event.key === 'ArrowRight' || event.key === ' ') { playback.next(); event.preventDefault(); return; }
-            if (event.key === 'ArrowLeft') { playback.prev(); event.preventDefault(); return; }
-            if (event.key === 'Escape') { endFlow(); event.preventDefault(); return; }
-          }
-          if (event.key === '?' && !isEditableTarget(event.target)) {
-            event.preventDefault(); panels.toggleShortcuts();
-          } else if (!map.onKey(event)) handleKeyDown(event);
-        }}
+        onKeyDown={handleKeyDown}
         onKeyUp={(event) => { if (event.key === ' ') setSpacePan(false); }}
         onDragOver={(event) => { if (imageFiles(event.dataTransfer).length > 0) event.preventDefault(); }}
         onDrop={input.handleDrop}
@@ -437,7 +424,7 @@ export function V2EditorPage({ shared }: { readonly shared?: V2SharedView } = {}
               exportPanel={exportPanel} commit={commit} leaveStart={leaveStart} setTool={setTool} pickShape={pickShape} pickConnector={pickConnector}
               gestureApiRef={gestureApiRef} input={input} fitAll={fitAll} />
             <V2EditorCanvas
-              comments={{ apiRef: commentApiRef, updateThreads: session.updateThreads, readOnly: docReadOnly, toast: pushToast }}
+              comments={{ apiRef: commentApiRef, updateThreads: session.updateThreads, readOnly: docReadOnly, toast: pushToast, ...threads.commentProps }}
               agentCursor={<AgentCursor ref={agents.presence.cursorRef} name={agents.agentShown} working={agents.agentBridge.activity?.doing === 'drawing'} data-testid="v2-agent-cursor" />}
               page={page} viewPage={viewPage ?? page} hostRef={hostRef} sectionRef={sectionRef} pageRef={pageRef} selectionRef={selectionRef}
               selectedConnectorIdsRef={selectedConnectorIdsRef} toolRef={toolRef} spacePanRef={spacePanRef} toolConfigRef={toolConfigRef}
@@ -466,19 +453,19 @@ export function V2EditorPage({ shared }: { readonly shared?: V2SharedView } = {}
             <V2EditorExport exportPanel={exportPanel} session={session} page={page} map={map} selectedNodeIds={selection.nodeIds}
               selectedConnectorIds={selectedConnectorIds} shared={Boolean(shared)} onExported={() => setExported(true)} onOpenAnimation={panels.openMotion}
               pushToast={pushToast} focusCanvas={focusCanvas} />
-            <V2WorkspaceRail mode={panels.workspace} onChange={(mode) => { if (mode === 'code') toggleCode(); else panels.toggleWorkspace(mode); }}
-              onShortcuts={panels.toggleShortcuts} agentConnected={agents.agentBridge.status === 'connected'} />
-            {/* A drawing tool armed means the next click draws: the welcome steps aside instead of catching it. */}
-            {page.nodes.length === 0 && page.connectors.length === 0 && !ghostPage && !docReadOnly && rendererReady && !map.active && tool === 'select'
-              ? <V2CanvasWelcome onOpen={openWorkspace}
-                blankDocument={session.document?.pages.every((candidate) => candidate.nodes.length === 0 && candidate.connectors.length === 0) ?? true} /> : null}
             <V2EditorSidePanels
               panels={panels} code={code} preferences={preferences} updatePreferences={updatePreferences} agents={agents} session={session}
               viewPage={viewPage ?? page} selection={selection} selectedConnectorIds={selectedConnectorIds} selectionApi={selectionApi} selectNodes={selectNodes}
               camera={camera} architecture={architecture} architectureActions={architectureActions} playback={playback} endFlow={endFlow} map={map}
               repoPanel={repoPanel} repoSource={repoSource} repoLoading={repo.state.status === 'loading'} mapArrow={mapArrow} renameRequest={renameRequest}
               selectedElementId={selectedElementId} placedElementIds={placedElementIds} canvasElementIds={canvasElementIds} showOnCanvas={showOnCanvas}
-              workspaceFolder={workspaceFolder} docReadOnly={docReadOnly} pushToast={pushToast} setAnnouncement={setAnnouncement} focusCanvas={focusCanvas} />
+              workspaceFolder={workspaceFolder} docReadOnly={docReadOnly} pushToast={pushToast} setAnnouncement={setAnnouncement} focusCanvas={focusCanvas}
+              threads={threads} toggleCode={toggleCode}>
+              {/* A drawing tool armed means the next click draws: the welcome steps aside instead of catching it. */}
+              {page.nodes.length === 0 && page.connectors.length === 0 && !ghostPage && !docReadOnly && rendererReady && !map.active && tool === 'select'
+                ? <V2CanvasWelcome onOpen={openWorkspace}
+                  blankDocument={session.document?.pages.every((candidate) => candidate.nodes.length === 0 && candidate.connectors.length === 0) ?? true} /> : null}
+            </V2EditorSidePanels>
             <V2EditorOverlays
               panels={panels} find={find} tips={tips} runTip={runTip} feedback={feedback} transient={transient} mapActive={map.active} code={code}
               session={session} page={page} viewPage={viewPage ?? page} chartPanelNode={chartPanelNode} selection={selection}

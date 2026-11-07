@@ -36,8 +36,12 @@ const placementFor = (cameraRef: RefObject<CanvasCamera>, hostRef: RefObject<Pix
 
 type Open =
   | { readonly kind: 'composer'; readonly world: Point2d; readonly nodeId: string | null }
-  /** `askDelete`: opened by Delete on its pin, asking to delete it. */
-  | { readonly kind: 'thread'; readonly id: string; readonly askDelete?: true };
+  /** `shownResolved`: opened from the Threads panel while resolved, so it stays up (its pin is drawn dimmed) until closed.
+   * `askDelete`: opened by Delete on its pin, asking to delete it. */
+  | { readonly kind: 'thread'; readonly id: string; readonly shownResolved?: boolean; readonly askDelete?: true };
+
+/** Ask the canvas to open a thread's popover (the Threads panel, a deep link); `seq` makes asking twice for one thread count twice. */
+export interface OpenThreadRequest { readonly threadId: string; readonly seq: number }
 
 interface Props {
   readonly page: ScenePage;
@@ -57,6 +61,12 @@ interface Props {
   /** Changes when a side panel opens or closes: the free canvas an open card stays inside changed. */
   readonly panelsKey: string;
   readonly updateThreads: (change: (document: SceneDocumentV1) => SceneDocumentV1) => void;
+  /** Open this thread's popover as soon as its page is the one shown. */
+  readonly request: OpenThreadRequest | null;
+  /** The thread whose popover is open (null for none): the Threads panel highlights its card. */
+  readonly onOpenThreadChange: (threadId: string | null) => void;
+  /** Threads with news for this viewer: their pin carries a dot. */
+  readonly unread: ReadonlySet<string>;
   /** Tells the user what could not be saved. */
   readonly toast: (toast: ToastItem) => void;
 }
@@ -136,7 +146,10 @@ function pinActions(
       if (event.key === 'Delete' || event.key === 'Backspace') {
         event.preventDefault();
         event.stopPropagation();
-        if (!latest.current.readOnly) setOpen({ kind: 'thread', id: thread.id, askDelete: true });
+        // A resolved thread shown from the Threads panel stays shown while it asks, or the card would close with the pin.
+        const open = latest.current.open;
+        const kept = open?.kind === 'thread' && open.id === thread.id && open.shownResolved ? { shownResolved: true } : {};
+        if (!latest.current.readOnly) setOpen({ kind: 'thread', id: thread.id, ...kept, askDelete: true });
         return;
       }
       const by = latest.current.readOnly ? null : pinNudge(event.key, event.altKey, event.shiftKey);
@@ -172,7 +185,6 @@ export const V2Comments = memo(function V2Comments(props: Props): React.JSX.Elem
   const [open, setOpen] = useState<Open | null>(null);
   const [now, setNow] = useState(() => Date.now());
   // The loop reads the refs when a frame runs, never during render.
-  // eslint-disable-next-line react-hooks/refs -- only handed over here; a frame reads them
   const [placement] = useState(() => placementFor(cameraRef, hostRef));
   useEffect(() => () => placement.stop(), [placement]);
   useEffect(() => subscribeCamera(() => placement.kick()), [placement, subscribeCamera]);
@@ -186,16 +198,35 @@ export const V2Comments = memo(function V2Comments(props: Props): React.JSX.Elem
     return () => observer.disconnect();
   }, [placement, sectionRef]);
 
-  const threads = useMemo(() => pageThreads(page).filter((thread) => !thread.resolved), [page]);
+  const openId = open?.kind === 'thread' ? open.id : null;
+  const shownResolved = open?.kind === 'thread' && open.shownResolved === true;
+  const threads = useMemo(() => pageThreads(page).filter((thread) => !thread.resolved || (shownResolved && thread.id === openId)), [page, shownResolved, openId]);
   // A shape being dragged, resized or turned: the pins on it are drawn where it is now, not where it was committed.
   const [preview, setPreview] = useState<readonly SceneNode[] | null>(null);
   const riding = useMemo(() => (preview ? pinsOnPreview(page, preview) : null), [page, preview]);
   const openThread = open?.kind === 'thread' ? pageThreads(page).find((thread) => thread.id === open.id) : undefined;
   // A thread that went away (deleted, an agent resolved it, another page) closes with it.
   useEffect(() => {
-    if (open?.kind === 'thread' && (!openThread || openThread.resolved)) setOpen(null);
+    if (open?.kind === 'thread' && (!openThread || (openThread.resolved && !open.shownResolved))) setOpen(null);
   }, [open, openThread]);
   useEffect(() => { setOpen(null); }, [page.id, hidden]);
+  // Asked from outside (after the reset above, which a page switch runs): open once this page holds the thread and the canvas is shown.
+  const requestSeq = props.request?.seq;
+  const requestedId = props.request?.threadId;
+  const handled = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (requestSeq === undefined || requestedId === undefined || hidden || requestSeq === handled.current) return;
+    const target = pageThreads(page).find((thread) => thread.id === requestedId);
+    if (!target) return;
+    handled.current = requestSeq;
+    setOpen({ kind: 'thread', id: target.id, ...(target.resolved ? { shownResolved: true } : {}) });
+    // Only a new request opens; the thread, page and mode are read as they are then.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestSeq, requestedId, page.id, hidden]);
+  const { onOpenThreadChange } = props;
+  useEffect(() => { onOpenThreadChange(openId); }, [openId, onOpenThreadChange]);
+  // Closing the canvas of a page (Map) or the editor reports nothing open.
+  useEffect(() => () => onOpenThreadChange(null), [onOpenThreadChange]);
   useEffect(() => { if (readOnly && open?.kind === 'composer') setOpen(null); }, [readOnly, open]);
   // Ages tick while a thread is open.
   useEffect(() => {
@@ -211,7 +242,6 @@ export const V2Comments = memo(function V2Comments(props: Props): React.JSX.Elem
   useEffect(() => { latest.current = { open, tool, readOnly, hidden, updateThreads, anchored }; });
   // Unsent text by box, kept for the editor's life; whether a click away has already warned about the open box's.
   const guard = useRef<DraftGuard>(FRESH_GUARD);
-  // eslint-disable-next-line react-hooks/refs -- only handed over here; a later keystroke writes it
   const [drafts] = useState(() => new CommentDrafts(() => { guard.current = typed(guard.current); }));
   useEffect(() => { guard.current = FRESH_GUARD; }, [open]);
   const pageId = page.id;
@@ -286,7 +316,6 @@ export const V2Comments = memo(function V2Comments(props: Props): React.JSX.Elem
 
   // A pin pressed and moved past DRAG_PX is carried with the pointer and dropped somewhere else: under a node it follows it, on empty canvas it is a page pin.
   const [drag, setDrag] = useState<{ id: string; world: Point2d } | null>(null);
-  // eslint-disable-next-line react-hooks/refs -- only handed over here; a pin's event reads them
   const [actions] = useState(() => pinActions(latest, sectionRef, hostRef, setDrag, setOpen));
 
   const message = useCallback((body: string) => ({ id: mintV2Id('msg'), author: HUMAN_AUTHOR, body, createdAt: new Date().toISOString() }), []);
@@ -314,9 +343,10 @@ export const V2Comments = memo(function V2Comments(props: Props): React.JSX.Elem
     <div className="ofk-comment-layer" ref={layerRef}>
       {threads.map((thread) => {
         const selected = open?.kind === 'thread' && open.id === thread.id;
+        const unread = props.unread.has(thread.id);
         return (
           <CommentPin key={thread.id} thread={thread} world={drag?.id === thread.id ? drag.world : riding?.get(thread.id) ?? thread.anchor.point}
-            selected={selected} dragging={drag?.id === thread.id} actions={actions}>
+            selected={selected} dragging={drag?.id === thread.id} unread={unread} actions={actions}>
             {selected && openThread ? (
               <ThreadPopover key={open?.kind === 'thread' && open.askDelete ? 'ask' : 'open'} thread={openThread} readOnly={readOnly} now={now}
                 askDelete={open?.kind === 'thread' && open.askDelete}

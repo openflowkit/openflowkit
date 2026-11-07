@@ -28,3 +28,24 @@ describe('bridge token', () => {
     expect(JSON.parse(mcpConfig(43119, '')).mcpServers.openflowkit.env).toBeUndefined();
   });
 });
+
+describe('threads panel preferences', () => {
+  beforeEach(() => localStorage.clear());
+  const store = (value: unknown) => localStorage.setItem('openflowkit-v2-preferences', JSON.stringify(value));
+
+  it('default to resolved hidden, unanswered-only off and nothing read', () => {
+    expect(readPreferences()).toMatchObject({ threadsShowResolved: false, threadsUnansweredOnly: false, threadReads: {} });
+  });
+
+  it('keep only a literal true for the toggles', () => {
+    store({ threadsShowResolved: true, threadsUnansweredOnly: 'yes' });
+    expect(readPreferences()).toMatchObject({ threadsShowResolved: true, threadsUnansweredOnly: false });
+  });
+
+  it('keep well-formed read marks and drop the rest', () => {
+    store({ threadReads: { 'd:t': '2026-10-26T12:00:00.000Z', 'd:u': 'unread', 'd:bad': 'x', 'd:n': 3 } });
+    expect(readPreferences().threadReads).toEqual({ 'd:t': '2026-10-26T12:00:00.000Z', 'd:u': 'unread' });
+    store({ threadReads: 'nope' });
+    expect(readPreferences().threadReads).toEqual({});
+  });
+});

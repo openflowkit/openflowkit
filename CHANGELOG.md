@@ -18,6 +18,10 @@ separately; its changes are listed under *For developers* in each release.
   comments, and unsent text is kept. Image exports never show pins; JSON exports and share links leave comments out
   (**Include comments** puts them in a JSON export). A file with a damaged thread still opens: a repeated number or
   id is fixed, and only a thread that cannot be repaired is dropped.
+- **Threads panel.** The **Threads** button on the rail, with the number of open threads, lists every thread in the
+  document. Search comments, the start of a page name, or `#3`; show resolved or only unanswered threads; resolve, delete, mark read
+  or unread, or copy a link that opens the thread in this browser. Click a thread to open it on the canvas, on its
+  page. Filters and read marks are kept in this browser.
 - **Private repos in the browser.** On the "not found, or it is private" screen, **Private repo? Use a GitHub token**
   takes a fine-grained token with Contents read-only access; the files are then read through the GitHub API. The
   token stays in this tab.

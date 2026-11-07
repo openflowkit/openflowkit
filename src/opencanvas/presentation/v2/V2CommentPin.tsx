@@ -47,6 +47,8 @@ export const CommentPin = memo(function CommentPin(props: {
   readonly world: Point2d;
   readonly selected: boolean;
   readonly dragging: boolean;
+  /** News for this viewer: the pin carries a dot. */
+  readonly unread: boolean;
   readonly actions: PinActions;
   readonly children?: ReactNode;
 }): React.JSX.Element {
@@ -56,7 +58,8 @@ export const CommentPin = memo(function CommentPin(props: {
     <Anchored world={props.world} card={props.children != null} className="ofk-comment-pinned" testId="v2-comment-pin">
       <button type="button" className="ofk-comment-pin" data-comment-ui data-thread-id={thread.id} data-selected={props.selected || undefined}
         data-kind={lead.author.kind} data-dragging={props.dragging || undefined}
-        aria-label={pinLabel(thread)}
+        data-unread={props.unread || undefined} data-resolved={thread.resolved || undefined}
+        aria-label={`${pinLabel(thread)}${props.unread ? ', unread' : ''}`}
         aria-expanded={props.selected}
         onPointerDown={(event) => actions.press(thread.id, event)} onPointerMove={(event) => actions.drag(thread.id, event)}
         onPointerUp={(event) => actions.drop(thread.id, event)} onPointerCancel={actions.cancel}
