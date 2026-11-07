@@ -260,6 +260,9 @@ describe('comments and history', () => {
     session = undoSessionCommand(session, session.contentRevision);
     expect(page(session.document).name).toBe('Page 1');
     expect(page(session.document).threads).toHaveLength(1);
+    // A snapshot that differs only in its threads changes nothing a command can change.
+    const current = page(session.document);
+    expect(() => applyDocumentCommand(session.document, { kind: 'set-page', id: 'noop', label: 'Noop', pageId: 'page-1', before: current, after: { ...current, threads: [] } })).toThrow(/must change the page/);
   });
 
   it('deleting a page takes its threads; undoing the delete brings them back', () => {
@@ -356,6 +359,21 @@ describe('comments and history', () => {
       expect(validateSceneDocumentV1(session.document).success).toBe(true);
     });
 
+    // Ids are unique across the document too. The page coming back holds "x" twice over, before the carry: the
+    // result is valid only after it, so this also pins validation to run after the carry.
+    it('a page brought back yields a thread id given out again since it went', () => {
+      // Thread "x" on page 2. Delete page 2, start a thread "x" on page 1, undo the delete.
+      let session = createDocumentSession(onPage(TWO_PAGES, 'page-2', 'x'));
+      session = commitSessionCommand(session, { kind: 'remove-page', id: 'rm', label: 'Delete', index: 1, page: session.document.pages[1]! }, session.contentRevision);
+      session = updateSessionThreads(session, (document) => onPage(document, 'page-1', 'x'), session.revision);
+      session = undoSessionCommand(session, session.contentRevision);
+      expect(session.document.pages.map((candidate) => (candidate.threads ?? []).map(({ id }) => id))).toEqual([['x'], ['x-2']]);
+      expect(numbersById(session.document)).toEqual({ x: 1, 'x-2': 2 });
+      // Redo takes it away again, and undo brings it back as it is now.
+      session = undoSessionCommand(redoSessionCommand(session, session.contentRevision), session.contentRevision + 1);
+      expect(threadIds(session.document)).toEqual(['x', 'x-2']);
+      expect(findThread(session.document, 'x-2')!.page.id).toBe('page-2');
+    });
   });
 
   it('refuses a thread change that would make the document invalid', () => {
