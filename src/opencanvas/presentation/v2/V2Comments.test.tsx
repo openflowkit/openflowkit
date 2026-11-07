@@ -5,6 +5,7 @@ import { createTestDocument, createTestNode } from '../../testing/builders/docum
 import { addThread } from '../../domain/threads/threads';
 import type { SceneDocumentV1 } from '../../domain/document/types';
 import { V2Comments, type V2CommentApi } from './V2Comments';
+import { ThreadPopover } from './V2CommentsParts';
 import type { V2Tool } from './v2ToolCatalog';
 
 // jsdom: no layout, no scrolling, no ResizeObserver (menus place themselves with one).
@@ -265,5 +266,27 @@ describe('deleting', () => {
     expect(outer).not.toHaveBeenCalled();
     expect(thread()).not.toBeNull();
     expect(screen.getByRole('alert')).toHaveTextContent('Delete this thread?');
+  });
+});
+
+describe('the thread card', () => {
+  it('every icon-only button has a tooltip', () => {
+    render(<Harness initial={withThread()} tool="select" />);
+    fireEvent.click(pinButton());
+    for (const name of ['Thread actions', 'Resolve thread', 'Close thread', 'Comment actions']) {
+      expect(screen.getByRole('button', { name }).closest('.ofk-tooltip-anchor'), name).not.toBeNull();
+    }
+  });
+
+  it('Reopen does not wear Resolve\'s check', () => {
+    const open = withThread().pages[0]!.threads![0]!;
+    const icon = (resolved: boolean) => {
+      const view = render(<ThreadPopover thread={{ ...open, resolved }} readOnly={false} now={Date.now()} onClose={vi.fn()} onResolve={vi.fn()}
+        onDeleteThread={vi.fn()} onReply={vi.fn()} onEditMessage={vi.fn()} onDeleteMessage={vi.fn()} />);
+      const svg = screen.getByRole('button', { name: resolved ? 'Reopen thread' : 'Resolve thread' }).querySelector('svg')!.getAttribute('class');
+      view.unmount();
+      return svg;
+    };
+    expect(icon(true)).not.toBe(icon(false));
   });
 });

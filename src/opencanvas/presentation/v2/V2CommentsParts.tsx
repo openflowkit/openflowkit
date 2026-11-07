@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { IconArrowUp, IconCheck, IconDots, IconPencil, IconSparkles, IconTrash, IconUser, IconX } from '@tabler/icons-react';
+import { IconArrowBackUp, IconArrowUp, IconCheck, IconDots, IconPencil, IconSparkles, IconTrash, IconUser, IconX } from '@tabler/icons-react';
 import type { SceneComment, SceneThread } from '../../domain/document/types';
 import { COMMENT_BODY_MAX } from '../../domain/document/types';
 import { Button, Icon, IconButton, Menu, MenuItem, Tooltip } from '../design-system';
@@ -109,8 +109,10 @@ function MessageMenu(props: { readonly label: string; readonly onEdit: () => voi
   const anchor = useRef<HTMLButtonElement>(null);
   return (
     <>
-      <IconButton ref={anchor} variant="quiet" label={props.label} aria-haspopup="menu" aria-expanded={open}
-        icon={<Icon icon={IconDots} />} onClick={() => setOpen((on) => !on)} />
+      <Tooltip content={props.label}>
+        <IconButton ref={anchor} variant="quiet" label={props.label} aria-haspopup="menu" aria-expanded={open}
+          icon={<Icon icon={IconDots} />} onClick={() => setOpen((on) => !on)} />
+      </Tooltip>
       <Menu open={open} anchorRef={anchor} onClose={() => setOpen(false)} label={props.label} placement="bottom-end" data-comment-ui>
         <MenuItem icon={<Icon icon={IconPencil} />} onSelect={props.onEdit}>Edit</MenuItem>
         <MenuItem icon={<Icon icon={IconTrash} />} danger onSelect={props.onDelete}>Delete</MenuItem>
@@ -206,15 +208,22 @@ export function ThreadPopover(props: {
         <h3>Comment</h3>
         {readOnly ? null : (
           <>
-            <IconButton ref={menuAnchor} variant="quiet" label="Thread actions" aria-haspopup="menu" aria-expanded={menuOpen}
-              icon={<Icon icon={IconDots} />} onClick={() => setMenuOpen((open) => !open)} />
+            <Tooltip content="Thread actions">
+              <IconButton ref={menuAnchor} variant="quiet" label="Thread actions" aria-haspopup="menu" aria-expanded={menuOpen}
+                icon={<Icon icon={IconDots} />} onClick={() => setMenuOpen((open) => !open)} />
+            </Tooltip>
             <Menu open={menuOpen} anchorRef={menuAnchor} onClose={() => setMenuOpen(false)} label="Thread actions" placement="bottom-end" data-comment-ui>
               <MenuItem icon={<Icon icon={IconTrash} />} danger onSelect={() => setConfirming({ commentId: null })}>Delete thread…</MenuItem>
             </Menu>
-            <IconButton variant="quiet" label={thread.resolved ? 'Reopen thread' : 'Resolve thread'} icon={<Icon icon={IconCheck} />} onClick={props.onResolve} />
+            <Tooltip content={thread.resolved ? 'Reopen thread' : 'Resolve thread'}>
+              <IconButton variant="quiet" label={thread.resolved ? 'Reopen thread' : 'Resolve thread'}
+                icon={<Icon icon={thread.resolved ? IconArrowBackUp : IconCheck} />} onClick={props.onResolve} />
+            </Tooltip>
           </>
         )}
-        <IconButton variant="quiet" label="Close thread" icon={<Icon icon={IconX} />} onClick={props.onClose} />
+        <Tooltip content="Close thread" shortcut="Esc">
+          <IconButton variant="quiet" label="Close thread" icon={<Icon icon={IconX} />} onClick={props.onClose} />
+        </Tooltip>
       </header>
       {body}
       <ul ref={listRef} className="ofk-comment-messages">
