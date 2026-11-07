@@ -1,6 +1,6 @@
 {
   "name": "openflowkit",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Draw diagrams that stay valid, editable and saved next to the code: the OpenFlowKit MCP server plus the skill that teaches the agent to use it.",
   "author": {
     "name": "OpenFlowKit",

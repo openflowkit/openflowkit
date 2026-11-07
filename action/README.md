@@ -32,7 +32,7 @@ Use a release tag (`v2.1.0` or later) or a commit SHA; a branch name works but m
 
 ## Requirements
 
-The default `cli` is the version pinned in that tag's `action.yml`: 0.2.3 in `v2.1.0`, 0.2.4 from the next release. Any CLI you point `cli` at must be at least 0.2.0: older ones lack `render`, `convert` and `op`.
+The default `cli` is the version pinned in that tag's `action.yml`: 0.2.3 in `v2.1.0`, 0.2.5 from the next release. Any CLI you point `cli` at must be at least 0.2.0: older ones lack `render`, `convert` and `op`.
 
 ## What it posts
 

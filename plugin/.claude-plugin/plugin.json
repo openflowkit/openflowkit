@@ -1,7 +1,7 @@
 {
   "name": "openflowkit",
   "displayName": "OpenFlowKit",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Draw diagrams that stay valid, editable and saved next to the code: the OpenFlowKit MCP server plus the skill that teaches Claude to use it.",
   "author": { "name": "OpenFlowKit", "url": "https://github.com/openflowkit/openflowkit" },
   "homepage": "https://github.com/openflowkit/openflowkit#readme",

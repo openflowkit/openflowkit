@@ -47,7 +47,7 @@ separately; its changes are listed under *For developers* in each release.
   A shape in front now covers the text and images of the shapes behind it too, overlapping images keep their order
   whichever loads first, and clicks and exports agree with what you see.
 
-### For developers: MCP server and CLI, not on npm yet
+### For developers: MCP server and CLI 0.2.5 (on npm since 2026-11-07, tag `mcp-v0.2.5`)
 
 - **`get_diagram` with `since`.** An agent that already holds the text it wrote can ask for just what changed on the
   canvas: `dslDiff`, a unified diff of the canvas against the text it was drawn from, in place of the whole `dsl`. Both
@@ -56,6 +56,13 @@ separately; its changes are listed under *For developers* in each release.
 - **`revision`** comes back from `create_diagram`, `update_diagram` and `get_diagram`; pass it as `since`. When the
   diagram was redrawn from other text after it (in Edit as code, or by another agent), `get_diagram` returns the whole
   text and says so, instead of an empty diff.
+- **`create_diagram` returns the id it placed.** A second diagram with the same text is placed as `<id>-2`; the op
+  returned the first one's id, so the agent's next call edited the wrong diagram.
+- **A palette survives an agent's edit.** A palette set by an op option (or the code panel's picker) was missing from
+  the text `get_diagram` returns, so redrawing from that text came back pastel. The text now names it.
+- **Several agent sessions share one canvas.** A second local server joins the one already paired with the editor
+  instead of failing on the port, and each agent edits under its own named cursor.
+- **Hosted endpoint:** CORS on every answer, read-only tool annotations, and the chat card draws while the model writes.
 
 ### For developers: MCP server and CLI 0.2.4 (on npm since 2026-10-13, tag `mcp-v0.2.4`)
 

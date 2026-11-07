@@ -6,12 +6,12 @@
     "url": "https://github.com/openflowkit/openflowkit",
     "source": "github"
   },
-  "version": "0.2.4",
+  "version": "0.2.5",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "openflowkit",
-      "version": "0.2.4",
+      "version": "0.2.5",
       "transport": {
         "type": "stdio"
       },

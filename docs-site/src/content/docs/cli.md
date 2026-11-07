@@ -18,7 +18,7 @@ npm install -g openflowkit
 
 `openflowkit` on npm is a short name for `@openflowkit/openflowkit-mcp`, which also ships the
 [MCP server](/mcp-server/); either package gives you the same `openflowkit` command. Pin a
-version in CI, for example `npx -y openflowkit@0.2.4 validate diagram.ofk`.
+version in CI, for example `npx -y openflowkit@0.2.5 validate diagram.ofk`.
 
 ## Commands
 

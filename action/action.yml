@@ -6,7 +6,7 @@ inputs:
     default: ${{ github.token }}
   cli:
     description: Command that runs the openflowkit CLI.
-    default: npx -y openflowkit@0.2.4
+    default: npx -y openflowkit@0.2.5
   refresh-svg:
     description: 'Commit a fresh SVG to the PR branch when the committed one beside a diagram is stale (same-repo PRs only). Off by default: GitHub runs no checks on that commit, so required checks would block the merge.'
     default: 'false'
