@@ -271,6 +271,24 @@ describe('excalidrawToDocument', () => {
     ]);
   });
 
+  it('never nests a frame, and keeps text bound to something that holds no label as text', () => {
+    const frame = { ...base, type: 'frame', y: 0, width: 100, height: 100 };
+    const words = { ...base, type: 'text', y: 200, width: 40, height: 20, fontSize: 16 };
+    const { document } = open(file([
+      // Hand-made: a frame in itself, two frames in each other. Excalidraw's frames don't nest.
+      { ...frame, id: 'self', x: 0, frameId: 'self' },
+      { ...frame, id: 'f', x: 200, frameId: 'g' }, { ...frame, id: 'g', x: 400, frameId: 'f' },
+      // Text bound to itself, to another text, or to a picture has no shape to label.
+      { ...words, id: 'me', x: 0, text: 'me', containerId: 'me' },
+      { ...words, id: 'a', x: 100, text: 'a', containerId: 'b' }, { ...words, id: 'b', x: 200, text: 'b', containerId: 'a' },
+      { ...base, id: 'pic', type: 'image', x: 300, y: 200, width: 40, height: 40, fileId: 'gone' },
+      { ...words, id: 'caption', x: 300, text: 'caption', containerId: 'pic' },
+    ]));
+    const nodes = document.pages[0]!.nodes;
+    expect(nodes.filter(({ kind }) => kind === 'frame').map(({ parentId }) => parentId)).toEqual([null, null, null]);
+    expect(nodes.filter(({ kind }) => kind === 'text').map(({ content }) => content.label)).toEqual(['me', 'a', 'b', 'caption']);
+  });
+
   it('turns a line by its angle, and places freehand drawn up and left by its lowest point', () => {
     const { document } = open(file([
       // A flat 100px line turned a quarter about its centre (50, 0) stands upright from (50, -50) to (50, 50).

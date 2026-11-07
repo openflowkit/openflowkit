@@ -58,6 +58,17 @@ describe('production clipboard', () => {
     expect(applyDocumentCommand(document, result.command).document.pages[0].nodes).toHaveLength(2);
   });
 
+  it('pastes a hand-made Excalidraw clipboard whose frame is its own frame', () => {
+    const document = createTestDocument({ nodes: [createTestNode('mine')] });
+    const scene = readExcalidraw(JSON.stringify({ type: 'excalidraw/clipboard', files: {}, elements: [
+      { id: 'loop', type: 'frame', frameId: 'loop', x: 0, y: 0, width: 200, height: 200, angle: 0, isDeleted: false },
+    ] }))!;
+    const { nodes, connectors } = excalidrawScene(scene);
+    const result = buildPasteProductionSelectionCommand(document.pages[0], { version: 1, nodes, connectors },
+      (kind) => `${kind}-pasted`, { offset: { x: 0, y: 0 }, keepParents: false });
+    expect(applyDocumentCommand(document, result.command).document.pages[0].nodes[1]).toMatchObject({ kind: 'frame', parentId: null });
+  });
+
   it('moves a pasted connector’s bends with its ends', () => {
     const document = createTestDocument({ nodes: [] });
     const snapshot = { version: 1 as const, nodes: [createTestNode('box')], connectors: [{

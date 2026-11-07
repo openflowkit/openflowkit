@@ -49,6 +49,8 @@ export function readExcalidraw(text: string): ExcalidrawScene | null {
 export const looksLikeExcalidraw = (text: string): boolean => readExcalidraw(text) !== null;
 
 const SHAPES: Readonly<Record<string, ShapeKind>> = { rectangle: 'rectangle', ellipse: 'ellipse', diamond: 'diamond' };
+/** What draws no label: text bound to one of these (only a hand-made file does that) stays text of its own. */
+const NO_LABEL = new Set(['text', 'freedraw', 'frame', 'magicframe', 'image']);
 
 /** Excalidraw turns an element about its centre; ours turn about the top-left corner, so the corner moves. */
 function turnedCorner(x: number, y: number, width: number, height: number, radians: number): Point2d {
@@ -147,6 +149,8 @@ class SceneBuilder {
   private readonly byId = new Map<string, ExcalidrawElement>();
   /** Text bound to a shape or an arrow, by the container's id: its label, not a node of its own. */
   private readonly labels = new Map<string, ExcalidrawElement>();
+  /** Every text bound to a shape or an arrow, the label and any second one left out: none is a node. */
+  private readonly boundTexts = new Set<string>();
   private readonly nodeIds = new Set<string>();
   private readonly frames = new Set<string>();
   private readonly fills = new FillIndex();
@@ -161,13 +165,17 @@ class SceneBuilder {
       if (typeof element.id !== 'string' || !element.id.trim()) { this.lose('elements without an id were left out'); continue; }
       if (this.byId.has(element.id)) { this.lose('elements sharing an earlier element’s id were left out'); continue; }
       this.byId.set(element.id, element);
-      if (element.type === 'text' && typeof element.containerId === 'string') {
-        if (this.labels.has(element.containerId)) this.lose('a second text bound to the same shape was left out');
-        else this.labels.set(element.containerId, element);
-      }
       if (element.type === 'frame' || element.type === 'magicframe') this.frames.add(element.id);
       if (Array.isArray(element.groupIds)) for (const group of element.groupIds) if (typeof group === 'string') groups.add(group);
       if (text(element.link) && element.type !== 'embeddable' && element.type !== 'iframe') this.lose('links on shapes were left out');
+    }
+    // Once every element is known: a container may come after its text.
+    for (const [id, element] of this.byId) {
+      const container = element.type === 'text' && typeof element.containerId === 'string' ? this.byId.get(element.containerId) : undefined;
+      if (!container || NO_LABEL.has(text(container.type))) continue;
+      this.boundTexts.add(id);
+      if (this.labels.has(element.containerId as string)) this.lose('a second text bound to the same shape was left out');
+      else this.labels.set(element.containerId as string, element);
     }
     for (let index = 0; index < groups.size; index += 1) this.lose('groups come in as separate shapes');
   }
@@ -186,7 +194,7 @@ class SceneBuilder {
     for (const element of this.byId.values()) {
       const type = text(element.type);
       if (type === 'arrow' || type === 'line') continue;
-      if (type === 'text' && typeof element.containerId === 'string' && this.byId.has(element.containerId)) continue;
+      if (this.boundTexts.has(element.id as string)) continue;
       this.addNode(element, type, z);
       z += 1;
     }
@@ -195,9 +203,10 @@ class SceneBuilder {
     }
   }
 
-  /** A frame's member sits in the frame's own space; everything else on the page. */
+  /** A frame's member sits in the frame's own space; everything else on the page. Frames don't nest, so a frame is never a member. */
   private place(element: ExcalidrawElement): { parentId: string | null; origin: Point2d } {
-    const frameId = typeof element.frameId === 'string' && this.frames.has(element.frameId) ? element.frameId : null;
+    const member = typeof element.frameId === 'string' && !this.frames.has(element.id as string) && this.frames.has(element.frameId);
+    const frameId = member ? element.frameId as string : null;
     const frame = frameId ? this.byId.get(frameId) : undefined;
     return { parentId: frameId, origin: frame ? { x: finite(frame.x), y: finite(frame.y) } : { x: 0, y: 0 } };
   }
