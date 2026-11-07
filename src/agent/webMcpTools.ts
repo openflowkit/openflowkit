@@ -2,7 +2,6 @@
 // only a browser can answer (what the person is looking at, and showing them what the agent means). Loaded only
 // in a browser that has a model context; the editor supplies the live session through WebMcpEditor.
 import { z, type ZodRawShape } from 'zod';
-import { zodToJsonSchema } from 'zod-to-json-schema';
 import type { SceneDocumentV1, ScenePage } from '../opencanvas/domain/document/types';
 import { buildNodeStateMap, connectorVisible } from '../opencanvas/domain/scene/nodeState';
 import { CAPABILITY_MANIFEST } from './manifest';
@@ -43,7 +42,7 @@ const ON_SCREEN_LIMIT = 100;
 
 /** The MCP SDK's conversion, so a browser agent sees the schema an MCP client does. A `$ref` would be a bug (see pointSchema). */
 export function jsonSchemaOf(shape: ZodRawShape): object {
-  return zodToJsonSchema(z.object(shape), { strictUnions: true, pipeStrategy: 'input' });
+  return z.toJSONSchema(z.object(shape), { io: 'input', reused: 'inline' });
 }
 
 const describeNode = (scene: ScenePage, id: string) => {
