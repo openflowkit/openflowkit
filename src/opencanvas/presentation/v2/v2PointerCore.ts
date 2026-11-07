@@ -71,9 +71,16 @@ export interface V2ChartPointOperation {
   readonly index: number;
 }
 
+// The comment tool's press: a click (released within the threshold) asks for a comment there; anything else is dropped.
+export interface V2CommentOperation {
+  readonly kind: 'comment';
+  readonly pointerId: number;
+  readonly start: Point2d;
+}
+
 export type V2Operation =
   | PixiPointerOperation | V2CreateOperation | V2ConnectOperation
-  | V2InkOperation | V2EraseOperation | V2ChartPointOperation;
+  | V2InkOperation | V2EraseOperation | V2ChartPointOperation | V2CommentOperation;
 
 export interface V2GestureApi {
   readonly cancelGesture: () => boolean;
@@ -102,7 +109,8 @@ export interface V2PointerOptions {
   readonly openEditor: (nodeId: string, options?: { readonly isNew?: boolean }) => void;
   readonly openConnectorEditor: (connectorId: string, at: Point2d) => void;
   readonly onToolChange: (tool: V2Tool) => void;
-  readonly onTransformPreview?: (result: TransformResult | null) => void;
+  /** Each previewed frame of a move, resize or turn (`copy`: an ⌥-drag leaves the originals where they are); null when it ends. */
+  readonly onTransformPreview?: (result: TransformResult | null, copy?: boolean) => void;
   readonly snapToGrid?: boolean;
   readonly mintId: (prefix: string) => string;
   /**
@@ -120,6 +128,8 @@ export interface V2PointerOptions {
   readonly onNodeDoubleClick?: (nodeId: string) => void;
   /** Read-only: a drag that started on a node. Nothing moves, so the host says why; no marquee is drawn. */
   readonly onNodeDrag?: (nodeId: string) => void;
+  /** A click with the comment tool on the canvas itself (screen point in the canvas): the comment layer opens a composer there. */
+  readonly onCommentClick?: (point: Point2d) => void;
 }
 
 export interface StylePresets {

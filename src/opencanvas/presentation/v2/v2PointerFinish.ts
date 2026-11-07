@@ -246,4 +246,7 @@ export function finishGesture(operation: V2Operation, opts: V2PointerOptions, ho
   else if (operation.kind === 'chart-point') finishChartPoint(operation, opts, host, point);
   else if (operation.kind === 'connect') finishConnect(operation, opts, host, point, event);
   else if (operation.kind === 'connector-edit') finishConnectorEdit(operation, opts, host, point, event);
+  else if (operation.kind === 'comment' && Math.hypot(point.x - operation.start.x, point.y - operation.start.y) < CLICK_THRESHOLD_PX) {
+    opts.onCommentClick?.(point);
+  }
 }

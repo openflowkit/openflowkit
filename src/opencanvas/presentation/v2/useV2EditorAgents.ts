@@ -125,6 +125,8 @@ export function useV2EditorAgents(input: EditorAgentsInput) {
     capabilities: agentCapabilities,
     // false tells the agent its edit did not land (a locked page), instead of reporting it applied.
     commit: (command: DocumentCommand) => { if (!writable(command)) return false; session.commit(command); return true; },
+    // Agent thread changes happen outside undo history.
+    threadChange: session.updateThreads,
     onActivity: setAnnouncement,
     // An agent edit off-screen (or under the agent panel) lands readable, as the assistant's does; one in view stays put.
     // It waits for the renderer to draw the edit: a frame later the host often had no bounds for it yet.

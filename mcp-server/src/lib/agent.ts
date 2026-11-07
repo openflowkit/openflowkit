@@ -314,7 +314,7 @@ interface AgentBundle {
   readonly MAX_IMAGE_KB: number;
   base64Kb(base64: string): number;
   runAgentOp(op: AgentOp, rawInput: unknown, context: {
-    document: SceneDocumentV1; pageId: string; capabilities: OpCapabilities;
+    document: SceneDocumentV1; pageId: string; capabilities: OpCapabilities; client?: string;
   }): Promise<{ document: SceneDocumentV1; changed: boolean; output: unknown }>;
   createFileCapabilities(options: {
     grammar: string;
@@ -335,7 +335,7 @@ interface AgentBundle {
   tablerSvg(nodes: readonly (readonly [string, Readonly<Record<string, string>>])[]): string;
   readonly ICON_PACK_IDS: Readonly<Record<string, string>>;
   /** One row per op: the human operation it mirrors. */
-  readonly CAPABILITY_MANIFEST: readonly { readonly action: string; readonly operation: string; readonly mutates: boolean }[];
+  readonly CAPABILITY_MANIFEST: readonly { readonly action: string; readonly operation: string; readonly writes: 'diagram' | 'threads' | null }[];
   /** A cheap grid layout, for checks that discard positions. */
   readonly deterministicLayout: unknown;
   /** ELK in process: the editor's layout, for file mode and the CLI. */

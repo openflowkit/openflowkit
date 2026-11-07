@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createTestDocument, createTestNode } from '../../opencanvas/testing/builders/documentBuilder';
+import { addThread } from '../../opencanvas/domain/threads/threads';
 import { decryptDocument, encryptDocument, SHARE_ENVELOPE_VERSION, ShareCryptoError } from './shareCrypto';
 
 const LABEL = 'Quarterly payroll secret';
@@ -66,5 +67,25 @@ describe('share envelope', () => {
     const { key } = await encryptDocument(document());
     expect((await failure(decryptDocument(new Uint8Array(), key))).code).toBe('corrupt');
     expect((await failure(decryptDocument(new Uint8Array([SHARE_ENVELOPE_VERSION, 1, 2]), key))).code).toBe('corrupt');
+  });
+});
+
+describe('comments in a share', () => {
+  const commented = () => {
+    const doc = document();
+    return addThread(doc, {
+      pageId: doc.pages[0]!.id, threadId: 't1', nodeId: null, point: { x: 1, y: 2 },
+      comment: { id: 'm1', author: { kind: 'human', name: 'Ada' }, body: 'private note', createdAt: '2026-01-01T00:00:00.000Z' },
+    });
+  };
+
+  it('are stripped from every page before encryption', async () => {
+    const withThread = commented();
+    expect(withThread.pages[0]!.threads).toHaveLength(1);
+    const { body, key } = await encryptDocument(withThread);
+    const opened = await decryptDocument(body, key);
+    expect(opened.pages.every((page) => page.threads === undefined)).toBe(true);
+    expect(JSON.stringify(opened)).not.toContain('private note');
+    expect(opened.pages[0]!.nodes).toEqual(withThread.pages[0]!.nodes);
   });
 });

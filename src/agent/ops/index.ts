@@ -1,6 +1,7 @@
 // The one registry every surface reads: the MCP server builds its tools here,
 // the editor's live bridge dispatches here, the manifest test proves it here.
 import { createDiagram, getDiagram, listDiagrams, updateDiagram } from './dslOps';
+import { listThreads, replyToThread, resolveThread, startThread } from './threadOps';
 import { findIconsFor, getSyntax, searchIcons } from './iconOps';
 import { exportDiagram, fitView, getDocument, listPages, screenshotDiagram } from './pipelineOps';
 import { addShape, deleteShapes, moveNodes, styleNodes } from './sceneOps';
@@ -28,6 +29,10 @@ export const AGENT_OPS: readonly AnyAgentOp[] = [
   fitView,
   getDocument,
   listPages,
+  listThreads,
+  replyToThread,
+  resolveThread,
+  startThread,
 ];
 
 export function findAgentOp(name: string): AnyAgentOp | null {

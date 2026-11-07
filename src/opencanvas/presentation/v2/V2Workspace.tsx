@@ -2,6 +2,7 @@ import {
   IconArrowUpRight,
   IconCode,
   IconKeyboard,
+  IconMessageCircle,
   IconPlugConnected,
   IconSitemap,
   IconSparkles,
@@ -22,13 +23,15 @@ import { shortcutFor, shortcutGroups } from './v2Shortcuts';
 import { DOCS_URL } from './homeStars';
 import { mapRepoPath, MapRepoForm } from './map/V2MapStart';
 
-export type V2WorkspaceMode = 'assistant' | 'code' | 'model' | 'agent' | 'inspect';
+export type V2WorkspaceMode = 'assistant' | 'code' | 'model' | 'agent' | 'inspect' | 'threads';
 const MODES = [
   { id: 'assistant', label: 'AI assistant', icon: IconSparkles },
+  { id: 'threads', label: 'Threads', icon: IconMessageCircle },
   { id: 'model', label: 'Architecture model', icon: IconSitemap },
   { id: 'code', label: 'Diagram as code', icon: IconCode },
   { id: 'agent', label: 'Connect agent', icon: IconPlugConnected },
 ] as const;
+const modeById = (id: V2WorkspaceMode) => MODES.find((mode) => mode.id === id)!;
 
 /** The document bar's pair at the right edge: the same top line, the workspace rail hangs below it. */
 export function V2ShareBar({ canShare, shareOpen, exportOpen, onShare, onExport }: {
@@ -61,11 +64,14 @@ export function V2WorkspaceRail({
   onChange,
   onShortcuts,
   agentConnected,
+  openThreads,
 }: {
   mode: V2WorkspaceMode | null;
   onChange: (mode: V2WorkspaceMode) => void;
   onShortcuts: () => void;
   agentConnected: boolean;
+  /** Unresolved threads in the document: shown on the Threads button. */
+  openThreads: number;
 }) {
   return (
     <>
@@ -75,7 +81,8 @@ export function V2WorkspaceRail({
             <Tooltip key={id} content={label} shortcut={shortcutFor(label)}>
               <IconButton
                 variant="quiet"
-                label={label}
+                label={id === 'threads' && openThreads > 0 ? `${label}, ${openThreads} open` : label}
+                data-count={id === 'threads' && openThreads > 0 ? (openThreads > 99 ? '99+' : openThreads) : undefined}
                 icon={<Icon icon={icon} />}
                 selected={mode === id}
                 aria-expanded={mode === id}
@@ -165,7 +172,7 @@ const coarsePointer = (): boolean =>
 
 // Diagram as code goes first: it needs no key and no setup, opens on a starter diagram, and Generate draws it.
 // The assistant needs a provider key and the agent an MCP client, so both are a second step for a first visit.
-const WELCOME_ACTIONS = [MODES[2], MODES[0], MODES[3]];
+const WELCOME_ACTIONS = [modeById('code'), modeById('assistant'), modeById('agent')];
 
 /** `blankDocument`: no page holds anything, so the document is no stop worth going Back to once a repo map opens from here. */
 export function V2CanvasWelcome({ onOpen, blankDocument = false }: { onOpen: (mode: V2WorkspaceMode) => void; blankDocument?: boolean }) {

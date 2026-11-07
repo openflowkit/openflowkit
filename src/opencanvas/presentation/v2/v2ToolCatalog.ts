@@ -13,7 +13,7 @@ import {
   IconDeviceMobile, IconDeviceTablet, IconEraser, IconFlare, IconForms, IconFrame, IconHeading, IconHighlight,
   IconInputSearch, IconLayoutBottombar, IconLayoutList, IconLayoutNavbar, IconLayoutSidebar,
   IconPencil, IconPhoto, IconRectangle, IconSelect, IconSquareCheck, IconTabs, IconToggleRight,
-  IconUserCircle, IconHandStop, IconPhotoPlus, IconPointer,
+  IconUserCircle, IconHandStop, IconMessageCircle, IconPhotoPlus, IconPointer,
 } from '@tabler/icons-react';
 import type { FramePreset } from '../../domain/nodes/framePreset';
 import { WIDGETS, type WidgetKind } from '../../domain/nodes/widgetNodePresentation';
@@ -23,7 +23,7 @@ import { WIDGETS, type WidgetKind } from '../../domain/nodes/widgetNodePresentat
 // and the agent all name the same things.
 
 export type V2Tool =
-  | 'select' | 'hand'
+  | 'select' | 'hand' | 'comment'
   | 'rectangle' | 'ellipse'
   /** A rectangle drawn 1:1: not a node kind, only a gesture that keeps the sides equal. */
   | 'square'
@@ -84,6 +84,7 @@ export const CONNECTOR_OPTIONS: readonly ToolOption<V2ConnectorTool>[] = [
 export const POINTER_OPTIONS: readonly ToolOption<V2Tool>[] = [
   { id: 'select', label: 'Select', icon: IconPointer, shortcut: 'V' },
   { id: 'hand', label: 'Hand', icon: IconHandStop, shortcut: 'H' },
+  { id: 'comment', label: 'Comment', icon: IconMessageCircle, shortcut: 'C' },
 ];
 
 /** Draw flyout: freehand marks, and the tools that remove or point at them. */

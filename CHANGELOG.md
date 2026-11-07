@@ -9,10 +9,29 @@ separately; its changes are listed under *For developers* in each release.
 
 ## [Unreleased]
 
+## [2.2.0] — 2026-11-07
+
+### Highlights
+
+- **Comments on the canvas.** Pin a thread to any shape or spot, reply, resolve, and find every thread in the new
+  Threads panel. Agents can read and answer them too.
+- **Import Excalidraw drawings.** Open an `.excalidraw` file, or paste shapes copied in Excalidraw, and they land
+  where they were drawn.
+- **Readable text everywhere:** labels on custom colours, faded shapes and imported drawings pick ink that reads.
+
 ### Added
 
 - **Import Excalidraw drawings.** **Import** takes `.excalidraw` files and shapes copied in Excalidraw paste onto the
   canvas, each where it was drawn; the import names anything that didn't come across.
+- **Comments on the canvas.** Press **C** and click to pin a thread, or press **Enter** to put it on the selected
+  shape. A pin follows its shape and opens its thread to reply, edit, resolve or delete; undo and redo never touch
+  comments, and unsent text is kept. Image exports never show pins; JSON exports and share links leave comments out
+  (**Include comments** puts them in a JSON export). A file with a damaged thread still opens: a repeated number or
+  id is fixed, and only a thread that cannot be repaired is dropped.
+- **Threads panel.** The **Threads** button on the rail, with the number of open threads, lists every thread in the
+  document. Search comments, the start of a page name, or `#3`; show resolved or only unanswered threads; resolve, delete, mark read
+  or unread, or copy a link that opens the thread in this browser. Click a thread to open it on the canvas, on its
+  page. Filters and read marks are kept in this browser.
 - **Private repos in the browser.** On the "not found, or it is private" screen, **Private repo? Use a GitHub token**
   takes a fine-grained token with Contents read-only access; the files are then read through the GitHub API. The
   token stays in this tab.
@@ -47,7 +66,7 @@ separately; its changes are listed under *For developers* in each release.
   A shape in front now covers the text and images of the shapes behind it too, overlapping images keep their order
   whichever loads first, and clicks and exports agree with what you see.
 
-### For developers: MCP server and CLI 0.2.5 (on npm since 2026-11-07, tag `mcp-v0.2.5`)
+### For developers: MCP server and CLI 0.3.0 (on npm since 2026-11-07, tag `mcp-v0.3.0`)
 
 - **`get_diagram` with `since`.** An agent that already holds the text it wrote can ask for just what changed on the
   canvas: `dslDiff`, a unified diff of the canvas against the text it was drawn from, in place of the whole `dsl`. Both
@@ -56,6 +75,12 @@ separately; its changes are listed under *For developers* in each release.
 - **`revision`** comes back from `create_diagram`, `update_diagram` and `get_diagram`; pass it as `since`. When the
   diagram was redrawn from other text after it (in Edit as code, or by another agent), `get_diagram` returns the whole
   text and says so, instead of an empty diff.
+- **Comment threads for agents.** `list_threads` reads the threads pinned on the canvas (`unanswered: true` for the
+  ones waiting on the agent, `after` for the next page, `threadId` for one with its bodies uncut); `reply_to_thread`,
+  `resolve_thread` and `start_thread` write them, live or on a file, signed with the agent's name and taking no undo
+  step. A page keeps its threads in `pages[].threads`, and a `.openflow.json` saved with `openflow_save` or the CLI's
+  `--doc` keeps them, as the app's own copy does; JSON export (unless **Include comments** is ticked), share links,
+  `get_diagram` and the `export` op leave them out. `get_document` and `list_pages` report `openThreads`.
 - **`create_diagram` returns the id it placed.** A second diagram with the same text is placed as `<id>-2`; the op
   returned the first one's id, so the agent's next call edited the wrong diagram.
 - **A palette survives an agent's edit.** A palette set by an op option (or the code panel's picker) was missing from
@@ -71,6 +96,12 @@ separately; its changes are listed under *For developers* in each release.
   before, plus an `openUrl` in file mode, so a terminal agent can hand you a link to the diagram.
 - **Hosted endpoint for chat apps:** `https://mcp.openflowkit.com/mcp` serves `render_diagram` and `get_syntax` to
   claude.ai, ChatGPT and other remote MCP clients. It runs on Cloudflare Workers, needs no login and stores nothing.
+
+### Thanks
+
+[@svallory](https://github.com/svallory) designed and built comment threads: the model (#102), comments on the
+canvas (#104), the Threads panel (#105), the agent thread tools (#103), and `get_diagram`'s diff (#94).
+[@Mr-Macharia](https://github.com/Mr-Macharia) built the Excalidraw importer (#97). Thank you both.
 
 ## [2.1.0] — 2026-10-13
 

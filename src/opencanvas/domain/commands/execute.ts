@@ -1,6 +1,7 @@
 import type { SceneDocumentV1, ScenePage } from '../document/types';
 import { validateSceneDocumentV1 } from '../document/validation';
 import { DocumentCommandError } from './commandError';
+import { carryThreads } from '../threads/threads';
 import { areStructurallyEqual } from './equality';
 import type {
   AppliedDocumentCommand,
@@ -126,15 +127,25 @@ function applyRemoveLayer(
   return { document: next, inverse: { ...command, kind: 'insert-layer' } };
 }
 
+// Threads are not diagram content (see domain/threads): page commands ignore them, since threads change
+// outside history and a stored page copy holds the threads of its time. applyDocumentCommand puts the threads
+// of now back on every page (carryThreads), so the commands below need no thread rule of their own.
+function samePageContent(a: ScenePage | undefined, b: ScenePage): boolean {
+  if (!a) return false;
+  const { threads: _a, ...left } = a;
+  const { threads: _b, ...right } = b;
+  return areStructurallyEqual(left, right);
+}
+
 function applySetPage(document: SceneDocumentV1, command: SetPageCommand): AppliedDocumentCommand {
   if (command.before.id !== command.after.id || command.pageId !== command.before.id) {
     throw new DocumentCommandError('set-page cannot change a page ID.');
   }
-  if (areStructurallyEqual(command.before, command.after)) {
+  if (samePageContent(command.before, command.after)) {
     throw new DocumentCommandError('set-page command must change the page.');
   }
   const index = document.pages.findIndex((page) => page.id === command.pageId);
-  if (index < 0 || !areStructurallyEqual(document.pages[index], command.before)) {
+  if (index < 0 || !samePageContent(document.pages[index], command.before)) {
     throw new DocumentCommandError(`Page "${command.pageId}" precondition failed.`);
   }
   const pages = [...document.pages];
@@ -157,7 +168,7 @@ function applyInsertPage(
   pages.splice(command.index, 0, command.page);
   return {
     document: { ...document, pages },
-    inverse: { ...command, kind: 'remove-page' },
+    inverse: { ...command, kind: 'remove-page', page: command.page },
   };
 }
 
@@ -166,14 +177,15 @@ function applyRemovePage(
   command: RemovePageCommand
 ): AppliedDocumentCommand {
   requireIndex(command.index, document.pages.length, false);
-  if (!areStructurallyEqual(document.pages[command.index], command.page)) {
+  const removed = document.pages[command.index];
+  if (!samePageContent(removed, command.page)) {
     throw new DocumentCommandError(`Page "${command.page.id}" removal precondition failed.`);
   }
   const pages = [...document.pages];
   pages.splice(command.index, 1);
   return {
     document: { ...document, pages },
-    inverse: { ...command, kind: 'insert-page' },
+    inverse: { ...command, kind: 'insert-page', page: removed! },
   };
 }
 
@@ -342,11 +354,16 @@ function requireValidDocument(document: SceneDocumentV1): void {
   }
 }
 
+/**
+ * Every command goes through here: undo history and the agent's file path (runAgentOp) alike. A command changes
+ * shapes, never threads, and pins follow their nodes (carryThreads).
+ */
 export function applyDocumentCommand(
   document: SceneDocumentV1,
   command: DocumentCommand
 ): AppliedDocumentCommand {
   const applied = applyUnchecked(document, command);
-  requireValidDocument(applied.document);
-  return applied;
+  const result = carryThreads(applied.document, document);
+  requireValidDocument(result);
+  return result === applied.document ? applied : { ...applied, document: result };
 }
