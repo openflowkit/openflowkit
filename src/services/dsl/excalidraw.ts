@@ -412,8 +412,8 @@ export function excalidrawScene(scene: ExcalidrawScene, layerId = DEFAULT_SCENE_
 }
 
 /** An Excalidraw file (or its clipboard JSON) as an OpenFlowKit document of one page under `id`. */
-// ponytail: main thread; 50 000 shapes (a 15 MB file) parse, build and validate in about 130 ms — a worker if drawings grow past that.
 export function excalidrawToDocument(source: string, id: string, now = new Date().toISOString()): ExcalidrawImport {
+  // ponytail: main thread; 50 000 shapes (a 15 MB file) parse, build and validate in about 130 ms — a worker if drawings grow past that.
   const scene = readExcalidraw(source);
   if (!scene) return { error: 'It isn’t an Excalidraw drawing.' };
   const { nodes, connectors, losses } = excalidrawScene(scene);
