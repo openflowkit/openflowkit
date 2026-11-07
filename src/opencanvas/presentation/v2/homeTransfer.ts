@@ -37,9 +37,9 @@ export async function importHomeFiles({ repository, toast, create, refresh, setT
     }
     repository.listThumbnails().then(setThumbnails, () => undefined);
   })();
-  const description = [...(report.problems.length ? [`Couldn’t open ${report.problems.join('; ')}`.replace(/([^.])$/, '$1.')] : []), ...report.notes].join(' ');
+  const description = [...(report.problems.length ? [`Couldn’t open ${report.problems.join('; ')}`.replace(/([^.])$/, '$1.')] : []), ...report.notes, ...report.losses].join(' ');
   toast({
-    tone: report.problems.length ? (report.count ? 'warning' : 'danger') : report.notes.length ? 'warning' : 'success',
+    tone: report.problems.length ? (report.count ? 'warning' : 'danger') : report.notes.length + report.losses.length ? 'warning' : 'success',
     title: report.count ? `Imported ${plural(report.count, 'diagram')}` : 'Nothing was imported',
     ...(description ? { description } : {}),
   });
