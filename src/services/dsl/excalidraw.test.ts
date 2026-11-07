@@ -338,6 +338,18 @@ describe('excalidrawToDocument', () => {
     expect(nodes.at(-1)!.content.customColor).toBe('#1e1e1e');
   });
 
+  it('opens strokes and texts too long to spread into Math.min (200 000 points, 200 000 lines)', () => {
+    const points = Array.from({ length: 200_000 }, (_, i) => [i % 100, -(i % 37)]);
+    const { document } = open(file([
+      { ...base, id: 'pen', type: 'freedraw', x: 0, y: 0, width: 100, height: 37, points },
+      { ...base, id: 'zig', type: 'line', x: 0, y: 100, width: 100, height: 37, points },
+      { ...base, id: 'long', type: 'text', x: 0, y: 200, width: 10, height: 10, text: Array(200_000).fill('a').join('\n') },
+    ]));
+    const node = (id: string) => document.pages[0]!.nodes.find((candidate) => candidate.id === id)!;
+    expect(node('pen').transform.translation.y).toBe(-36);
+    expect(node('zig').size).toEqual({ width: 99, height: 36 });
+  });
+
   it('says why it can’t open something', () => {
     expect(excalidrawToDocument('{}', 'doc', NOW)).toEqual({ error: 'It isn’t an Excalidraw drawing.' });
     expect(excalidrawToDocument(file([]), 'doc', NOW)).toEqual({ error: 'The drawing is empty.' });

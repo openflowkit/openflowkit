@@ -65,8 +65,19 @@ const pointsOf = (element: ExcalidrawElement): Point2d[] =>
     ? element.points.flatMap((point) => (Array.isArray(point) && point.length >= 2 ? [{ x: finite(point[0]), y: finite(point[1]) }] : []))
     : [];
 
-const lowest = (points: readonly Point2d[]): Point2d =>
-  points.length ? { x: Math.min(...points.map((point) => point.x)), y: Math.min(...points.map((point) => point.y)) } : { x: 0, y: 0 };
+/** The box around `points`, in a loop: spreading a long stroke into Math.min overflows the stack past ~100 000 points. */
+function extent(points: readonly Point2d[]): { readonly min: Point2d; readonly max: Point2d } {
+  if (points.length === 0) return { min: { x: 0, y: 0 }, max: { x: 0, y: 0 } };
+  const min = { ...points[0]! };
+  const max = { ...points[0]! };
+  for (const { x, y } of points) {
+    min.x = Math.min(min.x, x); min.y = Math.min(min.y, y);
+    max.x = Math.max(max.x, x); max.y = Math.max(max.y, y);
+  }
+  return { min, max };
+}
+
+const lowest = (points: readonly Point2d[]): Point2d => extent(points).min;
 
 /** Excalidraw fills a line or stroke that closes on itself (its ends within 8 px), or a line it calls a polygon. */
 function filledLoop(element: ExcalidrawElement, points: readonly Point2d[]): boolean {
@@ -82,9 +93,8 @@ function turnedPoints(element: ExcalidrawElement): Point2d[] {
   const points = pointsOf(element);
   const radians = finite(element.angle);
   if (!radians || points.length === 0) return points;
-  const xs = points.map((point) => point.x);
-  const ys = points.map((point) => point.y);
-  const centre = { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2 };
+  const { min, max } = extent(points);
+  const centre = { x: (min.x + max.x) / 2, y: (min.y + max.y) / 2 };
   const cos = Math.cos(radians);
   const sin = Math.sin(radians);
   return points.map(({ x, y }) => ({
@@ -267,7 +277,7 @@ class SceneBuilder {
       const label = wordsOf(element, element.autoResize === false);
       const fontSize = finite(element.fontSize, 20);
       const alpha = excalidrawOpacity(element);
-      const widest = Math.max(0, ...label.split('\n').map((line) => measurePortableText(line, { fontSize, fontWeight: 400 }).width));
+      const widest = label.split('\n').reduce((most, line) => Math.max(most, measurePortableText(line, { fontSize, fontWeight: 400 }).width), 0);
       const width = Math.max(at.size.width + 16, Math.ceil(widest * (excalidrawFont(element.fontFamily) === 'hand' ? 1.25 : 1.05)) + 20);
       return {
         id: at.id, kind: 'text', parentId: null, layerId: this.layerId, zIndex: 0,
@@ -366,14 +376,14 @@ class SceneBuilder {
   }
 
   private addLine(element: ExcalidrawElement, points: readonly Point2d[], zIndex: number): void {
-    const { x: minX, y: minY } = lowest(points);
+    const { min: { x: minX, y: minY }, max } = extent(points);
     const { parentId, origin } = this.place(element);
     this.nodes.push({
       id: element.id as string, kind: 'line', parentId, layerId: this.layerId, zIndex,
       transform: { translation: { x: finite(element.x) + minX - origin.x, y: finite(element.y) + minY - origin.y }, rotationRadians: 0, scale: { x: 1, y: 1 } },
       size: {
-        width: Math.max(1, Math.max(...points.map((point) => point.x)) - minX),
-        height: Math.max(1, Math.max(...points.map((point) => point.y)) - minY),
+        width: Math.max(1, max.x - minX),
+        height: Math.max(1, max.y - minY),
       },
       content: { points: points.map((point) => ({ x: point.x - minX, y: point.y - minY })), ...excalidrawStrokeContent(element) },
       appearance: {}, ports: [], metadata: {}, extensions: {},
