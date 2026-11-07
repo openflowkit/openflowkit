@@ -128,6 +128,14 @@ describe('comment validation', () => {
     const thread = page(valid).threads![0]!;
     expect(validateSceneDocumentV1({ ...valid, pages: [{ ...page(valid), threads: [thread, thread] }] }).success).toBe(false);
   });
+
+  // Ids are document-wide (findThread, the load-time drop): a save must refuse what the next load would cut.
+  it('rejects one thread id on two pages', () => {
+    const document = withThread(TWO_PAGES, 't1', null);
+    const twin = { ...page(document).threads![0]!, number: 2 };
+    const result = validateSceneDocumentV1({ ...document, pages: [page(document), { ...document.pages[1]!, threads: [twin] }] });
+    expect(result.success === false && result.issues.map(({ message }) => message)).toEqual(['Thread IDs must be unique within the document.']);
+  });
 });
 
 describe('thread numbers', () => {

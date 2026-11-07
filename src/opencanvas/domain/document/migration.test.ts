@@ -106,6 +106,15 @@ describe('migrateSceneDocument', () => {
       expect(warn).toHaveBeenCalledTimes(3);
     });
 
+    it('drops the second of two threads with one id on different pages', () => {
+      const document = createDocument();
+      const second = { ...document.pages[0]!, id: 'page-2', name: 'Page 2', threads: [thread('same', 2)] };
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const result = migrateSceneDocument({ ...document, pages: [{ ...document.pages[0]!, threads: [thread('same', 1)] }, second] });
+      expect(result.success && result.document.pages.map((page) => page.threads?.map(({ number }) => number))).toEqual([[1], undefined]);
+      expect(warn).toHaveBeenCalledTimes(1);
+    });
+
     it('leaves a page with no valid thread without the key', () => {
       const document = createDocument();
       vi.spyOn(console, 'warn').mockImplementation(() => undefined);

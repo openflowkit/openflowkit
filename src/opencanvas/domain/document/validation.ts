@@ -216,8 +216,7 @@ function isPage(value: unknown): value is ScenePage {
     hasUniqueIds(value.connectors) &&
     isJsonObject(value.metadata) &&
     isJsonObject(value.extensions) &&
-    (value.threads === undefined ||
-      (Array.isArray(value.threads) && value.threads.every(isThread) && hasUniqueIds(value.threads)))
+    (value.threads === undefined || (Array.isArray(value.threads) && value.threads.every(isThread)))
   );
 }
 
@@ -354,8 +353,12 @@ export function validateSceneDocumentV1(value: unknown): DocumentValidationResul
   } else {
     if (!hasUniqueIds(value.pages))
       issues.push({ path: '$.pages', message: 'Page IDs must be unique.' });
-    const numbers = value.pages.flatMap((page) => (page.threads ?? []).map((thread) => thread.number));
-    if (new Set(numbers).size !== numbers.length) {
+    // Thread ids and numbers are unique across the document, not just the page (findThread, withFreeThreadNumbers).
+    const threads = value.pages.flatMap((page) => page.threads ?? []);
+    if (!hasUniqueIds(threads)) {
+      issues.push({ path: '$.pages', message: 'Thread IDs must be unique within the document.' });
+    }
+    if (new Set(threads.map((thread) => thread.number)).size !== threads.length) {
       issues.push({ path: '$.pages', message: 'Thread numbers must be unique within the document.' });
     }
     value.pages.forEach((page, index) =>
