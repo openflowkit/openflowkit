@@ -46,11 +46,13 @@ interface ImportReport {
   readonly existing: number;
   /** What opening had to change, per file. */
   readonly notes: readonly string[];
+  /** What a drawing from another app (Excalidraw) couldn't bring across, per file. */
+  readonly losses: readonly string[];
   /** Exactly one text file, nothing else: it is drawn by the editor, so it is handed back, not saved. */
   readonly draw: { readonly source: string; readonly name: string } | null;
 }
 
-const EMPTY: ImportReport = { count: 0, firstId: null, documents: [], problems: [], fromBackup: false, existing: 0, notes: [], draw: null };
+const EMPTY: ImportReport = { count: 0, firstId: null, documents: [], problems: [], fromBackup: false, existing: 0, notes: [], losses: [], draw: null };
 
 /** "Opened 34 diagrams from the backup. 2 were already here and kept as is." */
 export function importSummary(report: ImportReport): string {
@@ -78,6 +80,7 @@ export async function importFiles(files: readonly File[], repository: V2Document
   const documents: SceneDocumentV1[] = [];
   const problems: string[] = [];
   const notes: string[] = [];
+  const losses: string[] = [];
   let count = 0;
   let firstId: string | null = null;
   let fromBackup = false;
@@ -96,6 +99,15 @@ export async function importFiles(files: readonly File[], repository: V2Document
       const text = await file.text();
       let parsed: unknown = null;
       try { parsed = JSON.parse(text); } catch { /* documentFromFileText reports it */ }
+      if (isJsonObject(parsed) && (parsed.type === 'excalidraw' || parsed.type === 'excalidraw/clipboard')) {
+        // Loaded on first use: Home's list doesn't wait on the importer.
+        const { excalidrawToDocument, lossNote } = await import('../../dsl/excalidraw');
+        const imported = excalidrawToDocument(text, mintId());
+        if ('error' in imported) { problems.push(`${file.name}: ${imported.error}`); continue; }
+        if (imported.losses.length) losses.push(`${file.name}: ${lossNote(imported.losses)}`);
+        await save({ ...imported.document, name: withoutExtension(file.name) }, file.name);
+        continue;
+      }
       if (isV1Backup(parsed)) {
         const report = await openV1Backup(parsed, repository);
         fromBackup = true;
@@ -126,5 +138,12 @@ export async function importFiles(files: readonly File[], repository: V2Document
     }
   }
   if (sources.length) problems.push(`${sources.length} text ${sources.length === 1 ? 'file' : 'files'} (open those one at a time)`);
-  return { count, firstId, documents, problems, fromBackup, existing, notes, draw: null };
+  return { count, firstId, documents, problems, fromBackup, existing, notes, losses, draw: null };
+}
+
+/** The toast for one file opened in the editor: what opening repaired, or, for a drawing from another app, what it lost. */
+export function openedNotice(report: ImportReport): { readonly title: string; readonly description: string } | null {
+  if (report.notes.length) return { title: 'Opened, with a repair', description: [...report.notes, ...report.losses].join(' ') };
+  // Titled as Home's Import titles the same file.
+  return report.losses.length ? { title: 'Imported 1 diagram', description: report.losses.join(' ') } : null;
 }

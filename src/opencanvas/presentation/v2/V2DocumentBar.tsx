@@ -23,7 +23,7 @@ import {
 import { useLocation, useNavigate } from 'react-router-dom';
 import type { SceneDocumentV1 } from '../../domain/document/types';
 import { createV2Repository } from '../../../services/storage/v2/v2Repository';
-import { importFiles, importSummary } from '../../../services/storage/v2/backup';
+import { importFiles, importSummary, openedNotice } from '../../../services/storage/v2/backup';
 import { track } from '../../../services/usage/usage';
 import { buildV1Backup, readV1ImportMarker } from '../../../services/storage/v2/v1Import';
 import { downloadTextFile } from './v2Export';
@@ -175,7 +175,8 @@ export function V2DocumentBar(props: V2DocumentBarProps): React.JSX.Element {
     if (report.count) track('created_import');
     const failed = report.problems.length > 0;
     if (report.count === 1 && !failed && report.firstId) {
-      navigate(`/d/${report.firstId}`, report.notes.length ? { state: { openedNotice: report.notes.join(' ') } } : undefined);
+      const notice = openedNotice(report);
+      navigate(`/d/${report.firstId}`, notice ? { state: { openedNotice: notice } } : undefined);
       return;
     }
     if (!report.count) {
@@ -184,18 +185,18 @@ export function V2DocumentBar(props: V2DocumentBarProps): React.JSX.Element {
     }
     const parts = [importSummary(report)];
     if (failed) parts.push(`Couldn’t open ${report.problems.join('; ')}.`);
-    parts.push(...report.notes);
-    navigate('/home', { state: { notice: parts.join(' '), tone: failed || report.notes.length ? 'warning' : 'success' } satisfies HomeNotice });
+    parts.push(...report.notes, ...report.losses);
+    navigate('/home', { state: { notice: parts.join(' '), tone: failed || report.notes.length + report.losses.length ? 'warning' : 'success' } satisfies HomeNotice });
   };
   // What opening the file had to change, told once in the new document's editor.
   const location = useLocation();
-  const openedNotice = (location.state as { openedNotice?: unknown } | null)?.openedNotice;
+  const opened = (location.state as { openedNotice?: ReturnType<typeof openedNotice> } | null)?.openedNotice;
   useEffect(() => {
-    if (typeof openedNotice !== 'string') return;
-    props.onToast({ id: `toast-${Date.now()}`, tone: 'warning', title: 'Opened, with a repair', description: openedNotice });
+    if (!opened) return;
+    props.onToast({ id: `toast-${Date.now()}`, tone: 'warning', ...opened });
     navigate(location.pathname, { replace: true, state: null });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- once per opened file
-  }, [openedNotice]);
+  }, [opened]);
 
   // A conflict's other way out: this tab's version, kept as a diagram of its own, instead of reloading it away.
   const saveCopy = async (): Promise<void> => {

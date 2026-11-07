@@ -11,6 +11,8 @@ separately; its changes are listed under *For developers* in each release.
 
 ### Added
 
+- **Import Excalidraw drawings.** **Import** takes `.excalidraw` files and shapes copied in Excalidraw paste onto the
+  canvas, each where it was drawn; the import names anything that didn't come across.
 - **Private repos in the browser.** On the "not found, or it is private" screen, **Private repo? Use a GitHub token**
   takes a fine-grained token with Contents read-only access; the files are then read through the GitHub API. The
   token stays in this tab.
