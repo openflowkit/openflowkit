@@ -88,8 +88,19 @@ describe('comment threads', () => {
     expect(validateSceneDocumentV1(document).success).toBe(true);
   });
 
+  // A change that changes nothing is not an edit: no new revision, no autosave.
+  it('returns the document itself for a change that changes nothing', () => {
+    const document = withThread(createTestDocument({ nodes: [node('a', 100, 100)] }));
+    expect(setThreadResolved(document, 't1', false)).toBe(document);
+    expect(editComment(document, 't1', 't1-m1', ' Why is this here? ', at)).toBe(document);
+    expect(moveThread(document, 't1', 'a', { x: 110, y: 120 })).toBe(document);
+    const session = createDocumentSession(document);
+    expect(updateSessionThreads(session, (current) => setThreadResolved(current, 't1', false), 0)).toBe(session);
+  });
+
   it('refuses empty, too long, unknown and duplicate input', () => {
     const document = withThread(createTestDocument({ nodes: [node('a')] }));
+    expect(() => removeComment(document, 't1', 'nope')).toThrow(ThreadError);
     expect(() => addComment(document, 't1', { id: 'x', author: human, body: '   ', createdAt: at })).toThrow(ThreadError);
     expect(() => addComment(document, 't1', { id: 'x', author: human, body: 'x'.repeat(COMMENT_BODY_MAX + 1), createdAt: at })).toThrow(ThreadError);
     expect(() => addComment(document, 'nope', { id: 'x', author: human, body: 'hi', createdAt: at })).toThrow(ThreadError);

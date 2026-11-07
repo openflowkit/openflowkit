@@ -166,18 +166,23 @@ function requireThread(document: SceneDocumentV1, threadId: string) {
   return found;
 }
 
+function requireComment(thread: SceneThread, commentId: string): SceneComment {
+  const found = thread.comments.find((candidate) => candidate.id === commentId);
+  if (!found) throw new ThreadError(`Unknown comment "${commentId}".`);
+  return found;
+}
+
+/** `change` returns the thread itself to leave it, or null to delete it; leaving it returns `document` itself. */
 function replaceThread(
   document: SceneDocumentV1,
   threadId: string,
   change: (thread: SceneThread) => SceneThread | null
 ): SceneDocumentV1 {
-  const { page } = requireThread(document, threadId);
+  const { page, thread } = requireThread(document, threadId);
+  const next = change(thread);
+  if (next === thread) return document;
   return updatePageThreads(document, page.id, (threads) =>
-    threads.flatMap((thread) => {
-      if (thread.id !== threadId) return [thread];
-      const next = change(thread);
-      return next ? [next] : [];
-    })
+    threads.flatMap((candidate) => (candidate !== thread ? [candidate] : next ? [next] : []))
   );
 }
 
@@ -240,14 +245,12 @@ export function editComment(
   editedAt: string
 ): SceneDocumentV1 {
   return replaceThread(document, threadId, (thread) => {
-    if (!thread.comments.some((candidate) => candidate.id === commentId)) {
-      throw new ThreadError(`Unknown comment "${commentId}".`);
-    }
+    const edited = requireComment(thread, commentId);
+    const next = commentBody(body);
+    if (next === edited.body) return thread;
     return {
       ...thread,
-      comments: thread.comments.map((candidate) =>
-        candidate.id === commentId ? { ...candidate, body: commentBody(body), editedAt } : candidate
-      ),
+      comments: thread.comments.map((candidate) => (candidate === edited ? { ...candidate, body: next, editedAt } : candidate)),
     };
   });
 }
@@ -255,8 +258,9 @@ export function editComment(
 /** Deleting the opening comment deletes the thread. */
 export function removeComment(document: SceneDocumentV1, threadId: string, commentId: string): SceneDocumentV1 {
   return replaceThread(document, threadId, (thread) => {
-    if (thread.comments[0]?.id === commentId) return null;
-    return { ...thread, comments: thread.comments.filter((candidate) => candidate.id !== commentId) };
+    const removed = requireComment(thread, commentId);
+    if (removed === thread.comments[0]) return null;
+    return { ...thread, comments: thread.comments.filter((candidate) => candidate !== removed) };
   });
 }
 
@@ -275,5 +279,9 @@ export function removeThread(document: SceneDocumentV1, threadId: string): Scene
 export function moveThread(document: SceneDocumentV1, threadId: string, nodeId: string | null, point: Point2d): SceneDocumentV1 {
   const { page } = requireThread(document, threadId);
   const anchor = createAnchor(page, nodeId, point);
-  return replaceThread(document, threadId, (thread) => ({ ...thread, anchor }));
+  return replaceThread(document, threadId, (thread) => (sameAnchor(thread.anchor, anchor) ? thread : { ...thread, anchor }));
+}
+
+function sameAnchor(a: SceneThreadAnchor, b: SceneThreadAnchor): boolean {
+  return a.nodeId === b.nodeId && a.offset?.x === b.offset?.x && a.offset?.y === b.offset?.y && a.point.x === b.point.x && a.point.y === b.point.y;
 }
