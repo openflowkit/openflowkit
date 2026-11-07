@@ -104,7 +104,11 @@ export function carryThreads(next: SceneDocumentV1, current: SceneDocumentV1): S
   return changed ? { ...next, pages } : next;
 }
 
-/** Threads are private conversations with the author's name: `document` as a file or link carries it, without them. */
+/**
+ * `document` without its comment threads, which carry people's names and private conversation. A diagram's own
+ * `.openflow.json` keeps them (the app's, an agent's in file mode, the CLI's --doc); JSON export (unless it asks,
+ * `includeThreads`), share links, `get_diagram` and the agent `export` op leave them out.
+ */
 export function withoutThreads(document: SceneDocumentV1): SceneDocumentV1 {
   if (!document.pages.some((page) => page.threads !== undefined)) return document;
   return { ...document, pages: document.pages.map(({ threads: _threads, ...page }) => page) };

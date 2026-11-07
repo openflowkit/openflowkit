@@ -109,7 +109,7 @@ export interface SceneThreadAnchor {
   readonly point: Point2d;
 }
 
-/** A discussion pinned on a page. Not part of undo history or the DSL; JSON exports and share links leave it out unless an export asks for it. */
+/** A discussion pinned on a page. Not part of undo history or the DSL; a diagram's own file keeps it, exports leave it out (see withoutThreads). */
 export interface SceneThread {
   readonly id: string;
   /** 1 to THREAD_NUMBER_MAX, unique within the document: the "#3" people say aloud. */
