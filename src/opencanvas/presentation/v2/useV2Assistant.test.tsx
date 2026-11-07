@@ -26,7 +26,7 @@ function harness(replies: Response[], withTools = false) {
   const document = createTestDocument({ nodes: [], connectors: [] });
   const hook = renderHook(() => {
     const proposal = useV2Proposal({
-      document, revision: 1, pageId: 'page-1', commit: vi.fn((_command: DocumentCommand) => undefined),
+      document, contentRevision: 1, pageId: 'page-1', commit: vi.fn((_command: DocumentCommand) => undefined),
       readOnly: false, announce: vi.fn(), compileDsl: async (text) => { await compileGate; return compile(text, { layout: deterministicLayout }); },
     });
     const assistant = useV2Assistant({
@@ -84,7 +84,7 @@ describe('assistant conversation', () => {
     const document = createTestDocument({ nodes: [], connectors: [] });
     const hook = renderHook(() => useV2Assistant({
       documentId: null, page: document.pages[0]!, selectedIds: [], settings, loadGrammar: async () => GRAMMAR, undo: vi.fn(), announce: vi.fn(),
-      proposal: useV2Proposal({ document, revision: 1, pageId: 'page-1', commit: vi.fn(), readOnly: false, announce: vi.fn(), compileDsl: async (text) => compile(text, { layout: deterministicLayout }) }),
+      proposal: useV2Proposal({ document, contentRevision: 1, pageId: 'page-1', commit: vi.fn(), readOnly: false, announce: vi.fn(), compileDsl: async (text) => compile(text, { layout: deterministicLayout }) }),
     }));
     act(() => hook.result.current.send('hi', 'page'));
     await waitFor(() => expect(signal).toBeDefined());

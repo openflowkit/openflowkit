@@ -27,6 +27,7 @@ export interface Proposal extends AiSceneProposal {
   readonly source: string;
   readonly intent: string;
   readonly scope: ProposalScope;
+  /** The session's contentRevision it was built on (diagram changes only; comment threads leave it). */
   readonly baseRevision: number;
   readonly status: 'pending';
 }

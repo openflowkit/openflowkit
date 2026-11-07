@@ -55,20 +55,20 @@ export function useDocumentSession(callbacks: DocumentSessionCallbacks) {
     []
   );
 
-  // With an explicit expectedRevision the caller owns staleness (a proposal
-  // built on an older revision) and receives StaleSessionRevisionError.
+  // With an explicit expectedContentRevision the caller owns staleness (a proposal
+  // built on an older diagram) and receives StaleSessionRevisionError.
   const commit = useCallback(
-    (command: DocumentCommand, expectedRevision?: number) =>
+    (command: DocumentCommand, expectedContentRevision?: number) =>
       advance(
-        (current) => commitSessionCommand(current, command, expectedRevision ?? current.revision),
+        (current) => commitSessionCommand(current, command, expectedContentRevision ?? current.contentRevision),
         () => true,
-        expectedRevision !== undefined
+        expectedContentRevision !== undefined
       ),
     [advance]
   );
   const amendNewNode = useCallback(
     (nodeId: string, command: DocumentCommand) =>
-      advance((current) => amendSessionNewNode(current, nodeId, command, current.revision)),
+      advance((current) => amendSessionNewNode(current, nodeId, command, current.contentRevision)),
     [advance]
   );
   // Threads change outside undo history (domain/threads). `change` throws ThreadError on bad input.
@@ -84,7 +84,7 @@ export function useDocumentSession(callbacks: DocumentSessionCallbacks) {
   const undo = useCallback(
     () =>
       advance(
-        (current) => undoSessionCommand(current, current.revision),
+        (current) => undoSessionCommand(current, current.contentRevision),
         (current) => canUndoDocument(current.history)
       ),
     [advance]
@@ -92,7 +92,7 @@ export function useDocumentSession(callbacks: DocumentSessionCallbacks) {
   const redo = useCallback(
     () =>
       advance(
-        (current) => redoSessionCommand(current, current.revision),
+        (current) => redoSessionCommand(current, current.contentRevision),
         (current) => canRedoDocument(current.history)
       ),
     [advance]
@@ -102,6 +102,7 @@ export function useDocumentSession(callbacks: DocumentSessionCallbacks) {
     session,
     document: session?.document ?? null,
     revision: session?.revision ?? 0,
+    contentRevision: session?.contentRevision ?? 0,
     canUndo: session ? canUndoDocument(session.history) : false,
     canRedo: session ? canRedoDocument(session.history) : false,
     openDocument,

@@ -27,7 +27,7 @@ interface V2PagesOptions {
   /** Deleting a page that has content offers Undo: the toast, and the editor's undo. */
   readonly toast: (toast: ToastItem) => void;
   readonly undo: () => void;
-  /** The session revision now: the toast's Undo only runs while the delete is still the latest change. */
+  /** The session's contentRevision now: the toast's Undo only runs while the delete is still the latest diagram change. */
   readonly revision: () => number;
 }
 
