@@ -9,7 +9,7 @@ import { dslFrameMeta } from '../../../dsl/sceneMeta';
 import { IconChevronRight, IconCode, IconCopy, IconDownload, IconLink, IconLinkOff, IconLock, IconMovie, IconPhoto } from '@tabler/icons-react';
 import type { SceneDocumentV1 } from '../../domain/document/types';
 import { isContainerNodeKind } from '../../domain/nodes/containerNodePresentation';
-import { Button, Icon, Popover, PopoverHeader, Segmented, Tooltip, type ToastItem } from '../design-system';
+import { Button, Checkbox, Icon, Popover, PopoverHeader, Segmented, Tooltip, type ToastItem } from '../design-system';
 import { track } from '../../../services/usage/usage';
 import { appBaseUrl, createShareLink, browserStorage, deleteShare, forgetShare, latestShareFor, rememberShare, ShareError } from '../../../services/share/shareClient';
 import { getTurnstileToken } from '../../../services/share/turnstile';
@@ -310,10 +310,7 @@ export function V2ExportMenu({
             ]} />
         ) : null}
         {effectiveFormat === 'json' ? (
-          <label className="ofk-v2-export-option">
-            <input type="checkbox" checked={includeComments} onChange={(event) => setIncludeComments(event.target.checked)} />
-            <span>Include comments</span>
-          </label>
+          <Checkbox label="Include comments" checked={includeComments} onChange={(event) => setIncludeComments(event.currentTarget.checked)} />
         ) : null}
         <div className="ofk-v2-export-actions">
           <Button variant="primary" disabled={busy || empty} onClick={() => { void run('download'); }}>

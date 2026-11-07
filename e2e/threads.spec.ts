@@ -251,7 +251,7 @@ test('a pin on the canvas highlights its card', async ({ page }) => {
   await card(page, 1).getByRole('button', { name: /Why is this a queue/ }).click();
   await page.getByTestId('v2-comment-thread').getByRole('button', { name: 'Close thread' }).click();
   await expect(card(page, 1)).not.toHaveAttribute('data-selected', 'true');
-  await page.locator('.ofk-comment-pin[aria-label^="Comment by User, 2 messages"]').click();
+  await page.locator('.ofk-comment-pin[aria-label^="Comment #1 by User: Why is this a queue?, 2 messages"]').click();
   await expect(page.getByTestId('v2-comment-thread')).toBeVisible();
   await expect(card(page, 1)).toHaveAttribute('data-selected', 'true');
 });
@@ -381,7 +381,7 @@ test('a pin drags to a new place with either tool: onto a node it follows it, on
   await panel(page).getByRole('button', { name: 'Close threads' }).click();
   await page.getByRole('button', { name: 'Zoom to fit' }).click();
   const nodeId = (await doc(page)).pages[0]!.nodes[0]!.id;
-  const pinOne = page.locator('.ofk-comment-pin[aria-label^="Comment by User, 2 messages"]');
+  const pinOne = page.locator('.ofk-comment-pin[aria-label^="Comment #1 by User: Why is this a queue?, 2 messages"]');
   // The pin's centre once the camera has stopped moving it.
   const centreOf = async () => {
     let last = '';

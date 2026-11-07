@@ -1,6 +1,6 @@
 // Proposal lifecycle for the v2 editor: propose → ready → apply/stale/failed.
 // Holds the proposal, decisions and applied ids; commits only through the
-// session with the base revision. Owns no rendering and no provider.
+// session with the base content revision. Owns no rendering and no provider.
 import { useCallback, useMemo, useRef, useState } from 'react';
 import type { CompileResult } from '../../../dsl/compile';
 import { chainAssistantChanges, type AssistantDraft } from '../../application/ai/assistantChanges';
@@ -27,9 +27,10 @@ interface V2ProposalRequest {
 
 interface V2ProposalOptions {
   readonly document: SceneDocumentV1 | null;
-  readonly revision: number;
+  /** The session's contentRevision: a proposal is built on the diagram, so a comment thread change leaves it current. */
+  readonly contentRevision: number;
   readonly pageId: string | null;
-  readonly commit: (command: DocumentCommand, expectedRevision?: number) => void;
+  readonly commit: (command: DocumentCommand, expectedContentRevision?: number) => void;
   readonly readOnly: boolean;
   readonly announce: (message: string) => void;
   /** Compiles generated DSL for the AI path (host layout port, icons). */
@@ -43,7 +44,7 @@ export function useV2Proposal(options: V2ProposalOptions) {
   const [intent, setIntent] = useState<string | null>(null);
   const [highlightedChangeId, setHighlightedChangeId] = useState<string | null>(null);
   const [appliedSummary, setAppliedSummary] = useState('');
-  // The revision the Apply produced: once the canvas moves past it, Undo would undo something else.
+  // The content revision the Apply produced: once the diagram moves past it, Undo would undo something else.
   const [appliedRevision, setAppliedRevision] = useState<number | null>(null);
   const appliedIds = useRef(new Set<string>());
   const baseDocument = useRef<SceneDocumentV1 | null>(null);
@@ -55,7 +56,7 @@ export function useV2Proposal(options: V2ProposalOptions) {
   const optionsRef = useRef(options);
   optionsRef.current = options;
 
-  const stale = phase === 'ready' && proposal !== null && proposal.baseRevision !== options.revision;
+  const stale = phase === 'ready' && proposal !== null && proposal.baseRevision !== options.contentRevision;
 
   /**
    * Compiles every block, then chains them into rows that compose. Resolves to
@@ -63,7 +64,7 @@ export function useV2Proposal(options: V2ProposalOptions) {
    * lines, so the caller can hand them back to the model.
    */
   const propose = useCallback(async (request: V2ProposalRequest): Promise<{ readonly id: string } | { readonly error: string; readonly compile: boolean }> => {
-    const { document, revision, pageId, compileDsl, announce } = optionsRef.current;
+    const { document, contentRevision, pageId, compileDsl, announce } = optionsRef.current;
     if (!document || !pageId) return { error: 'No page is open.', compile: false };
     let compileFailed = false;
     setPhase('working');
@@ -89,7 +90,7 @@ export function useV2Proposal(options: V2ProposalOptions) {
       if (!changes.length) throw new Error('The diagram already matches this request.');
       const bound = next.flatMap((draft) => ('frameId' in draft && draft.frameId ? [draft.frameId] : []));
       const proposal = createProposal({
-        document, revision, source: request.source ?? 'byok', intent: request.intent,
+        document, revision: contentRevision, source: request.source ?? 'byok', intent: request.intent,
         scope: { kind: request.scope ?? (bound.length ? 'selection' : 'page'), pageId, objectIds: bound },
         changes,
       });
@@ -134,10 +135,10 @@ export function useV2Proposal(options: V2ProposalOptions) {
   /** Resolves true once the accepted rows are committed. */
   /** Commits the accepted changes; resolves to the diagrams they touched (for the camera), or null when nothing applied. */
   const apply = useCallback(async (): Promise<readonly string[] | null> => {
-    const { document, revision, commit, readOnly, announce } = optionsRef.current;
+    const { document, contentRevision, commit, readOnly, announce } = optionsRef.current;
     if (!proposal || !document || readOnly || appliedIds.current.has(proposal.id)) return null;
     try {
-      const command = applyCommand(proposal, revision, document);
+      const command = applyCommand(proposal, contentRevision, document);
       if (!command) { setPhase('idle'); show(null); return null; }
       const { pageId } = proposal.scope;
       const touched = changedRoots(document.pages.find(({ id }) => id === pageId), proposal.preview.pages.find(({ id }) => id === pageId)!);
@@ -181,7 +182,7 @@ export function useV2Proposal(options: V2ProposalOptions) {
     proposal, phase, intent, stale, error, changes, decisions, appliedSummary,
     canApply: phase === 'ready' && !stale && !options.readOnly,
     /** Applied and nothing since: the bar's Undo still undoes exactly this. */
-    undoable: phase === 'applied' && options.revision === appliedRevision,
+    undoable: phase === 'applied' && options.contentRevision === appliedRevision,
     highlightedChangeId, highlight: setHighlightedChangeId,
     propose, decide, apply, discard,
   };

@@ -32,12 +32,22 @@ function requireCurrentRevision(session: DocumentSession, expectedRevision: numb
   }
 }
 
+// A diagram step is built on the diagram: a thread change since it was built is no conflict (history steps keep
+// the threads they start from, see carryThreads), a diagram change is.
+function requireCurrentContent(session: DocumentSession, expectedContentRevision: number): void {
+  if (expectedContentRevision !== session.contentRevision) {
+    throw new StaleSessionRevisionError(expectedContentRevision, session.contentRevision);
+  }
+}
+
 function advance(
   session: DocumentSession,
   history: DocumentHistoryState
 ): DocumentSession {
   if (history === session.history) return session;
-  return { document: history.present, revision: session.revision + 1, history };
+  return {
+    document: history.present, revision: session.revision + 1, contentRevision: session.contentRevision + 1, history,
+  };
 }
 
 export function createDocumentSession(
@@ -45,15 +55,15 @@ export function createDocumentSession(
   limit?: number
 ): DocumentSession {
   const history = createDocumentHistory(document, limit);
-  return { document: history.present, revision: 0, history };
+  return { document: history.present, revision: 0, contentRevision: 0, history };
 }
 
 export function commitSessionCommand(
   session: DocumentSession,
   command: DocumentCommand,
-  expectedRevision: number
+  expectedContentRevision: number
 ): DocumentSession {
-  requireCurrentRevision(session, expectedRevision);
+  requireCurrentContent(session, expectedContentRevision);
   return advance(session, commitDocumentCommand(session.history, command));
 }
 
@@ -62,9 +72,9 @@ export function amendSessionNewNode(
   session: DocumentSession,
   nodeId: string,
   command: DocumentCommand,
-  expectedRevision: number
+  expectedContentRevision: number
 ): DocumentSession {
-  requireCurrentRevision(session, expectedRevision);
+  requireCurrentContent(session, expectedContentRevision);
   return advance(session, amendNewNode(session.history, nodeId, command));
 }
 
@@ -79,7 +89,7 @@ export function forgetSessionHistory(session: DocumentSession): DocumentSession 
 
 /**
  * A thread change (domain/threads): a new revision, so autosave and the agent bridge see it, but no undo
- * step, and undo/redo of the steps around it keep it.
+ * step and no content revision, and undo/redo of the steps around it keep it.
  */
 export function updateSessionThreads(
   session: DocumentSession,
@@ -91,23 +101,23 @@ export function updateSessionThreads(
   if (document === session.document) return session;
   const valid = validateSceneDocumentV1(document);
   if (valid.success === false) throw new ThreadError(`Invalid thread change: ${valid.issues[0]!.message}`);
-  return { document, revision: session.revision + 1, history: { ...session.history, present: document } };
+  return { ...session, document, revision: session.revision + 1, history: { ...session.history, present: document } };
 }
 
 export function undoSessionCommand(
   session: DocumentSession,
-  expectedRevision: number
+  expectedContentRevision: number
 ): DocumentSession {
-  requireCurrentRevision(session, expectedRevision);
-  // Revision counts commits, so undo/redo move it forward like any other
-  // commit instead of rewinding it; history holds the inverse, not the counter.
+  requireCurrentContent(session, expectedContentRevision);
+  // Revisions count commits, so undo/redo move them forward like any other
+  // commit instead of rewinding them; history holds the inverse, not the counter.
   return advance(session, undoDocumentCommand(session.history));
 }
 
 export function redoSessionCommand(
   session: DocumentSession,
-  expectedRevision: number
+  expectedContentRevision: number
 ): DocumentSession {
-  requireCurrentRevision(session, expectedRevision);
+  requireCurrentContent(session, expectedContentRevision);
   return advance(session, redoDocumentCommand(session.history));
 }

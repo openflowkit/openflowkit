@@ -85,6 +85,7 @@ export interface SceneLayer {
 
 export interface SceneCommentAuthor {
   readonly kind: 'human' | 'agent';
+  /** At most COMMENT_AUTHOR_MAX characters. */
   readonly name: string;
 }
 
@@ -93,13 +94,14 @@ export interface SceneComment {
   readonly author: SceneCommentAuthor;
   /** Plain text, at most COMMENT_BODY_MAX characters. */
   readonly body: string;
+  /** ISO 8601 timestamps, as toISOString writes them. */
   readonly createdAt: string;
   readonly editedAt?: string;
 }
 
 /**
  * Where a thread is pinned. `point` is the pin tip in page coordinates; with a `nodeId` it follows the node
- * (`offset` from the node's world origin) and keeps the node's last position when the node is gone.
+ * (`offset` in the node's own frame, so it also turns with it) and keeps the node's last position when the node is gone.
  */
 export interface SceneThreadAnchor {
   readonly nodeId: string | null;
@@ -107,10 +109,10 @@ export interface SceneThreadAnchor {
   readonly point: Point2d;
 }
 
-/** A discussion pinned on a page. Not part of undo history or the DSL; JSON exports and share links leave it out unless an export asks for it. */
+/** A discussion pinned on a page. Not part of undo history or the DSL; a diagram's own file keeps it, exports leave it out (see withoutThreads). */
 export interface SceneThread {
   readonly id: string;
-  /** Positive, unique within the document: the "#3" people say aloud. */
+  /** 1 to THREAD_NUMBER_MAX, unique within the document: the "#3" people say aloud. */
   readonly number: number;
   readonly anchor: SceneThreadAnchor;
   readonly resolved: boolean;
@@ -119,6 +121,10 @@ export interface SceneThread {
 }
 
 export const COMMENT_BODY_MAX = 4000;
+/** As long as an agent's name may be (agentName). */
+export const COMMENT_AUTHOR_MAX = 40;
+/** Past it, a new thread takes the lowest free number (nextThreadNumber), so a file holding it never blocks one. */
+export const THREAD_NUMBER_MAX = 99_999;
 
 export interface ScenePage {
   readonly id: string;

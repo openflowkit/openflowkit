@@ -859,7 +859,6 @@
 .ofk-v2-export .ofk-segmented-caption { font-size: 12px; }
 .ofk-v2-export .ofk-v2-export-caption { margin-top: -6px; padding-inline-start: calc(var(--ofk-row-label, 72px) + var(--ofk-space-md)); }
 .ofk-v2-export-actions { display: flex; gap: 8px; }
-.ofk-v2-export-option { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ofk-text); }
 .ofk-v2-export-copies { display: grid; grid-template-columns: repeat(auto-fit, minmax(0, 1fr)); gap: 8px; }
 .ofk-v2-export-copies .ofk-button, .ofk-v2-export-copies > * { width: 100%; white-space: nowrap; }
 /* Share: two jobs, like a whiteboard's session vs link — pick one, then one action.
@@ -1453,28 +1452,35 @@
 }
 
 /* Comments: pins over the canvas, and the card a pin or a new thread opens. The card is a panel of the editor, on its surface and accent. */
-.ofk-comment-anchor { position: absolute; top: 0; left: 0; z-index: calc(var(--ofk-layer-toolbar, 10) - 1); width: 0; height: 0; pointer-events: none; will-change: transform; }
-.ofk-comment-anchor:has([data-comment-open]) { z-index: var(--ofk-layer-toolbar, 10); }
+/* One composited layer for every pin: the camera's pan moves it (v2CommentPlacement), the pins inside move only on zoom. */
+.ofk-comment-layer { position: absolute; top: 0; left: 0; width: 0; height: 0; z-index: calc(var(--ofk-layer-toolbar, 10) - 1); pointer-events: none; will-change: transform; }
+.ofk-comment-anchor { position: absolute; top: 0; left: 0; width: 0; height: 0; pointer-events: none; }
+.ofk-comment-anchor:has([data-comment-open]) { z-index: 1; }
 .ofk-comment-pin {
   position: absolute; left: 0; bottom: 0; box-sizing: border-box; width: 30px; height: 30px; padding: 0; border: 2px solid var(--ofk-surface);
   border-radius: 50% 50% 50% 0; background: var(--ofk-surface); overflow: hidden; cursor: pointer; pointer-events: auto;
-  box-shadow: 0 1px 3px rgb(0 0 0 / .35), 0 3px 10px rgb(0 0 0 / .18);
+  /* A crisp ring, no blur: a soft shadow, painted for every pin on each zoom frame, is what made zooming over many pins stutter. */
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ofk-text) 22%, transparent);
   transition: transform .12s ease;
 }
 .ofk-comment-pin[data-ghost] { pointer-events: none; opacity: .9; }
 .ofk-comment-pin:hover { transform: scale(1.06); transform-origin: 0 100%; }
-.ofk-comment-pin:focus-visible, .ofk-comment-pin[data-selected] { outline: var(--ofk-focus-width, 2px) solid var(--ofk-focus); outline-offset: 2px; }
+/* Selected is a neutral ring, keyboard focus the system blue. */
+.ofk-comment-pin[data-selected] { outline: var(--ofk-focus-width, 2px) solid var(--ofk-text); outline-offset: 2px; }
+.ofk-comment-pin:focus-visible { outline: var(--ofk-focus-width, 2px) solid var(--ofk-focus); outline-offset: 2px; }
 .ofk-comment-pin[data-dragging] { cursor: grabbing; }
 .ofk-comment-pin .ofk-comment-avatar { width: 100% !important; height: 100% !important; border-radius: inherit; }
+/* A person is the neutral inverse tile, an agent the brand one; the glyph says which. */
 .ofk-comment-avatar {
-  display: inline-grid; place-items: center; flex: none; border-radius: 50%; color: #fff; font-size: 11px; font-weight: 600; line-height: 1;
-  user-select: none;
+  display: inline-grid; place-items: center; flex: none; border-radius: 50%; line-height: 1; user-select: none;
+  background: var(--ofk-inverse); color: var(--ofk-onInverse);
 }
-.ofk-comment-avatar[data-kind='agent'] { background: var(--ofk-primary); color: var(--ofk-onPrimary, #fff); }
+.ofk-comment-avatar[data-kind='agent'] { background: var(--ofk-primary); color: var(--ofk-onPrimary); }
 .ofk-comment-avatar svg { width: 60%; height: 60%; }
 
 .ofk-comment-card {
-  position: absolute; left: 38px; top: -34px; box-sizing: border-box; width: 320px; max-width: min(320px, 86vw);
+  /* Beside the pin, inside the free canvas: v2CommentPlacement sets the side and --ofk-card-top. */
+  position: absolute; left: 38px; top: var(--ofk-card-top, -34px); box-sizing: border-box; width: 320px; max-width: min(320px, 86vw);
   display: grid; gap: 8px; padding: 10px; border-radius: 12px; background: var(--ofk-surface); color: var(--ofk-text);
   border: 1px solid var(--ofk-border); font-size: 13px; line-height: 1.4; pointer-events: auto; cursor: default;
   box-shadow: 0 8px 28px rgb(0 0 0 / .25);
@@ -1506,7 +1512,7 @@
 .ofk-comment-input textarea::placeholder { color: var(--ofk-muted); }
 .ofk-comment-send {
   display: grid; place-items: center; flex: none; width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50%;
-  background: var(--ofk-primary); color: var(--ofk-onPrimary, #fff); cursor: pointer;
+  background: var(--ofk-primary); color: var(--ofk-onPrimary); cursor: pointer;
 }
 .ofk-comment-send:disabled { background: color-mix(in srgb, var(--ofk-text) 14%, transparent); color: var(--ofk-muted); cursor: default; }
 .ofk-comment-send:focus-visible { outline: var(--ofk-focus-width, 2px) solid var(--ofk-focus); outline-offset: 1px; }

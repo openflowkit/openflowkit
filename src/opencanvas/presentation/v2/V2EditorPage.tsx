@@ -10,7 +10,7 @@ import { archFrameOf, placedElementId } from '../../../dsl/model/model';
 import type { SceneDocumentV1 } from '../../domain/document/types';
 import { AgentCursor, SystemRoot, ToastRegion, withToast, type ToastItem } from '../design-system';
 import { V2CanvasWelcome, V2WorkspaceRail } from './V2Workspace';
-import { V2CommentsHost } from './V2Comments';
+import type { V2CommentApi } from './V2Comments';
 import { V2EditorCanvas } from './V2EditorCanvas';
 import { V2EditorChrome } from './V2EditorChrome';
 import { V2EditorContextMenu } from './V2EditorContextMenu';
@@ -98,7 +98,7 @@ export function V2EditorPage({ shared }: { readonly shared?: V2SharedView } = {}
   const sectionRef = useRef<HTMLElement | null>(null);
   const pasteRef = useRef<(event: ClipboardEvent) => void>(() => undefined);
   const gestureApiRef = useRef<V2GestureApi | null>(null);
-  const commentHereRef = useRef<() => boolean>(() => false);
+  const commentApiRef = useRef<V2CommentApi | null>(null);
   const focusCanvas = useCallback(() => sectionRef.current?.focus(), []);
   useV2BodyFocusForward(sectionRef, pasteRef);
   const { tool, setTool, toolConfig, spacePan, setSpacePan, toolRef, toolConfigRef, spacePanRef, pickShape, pickConnector } = useV2ToolState(gestureApiRef);
@@ -136,7 +136,6 @@ export function V2EditorPage({ shared }: { readonly shared?: V2SharedView } = {}
     selection, selectionRef, selectedConnectorId, selectedConnectorIds, selectedConnectorIdsRef,
     applySelection, applyConnectorSelection,
   } = selectionApi;
-  const selectedNodeId = useCallback(() => selectionRef.current.primaryNodeId, [selectionRef]);
   /** Exactly these shapes selected, and no connector. */
   const selectNodes = useCallback((nodeIds: readonly string[]) => {
     applyConnectorSelection([]);
@@ -227,7 +226,9 @@ export function V2EditorPage({ shared }: { readonly shared?: V2SharedView } = {}
   };
   const viewPage = map.mapPage ?? page;
   useV2DocumentTitle(session.document?.name);
+  // An open comment goes first, then the chart's data panel.
   const escapePanel = () => {
+    if (commentApiRef.current?.escape()) return true;
     if (!panels.chartId) return false;
     panels.closeChart();
     sectionRef.current?.focus({ preventScroll: true });
@@ -275,7 +276,7 @@ export function V2EditorPage({ shared }: { readonly shared?: V2SharedView } = {}
   });
 
   const proposal = useV2Proposal({
-    document: session.document, revision: session.revision, pageId: page?.id ?? null,
+    document: session.document, contentRevision: session.contentRevision, pageId: page?.id ?? null,
     commit: commit, readOnly: docReadOnly,
     announce: setAnnouncement, compileDsl: compileDraft,
   });
@@ -290,8 +291,8 @@ export function V2EditorPage({ shared }: { readonly shared?: V2SharedView } = {}
     load, page, rendererStatus, startIntent, generating: code.generating, map, repoSource, repoStatus: repo.state.status,
   });
 
-  const revisionRef = useRef(session.revision);
-  revisionRef.current = session.revision;
+  const revisionRef = useRef(session.contentRevision);
+  revisionRef.current = session.contentRevision;
   const pages = useV2Pages({
     document: session.document, pageId: page?.id ?? null, readOnly: load.readOnly || repo.broken, lockedPageId: repo.lockedPageId,
     commit: commit, onSelect: setActivePageId, mintId: mintV2Id,
@@ -375,7 +376,7 @@ export function V2EditorPage({ shared }: { readonly shared?: V2SharedView } = {}
     ...(map.findSource && repoPanel.drawn ? { source: map.findSource } : {}),
   });
   const handleKeyDown = useV2EditorKeyboard({
-    toolRef, commentHereRef, editingRef: labelEditing.editingRef, pageRef, selectionRef, gestureApiRef, setTool, setSpacePan, input, editActions, architectureActions, camera, connectorLabel,
+    toolRef, commentApiRef, editingRef: labelEditing.editingRef, pageRef, selectionRef, gestureApiRef, setTool, setSpacePan, input, editActions, architectureActions, camera, connectorLabel,
     panels, selectionApi, map, find, viewPage, selectedElementId, selectedConnectorIds, docReadOnly, editLocked, undo, redo, escapePanel,
     openEditor, selectNodes, fitAll, toggleCode, backToMap,
   });
@@ -440,8 +441,7 @@ export function V2EditorPage({ shared }: { readonly shared?: V2SharedView } = {}
               exportPanel={exportPanel} commit={commit} leaveStart={leaveStart} setTool={setTool} pickShape={pickShape} pickConnector={pickConnector}
               gestureApiRef={gestureApiRef} input={input} fitAll={fitAll} />
             <V2EditorCanvas
-              comments={<V2CommentsHost session={session} page={page} sectionRef={sectionRef} hostRef={hostRef} cameraRef={camera.cameraRef} subscribeCamera={camera.subscribe}
-                selectedNodeId={selectedNodeId} placeRef={commentHereRef} tool={tool} readOnly={docReadOnly} hidden={map.active} {...threads.commentProps} />}
+              comments={{ apiRef: commentApiRef, updateThreads: session.updateThreads, readOnly: docReadOnly, ...threads.commentProps }}
               agentCursor={<AgentCursor ref={agents.presence.cursorRef} name={agents.agentShown} working={agents.agentBridge.activity?.doing === 'drawing'} data-testid="v2-agent-cursor" />}
               page={page} viewPage={viewPage ?? page} hostRef={hostRef} sectionRef={sectionRef} pageRef={pageRef} selectionRef={selectionRef}
               selectedConnectorIdsRef={selectedConnectorIdsRef} toolRef={toolRef} spacePanRef={spacePanRef} toolConfigRef={toolConfigRef}

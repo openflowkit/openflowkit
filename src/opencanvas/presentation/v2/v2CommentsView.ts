@@ -1,4 +1,8 @@
-// Pure helpers for the comment overlays: how a message's age reads, and the avatar a name gets.
+// Pure helpers for the comment overlays: how a message's age reads, what a pin is called, where a pin is drawn mid-drag.
+import type { Point2d } from '../../domain/geometry/types';
+import type { SceneDocumentV1, SceneNode, ScenePage, SceneThread } from '../../domain/document/types';
+import { pageThreads, pinOnNode, ThreadError } from '../../domain/threads/threads';
+import { buildNodeWorldMatrices } from '../../domain/scene/worldGeometry';
 
 /** Every human comment is written by this name until named commenters exist; the data model already carries it. */
 export const HUMAN_AUTHOR_NAME = 'User';
@@ -17,13 +21,6 @@ export function relativeTime(iso: string, now: number = Date.now()): string {
   if (age < DAY) return `${Math.floor(age / HOUR)}h`;
   if (age < 7 * DAY) return `${Math.floor(age / DAY)}d`;
   return new Date(then).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-}
-
-/** The same name always gets the same colour (a hue from a hash), dark enough for white text. */
-export function avatarColor(name: string): string {
-  let hash = 0;
-  for (const char of name.trim().toLowerCase()) hash = (hash * 31 + char.codePointAt(0)!) >>> 0;
-  return `hsl(${hash % 360} 55% 42%)`;
 }
 
 /**
@@ -56,4 +53,53 @@ export function pinNudge(key: string, altKey: boolean, shiftKey: boolean): { rea
     case 'ArrowDown': return { x: 0, y: step };
     default: return null;
   }
+}
+
+const NO_PINS: ReadonlyMap<string, Point2d> = new Map();
+
+/**
+ * Where the pins on `page` are drawn while `nodes` (a drag, resize or turn being previewed) stand in for theirs: by thread id,
+ * only the pins that move. A pin follows its node's live world matrix by the same rule the document applies on drop (pinOnNode),
+ * so children of a dragged frame or group come along, and a pin whose node is not on the page stays where it was.
+ */
+export function pinsOnPreview(page: ScenePage, nodes: readonly SceneNode[]): ReadonlyMap<string, Point2d> {
+  const pinned = pageThreads(page).filter((thread) => thread.anchor.nodeId !== null && thread.anchor.offset !== null);
+  if (pinned.length === 0 || nodes.length === 0) return NO_PINS;
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  const matrices = buildNodeWorldMatrices({ ...page, nodes: page.nodes.map((node) => byId.get(node.id) ?? node) });
+  const moved = new Map<string, Point2d>();
+  for (const { id, anchor } of pinned) {
+    const matrix = matrices.get(anchor.nodeId!);
+    if (!matrix) continue;
+    const at = pinOnNode(matrix, anchor.offset!);
+    if (at.x !== anchor.point.x || at.y !== anchor.point.y) moved.set(id, at);
+  }
+  return moved;
+}
+
+/** At most this many characters of the opening message name a pin, cut at a word. */
+const LABEL_WORDS = 48;
+
+/** A pin's accessible name: "Comment #3 by User: Why is this a queue?, 2 messages". Number and first words tell pins apart. */
+export function pinLabel(thread: SceneThread): string {
+  const lead = thread.comments[0]!;
+  const text = lead.body.replace(/\s+/g, ' ').trim();
+  const cut = text.length <= LABEL_WORDS ? text : `${text.slice(0, LABEL_WORDS + 1).replace(/\s+\S*$/, '')}…`;
+  const count = thread.comments.length > 1 ? `, ${thread.comments.length} messages` : '';
+  return `Comment #${thread.number} by ${lead.author.name}: ${cut}${count}`;
+}
+
+/**
+ * `change`, except that a thread or message someone else removed first (an agent, another tab) makes it no change: the card
+ * that asked closes with its thread, instead of the error reaching the page.
+ */
+export function unlessGone(change: (document: SceneDocumentV1) => SceneDocumentV1): (document: SceneDocumentV1) => SceneDocumentV1 {
+  return (document) => {
+    try {
+      return change(document);
+    } catch (error) {
+      if (error instanceof ThreadError) return document;
+      throw error;
+    }
+  };
 }

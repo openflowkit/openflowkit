@@ -11,15 +11,10 @@ separately; its changes are listed under *For developers* in each release.
 
 ### Added
 
-- **Comment threads in the document.** A page can now hold threads of comments (`pages[].threads`), each with a number
-  unique across the document. Threads are not part of undo history, the diagram text or the diagram's content:
-  undo and redo keep them, including on a page that is added, duplicated or deleted and brought back. JSON exports and
-  share links leave them out; a bad thread in a file is dropped with a console warning and the rest of the diagram
-  loads.
-- **Comments on the canvas.** Press **C** (or pick **Comment** in the toolbar) and click to pin a thread; with the
-  keyboard, press **Enter** instead, and the thread lands on the selected shape or the middle of the canvas. Type,
-  press Enter to send; a pin opens its thread to reply, edit, resolve, delete or drag it elsewhere. Pins are not drawn
-  into PNG, SVG or PDF exports, and JSON exports carry comments only when **Include comments** is ticked.
+- **Comments on the canvas.** Press **C** and click to pin a thread, or press **Enter** to put it on the selected
+  shape. A pin follows its shape and opens its thread to reply, edit, resolve or delete; undo and redo never touch
+  comments, and unsent text is kept. Image exports never show pins; JSON exports and share links leave comments out
+  (**Include comments** puts them in a JSON export), and a bad thread in a file is dropped when it loads.
 - **Threads panel.** A **Threads** button on the rail, with the number of open threads, lists every thread in the
   document. Search the comments, show resolved threads or only the unanswered ones, resolve, delete, copy a link or
   mark a thread read or unread; unread threads are marked on the list and on their pin. Click a thread to open it and

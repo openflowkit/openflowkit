@@ -93,13 +93,14 @@ export function useV2Pointer(options: V2PointerOptions) {
       OBJECT_SNAP_PX / opts.cameraRef.current.zoom, pending.modifiers);
     operationRef.current = next;
     // ⌥ makes a move a copy: the preview leaves the originals drawn where they are.
-    host.setTransformPreview(next.result, next.transformKind === 'move' && pending.modifiers.altKey);
+    const copy = next.transformKind === 'move' && pending.modifiers.altKey;
+    host.setTransformPreview(next.result, copy);
     host.setAlignmentGuides(
       next.result?.guideX != null || next.result?.guideY != null
         ? { x: next.result.guideX ?? null, y: next.result.guideY ?? null }
         : null
     );
-    opts.onTransformPreview?.(next.result);
+    opts.onTransformPreview?.(next.result, copy);
   }, []);
 
   const pointerMove = useCallback(

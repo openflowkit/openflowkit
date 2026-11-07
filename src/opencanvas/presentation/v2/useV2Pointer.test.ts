@@ -55,23 +55,25 @@ function setup(
   const gestureApiRef = { current: null as V2GestureApi | null };
   const onToolChange = vi.fn();
   const updateCamera = vi.fn();
+  const onCommentClick = vi.fn();
+  const spacePanRef = { current: false };
   const { result } = renderHook(() => useV2Pointer({
     hostRef: { current: host as unknown as PixiRendererHost },
     cameraRef: { current: { x: 0, y: 0, zoom: 1 } }, pageRef: { current: page },
     selectionRef, selectedConnectorIdsRef, toolRef, toolConfigRef,
-    spacePanRef: { current: false },
+    spacePanRef, onCommentClick,
     readOnlyRef: { current: Boolean(readOnly) }, gestureApiRef, commit,
     ...(readOnly ? { onNodeDrag: readOnly.onNodeDrag } : {}),
     ...(readOnly?.onNodeDoubleClick ? { onNodeDoubleClick: readOnly.onNodeDoubleClick } : {}),
     applySelection, applyConnectorSelection,
     updateCamera, openEditor, openConnectorEditor: vi.fn(), onToolChange, mintId: () => 'new',
   }));
-  function event(x: number, y: number, target: HTMLElement = canvas): ReactPointerEvent<HTMLElement> {
-    return { currentTarget: section, target, clientX: x, clientY: y, button: 0,
+  function event(x: number, y: number, target: HTMLElement = canvas, button = 0): ReactPointerEvent<HTMLElement> {
+    return { currentTarget: section, target, clientX: x, clientY: y, button,
       pointerId: 1, preventDefault: vi.fn() } as unknown as ReactPointerEvent<HTMLElement>;
   }
-  return { result, host, commit, page, selectionRef, applySelection, applyConnectorSelection, openEditor, event,
-    toolRef, toolConfigRef, gestureApiRef, onToolChange, updateCamera };
+  return { result, host, commit, page, selectionRef, applySelection, applyConnectorSelection, openEditor, event, section,
+    toolRef, toolConfigRef, gestureApiRef, onToolChange, updateCamera, onCommentClick, spacePanRef };
 }
 
 async function flushFrame(): Promise<void> {
@@ -652,5 +654,38 @@ describe('enteredGroup', () => {
     expect(enteredGroup(page, ['b', 'e'])).toBeNull();
     expect(enteredGroup(page, ['d'])).toBeNull();
     expect(enteredGroup(page, [])).toBeNull();
+  });
+});
+
+describe('the comment tool', () => {
+  const click = (s: ReturnType<typeof setup>, x: number, y: number, target?: HTMLElement, button = 0) => {
+    act(() => s.result.current.handlePointerDown(s.event(x, y, target, button)));
+    act(() => s.result.current.handlePointerUp(s.event(x, y, target, button)));
+  };
+
+  it('a click on the canvas asks for a comment where it landed, and changes nothing else', () => {
+    const s = setup();
+    s.toolRef.current = 'comment';
+    click(s, 120, 80);
+    expect(s.onCommentClick).toHaveBeenCalledExactlyOnceWith({ x: 120, y: 80 });
+    expect(s.commit).not.toHaveBeenCalled();
+    expect(s.selectionRef.current.nodeIds).toEqual([]);
+  });
+
+  it('a drag, a press on a control in the canvas, Space-pan and a middle-button pan never start a comment', () => {
+    const s = setup();
+    s.toolRef.current = 'comment';
+    act(() => s.result.current.handlePointerDown(s.event(100, 100)));
+    act(() => s.result.current.handlePointerMove(s.event(130, 100)));
+    act(() => s.result.current.handlePointerUp(s.event(130, 100)));
+    const button = document.createElement('button');
+    s.section.append(button);
+    click(s, 100, 100, button);
+    s.spacePanRef.current = true;
+    click(s, 100, 100);
+    expect(s.updateCamera).not.toHaveBeenCalled();
+    s.spacePanRef.current = false;
+    click(s, 100, 100, undefined, 1);
+    expect(s.onCommentClick).not.toHaveBeenCalled();
   });
 });

@@ -55,7 +55,7 @@ function Card(props: {
     <li className="ofk-threads-card" data-testid="v2-thread-card" data-thread-id={thread.id} data-selected={selected || undefined}
       data-resolved={thread.resolved || undefined} data-unread={unread || undefined} data-menu-open={menuOpen || undefined}>
       <button type="button" className="ofk-threads-card-main" aria-current={selected || undefined} onClick={props.onSelect}>
-        <Avatar kind={lead.author.kind} name={lead.author.name} size={28} />
+        <Avatar kind={lead.author.kind} size={28} />
         <span className="ofk-threads-card-text">
           <span className="ofk-threads-card-where">
             <span>#{thread.number} · {entry.pageName}</span>

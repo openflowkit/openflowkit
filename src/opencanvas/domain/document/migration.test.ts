@@ -106,6 +106,25 @@ describe('migrateSceneDocument', () => {
       expect(warn).toHaveBeenCalledTimes(3);
     });
 
+    it('drops the second of two threads with one id on different pages', () => {
+      const document = createDocument();
+      const second = { ...document.pages[0]!, id: 'page-2', name: 'Page 2', threads: [thread('same', 2)] };
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const result = migrateSceneDocument({ ...document, pages: [{ ...document.pages[0]!, threads: [thread('same', 1)] }, second] });
+      expect(result.success && result.document.pages.map((page) => page.threads?.map(({ number }) => number))).toEqual([[1], undefined]);
+      expect(warn).toHaveBeenCalledTimes(1);
+    });
+
+    it('drops a thread whose comment has no real timestamp, or an author name past the cap', () => {
+      const document = createDocument();
+      const badTime = thread('bad-time', 2, { comments: [{ ...comment('m'), createdAt: 'last week' }] });
+      const longName = thread('long-name', 3, { comments: [{ ...comment('n'), author: { kind: 'agent', name: 'x'.repeat(41) } }] });
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const result = migrateSceneDocument({ ...document, pages: [{ ...document.pages[0]!, threads: [thread('good', 1), badTime, longName] }] });
+      expect(result.success && result.document.pages[0]!.threads!.map(({ id }) => id)).toEqual(['good']);
+      expect(warn).toHaveBeenCalledTimes(2);
+    });
+
     it('leaves a page with no valid thread without the key', () => {
       const document = createDocument();
       vi.spyOn(console, 'warn').mockImplementation(() => undefined);

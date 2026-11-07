@@ -6,6 +6,10 @@ import type { Point2d } from '../../domain/geometry/types';
 // Browser zoom never leaks from the editor: plain wheel over the canvas
 // pans, ⌘/Ctrl+wheel (pinch) anywhere in the editor is ours, and Safari's
 // proprietary gesture events (trackpad pinch) zoom at the pointer too.
+/** A plain wheel pans over the canvas itself and over a comment pin on it, so a trackpad pan does not stall when it crosses one. */
+const pansCanvas = (target: EventTarget | null): boolean =>
+  target instanceof HTMLCanvasElement || (target instanceof Element && target.closest('.ofk-comment-pin') !== null);
+
 export function useV2CanvasWheel(
   sectionRef: RefObject<HTMLElement | null>,
   cameraRef: RefObject<CanvasCamera>,
@@ -17,7 +21,7 @@ export function useV2CanvasWheel(
     const root = sectionRef.current?.closest<HTMLElement>('.ofk-v2');
     if (!root) return;
     const onWheel = (event: WheelEvent) => {
-      if (event.ctrlKey || event.metaKey || event.target instanceof HTMLCanvasElement) event.preventDefault();
+      if (event.ctrlKey || event.metaKey || pansCanvas(event.target)) event.preventDefault();
     };
     const onGestureStart = (event: Event) => {
       event.preventDefault();
@@ -55,7 +59,7 @@ export function useV2CanvasWheel(
   return function handleWheel(event: ReactWheelEvent<HTMLElement>): void {
     const camera = cameraRef.current;
     if (!event.ctrlKey && !event.metaKey) {
-      if (event.target instanceof HTMLCanvasElement) {
+      if (pansCanvas(event.target)) {
         const bounds = event.currentTarget.getBoundingClientRect();
         const delta = normalizeWheelDelta(event, { width: bounds.width, height: bounds.height });
         updateCamera(panCamera(camera, { x: -delta.x, y: -delta.y }));

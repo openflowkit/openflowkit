@@ -1,12 +1,13 @@
-import type { ComponentProps, MutableRefObject, ReactNode, RefObject } from 'react';
+import { useCallback, type ComponentProps, type MutableRefObject, type ReactNode, type RefObject } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { C4_STARTER } from '../../../agent/starterTemplates';
 import type { CanvasSelection } from '../../application/selection/selection';
 import type { DocumentCommand } from '../../domain/commands/types';
-import type { ScenePage } from '../../domain/document/types';
+import type { SceneDocumentV1, ScenePage } from '../../domain/document/types';
 import type { PixiRendererHost, PixiRendererStatus } from '../../infrastructure/pixi/PixiRendererHost';
 import { EmptyState, Button, ErrorState } from '../design-system';
 import { V2CanvasHost } from './V2CanvasHost';
+import { V2Comments, type V2CommentApi } from './V2Comments';
 import type { V2Tool } from './V2CreationToolbar';
 import { V2StateHero } from './V2StateHero';
 import { mapRepoPath, V2MapStart } from './map/V2MapStart';
@@ -50,8 +51,12 @@ interface EditorCanvasProps {
   readonly repoDrawing: boolean;
   readonly code: ReturnType<typeof useV2CodeWorkspace>;
   readonly agentCursor: ReactNode;
-  /** Comment pins, composer and thread (V2Comments). */
-  readonly comments: ReactNode;
+  /** Comment pins, composer and thread over the canvas (V2Comments): the editor's way in, and the session's thread writer. */
+  readonly comments: {
+    readonly apiRef: RefObject<V2CommentApi | null>;
+    readonly updateThreads: (change: (document: SceneDocumentV1) => SceneDocumentV1) => void;
+    readonly readOnly: boolean;
+  } & Pick<ComponentProps<typeof V2Comments>, 'request' | 'onOpenThreadChange' | 'unread'>;
   readonly labelEditing: ReturnType<typeof useV2LabelEditing>;
   readonly connectorLabel: ReturnType<typeof useV2ConnectorLabelEditing>;
   readonly iconActions: ReturnType<typeof useV2IconActions>;
@@ -81,12 +86,16 @@ export function V2EditorCanvas(p: EditorCanvasProps): React.JSX.Element {
   const { map, panels, code, repoSource, labelEditing, connectorLabel, iconActions, selectionRef } = p;
   const navigate = useNavigate();
   const openWorkspace = panels.openWorkspace;
+  const selectedNodeId = useCallback(() => selectionRef.current.primaryNodeId, [selectionRef]);
+  const commentApi = p.comments.apiRef;
   return (
     <V2CanvasHost
       page={p.viewPage} hostRef={p.hostRef} camera={p.camera.camera} cameraRef={p.camera.cameraRef} pageRef={p.pageRef}
       selectionRef={selectionRef} selectedConnectorIdsRef={p.selectedConnectorIdsRef} toolRef={p.toolRef} tool={p.tool} spacePanRef={p.spacePanRef}
       toolConfigRef={p.toolConfigRef} onOpenChartData={p.openChartData} zoomInto={map.active ? null : p.zoomInto}
       {...(map.active ? { onNodeClick: map.clickNode, onNodeDoubleClick: p.editBox, onNodeDrag: () => p.explainMapRef.current() } : {})}
+      onCommentClick={(point) => commentApi.current?.click(point)}
+      onTransformPreview={(result, copy) => commentApi.current?.preview(result, copy)}
       onRemoveIcons={() => iconActions.removeIcons(selectionRef.current.nodeIds)}
       onSetIcon={(icon) => iconActions.setIcons(selectionRef.current.nodeIds, icon)}
       onOpenCode={code.openNew}
@@ -110,7 +119,11 @@ export function V2EditorCanvas(p: EditorCanvasProps): React.JSX.Element {
     >
       {repoSource && map.active ? <V2RepoMapOverlay source={repoSource} map={p.repo.state} links={map.links}
         onOpenDrawing={p.repoDrawing ? () => { p.openDrawingRef.current(); } : undefined} /> : null}
-      {p.comments}
+      <V2Comments page={p.page} sectionRef={p.sectionRef} hostRef={p.hostRef} cameraRef={p.camera.cameraRef} subscribeCamera={p.camera.subscribe}
+        selectedNodeId={selectedNodeId} apiRef={commentApi} tool={p.tool} readOnly={p.comments.readOnly} hidden={map.active}
+        panelsKey={[panels.workspace, panels.shortcutsOpen, panels.chartId, panels.treeOpen, panels.motionOpen].join()}
+        updateThreads={p.comments.updateThreads} request={p.comments.request} onOpenThreadChange={p.comments.onOpenThreadChange}
+        unread={p.comments.unread} />
       {p.agentCursor}
       {map.start ? (
         <V2MapStart busy={code.generating} onStartModel={() => { void code.startFrom(C4_STARTER, { openPanel: false }).then(counted('created_template')); p.setModelPanelOnStart(true); }}

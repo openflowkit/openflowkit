@@ -65,7 +65,7 @@ export function shortcutGroups(apple = isApplePlatform()): readonly ShortcutGrou
         ['Sticky note', 'N', ['n']],
         ['Place the armed shape at the centre', '↵', []],
         ['Place a comment at the selection or the centre', '↵', []],
-        ['Move a focused comment pin (10× with Shift)', '⌥ Arrows', []],
+        ['Move a focused comment pin, onto the shape under it (10× with Shift)', '⌥ Arrows', []],
         ['Connect two selected shapes', 'A', []],
         ['Insert: media, charts, frames, wireframe', '⇧S', ['KeyS']],
         ['Icons and emoji', 'I / E', ['i', 'e']],

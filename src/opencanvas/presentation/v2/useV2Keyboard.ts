@@ -75,6 +75,14 @@ const ALT_ALIGN: Readonly<Record<string, AlignMode>> = {
 const CONTROLS = 'button, a[href], [role="slider"], [role="menu"], [role="listbox"], [role="tree"]';
 const CONTROL_KEYS = [' ', 'Enter', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'];
 
+/**
+ * The key belongs to an input method that is composing (CJK, accents): Enter, Escape and letters are the IME's. Safari sends the
+ * first key of a composition with isComposing false and keyCode 229, so both are checked.
+ */
+export function composing(event: { readonly nativeEvent?: { readonly isComposing?: boolean }; readonly keyCode: number }): boolean {
+  return Boolean(event.nativeEvent?.isComposing) || event.keyCode === 229;
+}
+
 /** The key is the focused field's or control's own (typing, activation, arrow navigation), or already handled. */
 export function keyOwnedByTarget(event: KeyboardEvent<HTMLElement>): boolean {
   return event.defaultPrevented || isEditableTarget(event.target)
@@ -100,8 +108,7 @@ export function useV2Keyboard(options: V2KeyboardOptions) {
     // Native chrome controls keep activation/navigation keys. Global tool and
     // history shortcuts still work after choosing a tool with the mouse.
     if (keyOwnedByTarget(event)) return;
-    // An input method's keys (Safari sends the first with the letter and keyCode 229) belong to the composition.
-    if (event.nativeEvent?.isComposing || event.keyCode === 229) return;
+    if (composing(event)) return;
     if (event.key === ' ' && !event.repeat) {
       if (!opts.editingRef.current) {
         opts.onSpacePan(true);
