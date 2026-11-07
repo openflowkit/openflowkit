@@ -20,7 +20,8 @@ import type {
   SetNodeCommand,
 } from './types';
 
-class DocumentCommandError extends Error {
+/** A command the document refuses: its precondition failed or its result is not a valid document. */
+export class DocumentCommandError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'DocumentCommandError';

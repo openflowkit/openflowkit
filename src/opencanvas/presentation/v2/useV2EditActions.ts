@@ -22,6 +22,7 @@ import {
   type CanvasSelection,
 } from '../../application/selection/selection';
 import type { DocumentCommand } from '../../domain/commands/types';
+import { DocumentCommandError } from '../../domain/commands/execute';
 import type { Bounds2d } from '../../domain/geometry/types';
 import {
   buildDeleteSelectionCommand,
@@ -40,11 +41,19 @@ interface ClipboardShapes {
   readonly excalidraw?: { readonly losses: readonly string[] };
 }
 
-function parseClipboard(text: string): ClipboardShapes | null {
-  try {
-    const parsed = JSON.parse(text) as ({ format?: string } & ProductionClipboardSnapshot) | null;
-    return parsed?.format === CLIPBOARD_FORMAT && Array.isArray(parsed.nodes) ? { snapshot: parsed } : excalidrawClipboard(text);
-  } catch { return null; }
+const isObject = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
+const objects = (value: unknown): boolean => Array.isArray(value) && value.every(isObject);
+
+/**
+ * The shapes in pasted text: our copy or Excalidraw's; `unreadable` when it is our format but not a copy this
+ * version can paste (hand-edited, or cut short); null when it is neither, so the paste tries what else it could be.
+ */
+function parseClipboard(text: string): ClipboardShapes | 'unreadable' | null {
+  let parsed: unknown;
+  try { parsed = JSON.parse(text); } catch { return null; }
+  if (!isObject(parsed) || parsed.format !== CLIPBOARD_FORMAT) return excalidrawClipboard(text);
+  return parsed.version === 1 && objects(parsed.nodes) && objects(parsed.connectors)
+    ? { snapshot: parsed as unknown as ProductionClipboardSnapshot } : 'unreadable';
 }
 
 /** Shapes copied in Excalidraw (`excalidraw/clipboard`) paste as ours, where they were drawn relative to each other. */
@@ -174,10 +183,13 @@ export function useV2EditActions(options: V2EditActionsOptions) {
     const memory = clipboardRef.current;
     const shapes = text === undefined || writingRef.current ? (memory ? { snapshot: memory } : null) : parseClipboard(text);
     if (!page || !shapes) return false;
+    const refuse = () => options.notify({ id: 'paste-shapes', tone: 'danger', title: 'Couldn’t paste the copied shapes',
+      description: 'They don’t make a valid diagram. Nothing was changed.' });
+    if (shapes === 'unreadable') { refuse(); return true; }
     const { snapshot, excalidraw } = shapes;
     const note = excalidraw?.losses.length ? { description: lossNote(excalidraw.losses) } : {};
     if (snapshot.nodes.length + snapshot.connectors.length === 0) {
-      options.notify({ id: 'paste-shapes', tone: 'info', title: 'Nothing to paste from Excalidraw', ...note });
+      options.notify({ id: 'paste-shapes', tone: 'info', title: excalidraw ? 'Nothing to paste from Excalidraw' : 'Nothing to paste', ...note });
       return true;
     }
     const view = options.viewWorldBounds?.();
@@ -186,9 +198,11 @@ export function useV2EditActions(options: V2EditActionsOptions) {
       pasted = buildPasteProductionSelectionCommand(page, snapshot, (kind) => options.mintId(kind),
         ...(view ? [pastePlacement(snapshot, view)] : []));
       options.commit(pasted.command);
-    } catch {
+    } catch (error) {
       // Clipboard text is anyone's JSON: one the document refuses is said, not thrown. Nothing was changed.
-      options.notify({ id: 'paste-shapes', tone: 'danger', title: 'Couldn’t paste the copied shapes', description: 'They don’t make a valid diagram. Nothing was changed.' });
+      // Anything else is a bug, and goes on up where it is seen.
+      if (!(error instanceof DocumentCommandError)) throw error;
+      refuse();
       return true;
     }
     const { pastedNodeIds, pastedConnectorIds } = pasted;
