@@ -18,7 +18,7 @@ export class StaleSessionRevisionError extends Error {
 
   constructor(expectedRevision: number, actualRevision: number) {
     super(
-      `Stale session revision: expected ${expectedRevision}, session is at ${actualRevision}.`
+      `Stale content revision: expected ${expectedRevision}, the diagram is at ${actualRevision}.`
     );
     this.name = 'StaleSessionRevisionError';
     this.expectedRevision = expectedRevision;
