@@ -26,12 +26,6 @@ export class StaleSessionRevisionError extends Error {
   }
 }
 
-function requireCurrentRevision(session: DocumentSession, expectedRevision: number): void {
-  if (expectedRevision !== session.revision) {
-    throw new StaleSessionRevisionError(expectedRevision, session.revision);
-  }
-}
-
 // A diagram step is built on the diagram: a thread change since it was built is no conflict (history steps keep
 // the threads they start from, see carryThreads), a diagram change is.
 function requireCurrentContent(session: DocumentSession, expectedContentRevision: number): void {
@@ -89,14 +83,13 @@ export function forgetSessionHistory(session: DocumentSession): DocumentSession 
 
 /**
  * A thread change (domain/threads): a new revision, so autosave and the agent bridge see it, but no undo
- * step and no content revision, and undo/redo of the steps around it keep it.
+ * step and no content revision, and undo/redo of the steps around it keep it. It needs no expected revision:
+ * `change` reads the session's document of now, so it can never be built on an older one.
  */
 export function updateSessionThreads(
   session: DocumentSession,
-  change: (document: SceneDocumentV1) => SceneDocumentV1,
-  expectedRevision: number
+  change: (document: SceneDocumentV1) => SceneDocumentV1
 ): DocumentSession {
-  requireCurrentRevision(session, expectedRevision);
   const document = change(session.document);
   if (document === session.document) return session;
   const valid = validateSceneDocumentV1(document);

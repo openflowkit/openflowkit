@@ -117,7 +117,7 @@ describe('proposal session', () => {
     session = updateSessionThreads(session, (document) => addThread(document, {
       pageId: 'page-1', threadId: 't1', nodeId: 'a', point: { x: 5, y: 5 },
       comment: { id: 'm1', author: { kind: 'human', name: 'Ada' }, body: 'Is this right?', createdAt: '2026-10-26T12:00:00.000Z' },
-    }), session.revision);
+    }));
     const command = applyCommand(proposal, session.contentRevision, session.document)!;
     session = commitSessionCommand(session, command, proposal.baseRevision);
     const nodeIds = (document: SceneDocumentV1) => document.pages[0]!.nodes.map(({ id }) => id);
