@@ -101,7 +101,7 @@ export interface SceneComment {
 
 /**
  * Where a thread is pinned. `point` is the pin tip in page coordinates; with a `nodeId` it follows the node
- * (`offset` from the node's world origin) and keeps the node's last position when the node is gone.
+ * (`offset` in the node's own frame, so it also turns with it) and keeps the node's last position when the node is gone.
  */
 export interface SceneThreadAnchor {
   readonly nodeId: string | null;

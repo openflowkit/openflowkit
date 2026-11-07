@@ -13,6 +13,11 @@ separately; its changes are listed under *For developers* in each release.
 
 - **Import Excalidraw drawings.** **Import** takes `.excalidraw` files and shapes copied in Excalidraw paste onto the
   canvas, each where it was drawn; the import names anything that didn't come across.
+- **Comments on the canvas.** Press **C** and click to pin a thread, or press **Enter** to put it on the selected
+  shape. A pin follows its shape and opens its thread to reply, edit, resolve or delete; undo and redo never touch
+  comments, and unsent text is kept. Image exports never show pins; JSON exports and share links leave comments out
+  (**Include comments** puts them in a JSON export). A file with a damaged thread still opens: a repeated number or
+  id is fixed, and only a thread that cannot be repaired is dropped.
 - **Private repos in the browser.** On the "not found, or it is private" screen, **Private repo? Use a GitHub token**
   takes a fine-grained token with Contents read-only access; the files are then read through the GitHub API. The
   token stays in this tab.

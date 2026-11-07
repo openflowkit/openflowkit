@@ -163,6 +163,19 @@
       ]
     },
     {
+      "id": "canvas-comments",
+      "name": "Comments on the canvas",
+      "status": "shipped",
+      "evidence": "src/opencanvas/presentation/v2/V2Comments.tsx",
+      "notes": "The comment tool (C) pins a thread with a click, or with Enter at the selected shape or the centre. Pins ride their shape (drag, turn) and move with Alt+Arrow; unsent text is kept per thread; deletes ask first (not undoable). Threads are document data; JSON exports carry them only with Include comments ticked, image exports never draw pins.",
+      "page": "canvas-basics",
+      "shortcuts": [
+        "Comment",
+        "Place a comment at the selection or the centre",
+        "Move a focused comment pin, onto the shape under it (10× with Shift)"
+      ]
+    },
+    {
       "id": "hover-connector-handles",
       "name": "Hover handles and drag-to-connect",
       "status": "shipped",

@@ -1,7 +1,8 @@
 // Threads pinned on a page. They are document data but not diagram content: commands never edit them, so every
 // change goes through these functions, and carryThreads keeps them across every command (applyDocumentCommand),
 // the one place that does: a page an undo brings back yields any id or number given out again since it went.
-import type { Point2d } from '../geometry/types';
+import type { Matrix2d, Point2d } from '../geometry/types';
+import { applyMatrixToPoint, invertMatrix } from '../geometry/matrix';
 import { buildNodeWorldMatrices } from '../scene/worldGeometry';
 import { isIsoTimestamp } from '../document/validation';
 import { freeThreadId, freeThreadNumber } from './threadKeys';
@@ -43,11 +44,21 @@ function commentBody(body: string): string {
   return trimmed;
 }
 
+/**
+ * Where a node-anchored pin sits, given its node's world matrix: `offset` is in the node's own frame, so the pin moves
+ * and turns with the node, like a mark painted on it (a flip moves and turns the node but does not mirror it,
+ * so the pin stays on the same spot of the shape). The canvas uses it too, to draw a pin on a shape being dragged.
+ */
+export function pinOnNode(matrix: Matrix2d, offset: Point2d): Point2d {
+  return applyMatrixToPoint(matrix, offset);
+}
+
 /** Pins `point` to `nodeId` (when it is on the page) so the pin follows the node, or to the page. */
 function createAnchor(page: ScenePage, nodeId: string | null, point: Point2d): SceneThreadAnchor {
   const origin = nodeId === null ? undefined : buildNodeWorldMatrices(page).get(nodeId);
-  if (!origin) return { nodeId: null, offset: null, point };
-  return { nodeId, offset: { x: point.x - origin.tx, y: point.y - origin.ty }, point };
+  const inverse = origin ? invertMatrix(origin) : null;
+  if (!inverse) return { nodeId: null, offset: null, point };
+  return { nodeId, offset: applyMatrixToPoint(inverse, point), point };
 }
 
 /** Moves each node-anchored pin to where its node is now; a pin whose node is gone keeps its last point. */
@@ -60,8 +71,7 @@ function refreshAnchors(page: ScenePage): ScenePage {
     const { nodeId, offset, point } = thread.anchor;
     const origin = nodeId === null ? undefined : origins.get(nodeId);
     if (!origin || !offset) return thread;
-    const x = origin.tx + offset.x;
-    const y = origin.ty + offset.y;
+    const { x, y } = pinOnNode(origin, offset);
     if (x === point.x && y === point.y) return thread;
     changed = true;
     return { ...thread, anchor: { ...thread.anchor, point: { x, y } } };

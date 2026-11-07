@@ -37,6 +37,10 @@ export function useV2Camera(hostRef: RefObject<PixiRendererHost | null>) {
   const glideRef = useRef<number | null>(null);
   const glidingRef = useRef(false);
   const [camera, setCamera] = useState<CanvasCamera>(DEFAULT_CANVAS_CAMERA);
+  // Things drawn over the canvas by world position (comment pins) follow the camera in the frame it moves, not after React settles.
+  const listeners = useRef(new Set<() => void>());
+  const subscribe = useCallback((listener: () => void) => { listeners.current.add(listener); return () => { listeners.current.delete(listener); }; }, []);
+  const notify = () => { for (const listener of listeners.current) listener(); };
 
   // Ref and renderer update per input event; the React state (which
   // re-renders the whole page) settles once per animation frame so a real
@@ -47,6 +51,7 @@ export function useV2Camera(hostRef: RefObject<PixiRendererHost | null>) {
       pendingLandingRef.current = null;
       cameraRef.current = next;
       hostRef.current?.setCamera(next);
+      notify();
       if (frameRef.current !== null) return;
       frameRef.current = requestAnimationFrame(() => {
         frameRef.current = null;
@@ -69,6 +74,7 @@ export function useV2Camera(hostRef: RefObject<PixiRendererHost | null>) {
   const applyGlideFrame = useCallback((next: CanvasCamera) => {
     cameraRef.current = next;
     hostRef.current?.setCamera(next);
+    notify();
     if (frameRef.current !== null) return;
     frameRef.current = requestAnimationFrame(() => {
       frameRef.current = null;
@@ -270,6 +276,7 @@ export function useV2Camera(hostRef: RefObject<PixiRendererHost | null>) {
 
   return {
     cameraRef,
+    subscribe,
     camera,
     zoom: Math.round(camera.zoom * 100),
     updateCamera,

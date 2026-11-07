@@ -10,6 +10,7 @@ import { archFrameOf, placedElementId } from '../../../dsl/model/model';
 import type { SceneDocumentV1 } from '../../domain/document/types';
 import { AgentCursor, SystemRoot, ToastRegion, withToast, type ToastItem } from '../design-system';
 import { V2CanvasWelcome, V2WorkspaceRail } from './V2Workspace';
+import type { V2CommentApi } from './V2Comments';
 import { V2EditorCanvas } from './V2EditorCanvas';
 import { V2EditorChrome } from './V2EditorChrome';
 import { V2EditorContextMenu } from './V2EditorContextMenu';
@@ -96,6 +97,7 @@ export function V2EditorPage({ shared }: { readonly shared?: V2SharedView } = {}
   const sectionRef = useRef<HTMLElement | null>(null);
   const pasteRef = useRef<(event: ClipboardEvent) => void>(() => undefined);
   const gestureApiRef = useRef<V2GestureApi | null>(null);
+  const commentApiRef = useRef<V2CommentApi | null>(null);
   const focusCanvas = useCallback(() => sectionRef.current?.focus(), []);
   useV2BodyFocusForward(sectionRef, pasteRef);
   const { tool, setTool, toolConfig, spacePan, setSpacePan, toolRef, toolConfigRef, spacePanRef, pickShape, pickConnector } = useV2ToolState(gestureApiRef);
@@ -223,7 +225,9 @@ export function V2EditorPage({ shared }: { readonly shared?: V2SharedView } = {}
   };
   const viewPage = map.mapPage ?? page;
   useV2DocumentTitle(session.document?.name);
+  // An open comment goes first, then the chart's data panel.
   const escapePanel = () => {
+    if (commentApiRef.current?.escape()) return true;
     if (!panels.chartId) return false;
     panels.closeChart();
     sectionRef.current?.focus({ preventScroll: true });
@@ -368,7 +372,7 @@ export function V2EditorPage({ shared }: { readonly shared?: V2SharedView } = {}
     ...(map.findSource && repoPanel.drawn ? { source: map.findSource } : {}),
   });
   const handleKeyDown = useV2EditorKeyboard({
-    toolRef, editingRef: labelEditing.editingRef, pageRef, selectionRef, gestureApiRef, setTool, setSpacePan, input, editActions, architectureActions, camera, connectorLabel,
+    toolRef, commentApiRef, editingRef: labelEditing.editingRef, pageRef, selectionRef, gestureApiRef, setTool, setSpacePan, input, editActions, architectureActions, camera, connectorLabel,
     panels, selectionApi, map, find, viewPage, selectedElementId, selectedConnectorIds, docReadOnly, editLocked, undo, redo, escapePanel,
     openEditor, selectNodes, fitAll, toggleCode, backToMap,
   });
@@ -433,6 +437,7 @@ export function V2EditorPage({ shared }: { readonly shared?: V2SharedView } = {}
               exportPanel={exportPanel} commit={commit} leaveStart={leaveStart} setTool={setTool} pickShape={pickShape} pickConnector={pickConnector}
               gestureApiRef={gestureApiRef} input={input} fitAll={fitAll} />
             <V2EditorCanvas
+              comments={{ apiRef: commentApiRef, updateThreads: session.updateThreads, readOnly: docReadOnly, toast: pushToast }}
               agentCursor={<AgentCursor ref={agents.presence.cursorRef} name={agents.agentShown} working={agents.agentBridge.activity?.doing === 'drawing'} data-testid="v2-agent-cursor" />}
               page={page} viewPage={viewPage ?? page} hostRef={hostRef} sectionRef={sectionRef} pageRef={pageRef} selectionRef={selectionRef}
               selectedConnectorIdsRef={selectedConnectorIdsRef} toolRef={toolRef} spacePanRef={spacePanRef} toolConfigRef={toolConfigRef}
