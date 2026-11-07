@@ -25,14 +25,14 @@ export const exportDiagram = defineOp({
     scope: z.enum(['selection', 'page', 'document']).default('document').describe('document: every page; page: one page; selection: the ids you pass.'),
     pageId: z.string().min(1).optional().describe('Page to act on (see list_pages); defaults to the page the editor shows, or the first page in file mode.'),
     ids: z.array(z.string().min(1)).optional().describe('Selection scope: the node and connector ids to export; defaults to everything on the page.'),
-    scale: z.union([z.literal(1), z.literal(2), z.literal(3)]).default(1),
+    scale: z.literal([1, 2, 3]).default(1),
     theme: z.enum(['light', 'dark', 'print']).default('light'),
     preset: z.enum(['build', 'walkthrough', 'pulse']).default('build').describe('Animation preset: build reveals in order, walkthrough spotlights each step, pulse shows everything with a moving light.'),
     order: z.string().min(1).optional().describe('Animation order: a flow id from the architecture model, or "code" for the animate block in the diagram source. Omit for the connector graph.'),
     durationMs: z.number().int().min(500).max(600_000).optional().describe('Animation clip length in milliseconds; omit for the natural length.'),
     loop: z.boolean().default(false),
-    size: z.union([z.literal(720), z.literal(1080), z.literal(1440)]).default(1080).describe('Raster animation width in pixels.'),
-    fps: z.union([z.literal(12), z.literal(24), z.literal(30)]).default(24),
+    size: z.literal([720, 1080, 1440]).default(1080).describe('Raster animation width in pixels.'),
+    fps: z.literal([12, 24, 30]).default(24),
   }),
   async run({ format, scope, pageId, ids, scale, theme, preset, order, durationMs, loop, size, fps }, context) {
     if (!context.capabilities.exportFiles) throw new Error('This host cannot export files; connect a live editor or use a host with an export pipeline.');
@@ -59,7 +59,7 @@ export const screenshotDiagram = defineOp({
   schema: z.object({
     frameId: z.string().min(1).optional().describe('Diagram frame id, from create_diagram or list_diagrams; omit for the whole page.'),
     pageId: z.string().min(1).optional().describe('Page to act on (see list_pages); defaults to the page the editor shows, or the first page in file mode.'),
-    scale: z.union([z.literal(1), z.literal(2), z.literal(3)]).default(2),
+    scale: z.literal([1, 2, 3]).default(2),
     theme: z.enum(['light', 'dark']).default('light'),
   }),
   async run({ frameId, pageId, scale, theme }, context) {

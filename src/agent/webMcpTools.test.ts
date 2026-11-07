@@ -37,6 +37,14 @@ describe('webMcpTools', () => {
     }
   });
 
+  it('advertises a fixed set of numbers as one enum, and a refined op keeps its fields', () => {
+    const properties = (name: string) => (tool(tools, name).inputSchema as { properties: Record<string, unknown> }).properties;
+    expect(properties('export').scale).toMatchObject({ enum: [1, 2, 3], default: 1 });
+    expect(properties('export').fps).toMatchObject({ enum: [12, 24, 30] });
+    // add_shape carries a cross-field rule; its fields must still be advertised.
+    expect(Object.keys(properties('add_shape'))).toEqual(expect.arrayContaining(['kind', 'label', 'x', 'y']));
+  });
+
   it('marks reads read-only from the manifest, and document text as untrusted', () => {
     for (const row of CAPABILITY_MANIFEST) expect(tool(tools, row.action).annotations?.readOnlyHint, row.action).toBe(row.writes === null);
     expect(tool(tools, 'get_document').annotations?.untrustedContentHint).toBe(true);

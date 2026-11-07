@@ -121,7 +121,7 @@ export interface AgentOp<Input = unknown, Output = unknown> {
    * `Input` is the parsed *output* of the schema; the third parameter keeps
    * zod's looser input type (optional nested objects) out of inference.
    */
-  readonly schema: z.ZodType<Input, z.ZodTypeDef, unknown>;
+  readonly schema: z.ZodType<Input, unknown>;
   readonly run: (input: Input, context: OpContext) => Promise<OpOutcome<Output>>;
 }
 

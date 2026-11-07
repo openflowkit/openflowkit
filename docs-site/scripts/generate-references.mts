@@ -28,40 +28,32 @@ function frontmatter(title: string, description: string): string {
 // --- zod → readable type, for the op argument tables -------------------------
 
 interface ZodLike {
-  readonly _def?: { readonly typeName?: string } & Record<string, unknown>;
+  readonly def?: { readonly type?: string } & Record<string, unknown>;
   readonly shape?: Record<string, ZodLike>;
 }
 
-function shapeOf(schema: ZodLike): Record<string, ZodLike> {
-  let current: ZodLike | undefined = schema;
-  while (current) {
-    if (current.shape) return current.shape;
-    const inner = current._def?.schema ?? current._def?.innerType;
-    current = typeof inner === 'object' ? (inner as ZodLike) : undefined;
-  }
-  return {};
-}
+const shapeOf = (schema: ZodLike): Record<string, ZodLike> => schema.shape ?? {};
 
 function typeOf(schema: ZodLike): string {
-  const def = schema?._def;
+  const def = schema?.def;
   if (!def) return 'unknown';
-  switch (def.typeName) {
-    case 'ZodString': return 'string';
-    case 'ZodNumber': return 'number';
-    case 'ZodBoolean': return 'boolean';
-    case 'ZodLiteral': return JSON.stringify(def.value);
-    case 'ZodEnum': return (def.values as string[]).map((value) => `\`${value}\``).join(' \\| ');
-    case 'ZodOptional': return `${typeOf(def.innerType as ZodLike)} *(optional)*`;
-    case 'ZodDefault': return `${typeOf(def.innerType as ZodLike)} *(default \`${JSON.stringify((def.defaultValue as () => unknown)())}\`)*`;
-    case 'ZodArray': return `${typeOf(def.type as ZodLike)}[]`;
-    case 'ZodNullable': return `${typeOf(def.innerType as ZodLike)} or null`;
-    case 'ZodEffects': return typeOf(def.schema as ZodLike);
-    case 'ZodUnion': return (def.options as ZodLike[]).map(typeOf).join(' \\| ');
-    case 'ZodObject': return `object: ${Object.entries(shapeOf(schema))
+  switch (def.type) {
+    case 'string': return 'string';
+    case 'number': return 'number';
+    case 'boolean': return 'boolean';
+    case 'literal': return (def.values as unknown[]).map((value) => JSON.stringify(value)).join(' \\| ');
+    case 'enum': return Object.values(def.entries as Record<string, string>).map((value) => `\`${value}\``).join(' \\| ');
+    case 'optional': return `${typeOf(def.innerType as ZodLike)} *(optional)*`;
+    case 'default': return `${typeOf(def.innerType as ZodLike)} *(default \`${JSON.stringify(def.defaultValue)}\`)*`;
+    case 'array': return `${typeOf(def.element as ZodLike)}[]`;
+    case 'nullable': return `${typeOf(def.innerType as ZodLike)} or null`;
+    case 'pipe': return typeOf(def.out as ZodLike);
+    case 'union': return (def.options as ZodLike[]).map(typeOf).join(' \\| ');
+    case 'object': return `object: ${Object.entries(shapeOf(schema))
       .map(([key, value]) => `${key} (${typeOf(value)})`).join(', ')}`;
-    case 'ZodRecord': return `map of ${typeOf(def.valueType as ZodLike)}`;
-    case 'ZodAny': return 'any';
-    default: return (def.typeName ?? 'value').replace(/^Zod/, '').toLowerCase();
+    case 'record': return `map of ${typeOf(def.valueType as ZodLike)}`;
+    case 'any': return 'any';
+    default: return def.type ?? 'value';
   }
 }
 
