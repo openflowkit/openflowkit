@@ -146,7 +146,10 @@ function pinActions(
       if (event.key === 'Delete' || event.key === 'Backspace') {
         event.preventDefault();
         event.stopPropagation();
-        if (!latest.current.readOnly) setOpen({ kind: 'thread', id: thread.id, askDelete: true });
+        // A resolved thread shown from the Threads panel stays shown while it asks, or the card would close with the pin.
+        const open = latest.current.open;
+        const kept = open?.kind === 'thread' && open.id === thread.id && open.shownResolved ? { shownResolved: true } : {};
+        if (!latest.current.readOnly) setOpen({ kind: 'thread', id: thread.id, ...kept, askDelete: true });
         return;
       }
       const by = latest.current.readOnly ? null : pinNudge(event.key, event.altKey, event.shiftKey);

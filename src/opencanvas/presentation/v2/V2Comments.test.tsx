@@ -37,6 +37,7 @@ interface HarnessProps {
   /** The document the session holds when it differs from the one rendered: a change another writer made a moment ago. */
   readonly live?: { current: SceneDocumentV1 | null };
   readonly onRender?: () => void;
+  readonly request?: { readonly threadId: string; readonly seq: number };
 }
 
 function Harness(props: HarnessProps) {
@@ -59,7 +60,7 @@ function Harness(props: HarnessProps) {
       <section ref={sectionRef} tabIndex={-1} data-testid="section">
         <button type="button" data-testid="context-bar-button">Fill colour</button>
         <V2Comments page={page} sectionRef={sectionRef} hostRef={hostRef} cameraRef={cameraRef} subscribeCamera={() => () => undefined}
-          selectedNodeId={() => null} apiRef={api} tool={props.tool} readOnly={false} hidden={false} panelsKey="" request={null} onOpenThreadChange={noop} unread={NONE}
+          selectedNodeId={() => null} apiRef={api} tool={props.tool} readOnly={false} hidden={false} panelsKey="" request={props.request ?? null} onOpenThreadChange={noop} unread={NONE}
           toast={toast} updateThreads={updateThreads} />
       </section>
     </Profiler>
@@ -352,6 +353,22 @@ describe('moving a pin with the keyboard', () => {
     fireEvent.keyDown(pinButton(), { key: 'ArrowLeft', altKey: true, shiftKey: true });
     expect(anchor()).toMatchObject({ nodeId: null, point: { x: -62, y: 10 } });
     host.pickNode.mockImplementation(() => null);
+  });
+});
+
+describe('a resolved thread opened from the Threads panel', () => {
+  const resolved = (): SceneDocumentV1 => {
+    const doc = withThread();
+    const page = doc.pages[0]!;
+    return { ...doc, pages: [{ ...page, threads: [{ ...page.threads![0]!, resolved: true }] }] };
+  };
+
+  it('asks before deleting when Delete is pressed on its pin, instead of closing', () => {
+    render(<Harness initial={resolved()} tool="select" request={{ threadId: 't1', seq: 1 }} />);
+    expect(thread()).not.toBeNull();
+    fireEvent.keyDown(pinButton(), { key: 'Delete' });
+    expect(screen.getByRole('alert')).toHaveTextContent('Delete this thread?');
+    expect(thread()).not.toBeNull();
   });
 });
 
