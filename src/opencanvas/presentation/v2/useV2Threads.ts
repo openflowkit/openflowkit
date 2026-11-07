@@ -8,6 +8,7 @@ import type { useDocumentSession } from '../../application/session/useDocumentSe
 import type { useV2MapMode } from './map/useV2MapMode';
 import type { ToastItem } from '../design-system';
 import type { OpenThreadRequest } from './V2Comments';
+import { unlessGone } from './v2CommentsView';
 import type { useV2Camera } from './useV2Camera';
 import type { useV2Panels } from './useV2Panels';
 import type { useV2Preferences } from './useV2Preferences';
@@ -107,6 +108,8 @@ export function useV2Threads(input: ThreadsInput) {
     if (!pending || !document) return;
     const found = findThread(document, pending.threadId);
     if (!found) { setPending(null); return; }
+    // The page switch can land in Map again (a page that opens in Map): leave it once the thread's page is the one shown.
+    if (page?.id === found.page.id && mapActive && found.page.id !== lockedMapPageId) { leaveMap(); return; }
     if (page?.id !== found.page.id || mapActive || !rendererReady) return;
     setPending(null);
     setRequest(pending);
@@ -118,7 +121,7 @@ export function useV2Threads(input: ThreadsInput) {
       revealPin.current(point);
     };
     requestAnimationFrame(settle);
-  }, [pending, document, page?.id, mapActive, rendererReady]);
+  }, [pending, document, page?.id, mapActive, rendererReady, leaveMap, lockedMapPageId]);
 
   // `#/d/<id>?thread=<threadId>`: open it once the document is up, then take the param off the address.
   const location = useLocation();
@@ -137,10 +140,11 @@ export function useV2Threads(input: ThreadsInput) {
 
   const toggleResolved = useCallback((threadId: string) => {
     const found = document ? findThread(document, threadId) : undefined;
-    if (found && !readOnly) updateThreads((doc) => setThreadResolved(doc, threadId, !found.thread.resolved));
+    if (found && !readOnly) updateThreads(unlessGone((doc) => setThreadResolved(doc, threadId, !found.thread.resolved)));
   }, [document, readOnly, updateThreads]);
   const remove = useCallback((threadId: string) => {
-    if (!readOnly) updateThreads((doc) => removeThread(doc, threadId));
+    // An agent may have removed it while the confirmation was up.
+    if (!readOnly) updateThreads(unlessGone((doc) => removeThread(doc, threadId)));
   }, [readOnly, updateThreads]);
 
   const copyLink = useCallback((threadId: string) => {
