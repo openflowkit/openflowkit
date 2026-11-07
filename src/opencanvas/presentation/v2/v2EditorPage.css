@@ -1544,7 +1544,8 @@
 .ofk-v2 .ofk-threads-panel .ofk-panel-body { display: flex; flex-direction: column; min-height: 0; padding: 0; overflow: hidden; }
 .ofk-threads-bar { flex: none; display: flex; align-items: center; gap: 4px; padding: 10px 12px 8px 16px; }
 .ofk-threads-search { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; min-height: 32px; padding: 0 10px; color: var(--ofk-muted); background: var(--ofk-surface); border: 1px solid var(--ofk-border); border-radius: 8px; }
-.ofk-threads-search:focus-within { outline: 2px solid var(--ofk-focus); outline-offset: 0; border-color: transparent; }
+/* The focus treatment of the AI assistant's prompt box and the comment fields. */
+.ofk-threads-search:focus-within { border-color: var(--ofk-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ofk-accent) 18%, transparent); }
 .ofk-threads-search svg { width: 16px; height: 16px; flex: none; }
 .ofk-threads-search input { flex: 1; min-width: 0; padding: 0; font: inherit; font-size: 13px; color: var(--ofk-text); background: none; border: 0; outline: none; }
 .ofk-threads-bar .ofk-icon-button { flex: none; color: var(--ofk-secondary); }
