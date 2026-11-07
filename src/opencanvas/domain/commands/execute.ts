@@ -1,5 +1,6 @@
 import type { SceneDocumentV1, ScenePage } from '../document/types';
 import { validateSceneDocumentV1 } from '../document/validation';
+import { DocumentCommandError } from './commandError';
 import { areStructurallyEqual } from './equality';
 import type {
   AppliedDocumentCommand,
@@ -19,14 +20,6 @@ import type {
   SetPageCommand,
   SetNodeCommand,
 } from './types';
-
-/** A command the document refuses: its precondition failed or its result is not a valid document. */
-export class DocumentCommandError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'DocumentCommandError';
-  }
-}
 
 function updatePage(
   document: SceneDocumentV1,

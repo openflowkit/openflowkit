@@ -22,7 +22,7 @@ import {
   type CanvasSelection,
 } from '../../application/selection/selection';
 import type { DocumentCommand } from '../../domain/commands/types';
-import { DocumentCommandError } from '../../domain/commands/execute';
+import { DocumentCommandError } from '../../domain/commands/commandError';
 import type { Bounds2d } from '../../domain/geometry/types';
 import {
   buildDeleteSelectionCommand,
