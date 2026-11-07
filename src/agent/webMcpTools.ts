@@ -123,8 +123,8 @@ const answered = (run: () => unknown) => async (): Promise<unknown> => {
 
 /** Every op (only the reads when the document is read-only) and the browser's own tools. */
 export function webMcpTools(editor: WebMcpEditor, { readOnly }: { readonly readOnly: boolean }): WebMcpTool[] {
-  const mutates = new Map(CAPABILITY_MANIFEST.map((row) => [row.action, row.mutates]));
-  const ops = AGENT_OPS.filter((op) => !(readOnly && mutates.get(op.name) !== false)).map<WebMcpTool>((op) => ({
+  const writes = new Map(CAPABILITY_MANIFEST.map((row) => [row.action, row.writes]));
+  const ops = AGENT_OPS.filter((op) => !(readOnly && writes.get(op.name) !== null)).map<WebMcpTool>((op) => ({
     name: op.name,
     title: op.title,
     description: op.description,
@@ -135,7 +135,7 @@ export function webMcpTools(editor: WebMcpEditor, { readOnly }: { readonly readO
       }
       return cappedOutput(await editor.run(op.name, input ?? {}, typeof input?.pageId === 'string' ? input.pageId : undefined, options?.signal));
     })(),
-    annotations: { readOnlyHint: mutates.get(op.name) === false, untrustedContentHint: USER_CONTENT.has(op.name) },
+    annotations: { readOnlyHint: writes.get(op.name) === null, untrustedContentHint: USER_CONTENT.has(op.name) },
   }));
   return [
     ...ops,

@@ -5,7 +5,6 @@ import { commandTouchedRoots } from '../opencanvas/application/ai/proposalSessio
 import type { DocumentCommand } from '../opencanvas/domain/commands/types';
 import type { SceneDocumentV1 } from '../opencanvas/domain/document/types';
 import { drawingSourceOf } from '../opencanvas/application/map/pinPage';
-import { THREAD_WRITE_OPS } from './ops/surface';
 import type { OpCapabilities } from './ops/types';
 import { pageHolding, resolveAgentOpCommand } from './runAction';
 
@@ -90,13 +89,13 @@ export async function runLiveAgentOp(current: () => LiveAgentSession, name: stri
   // The page the op will run on (a named frame's own page), so the read-only check and the camera agree with it.
   let pageId = pageHolding({ document: session.document, pageId: requestedPageId ?? session.pageId ?? session.document.pages[0]?.id ?? '', capabilities: session.capabilities }, input);
   // Thread writes are conversation, not drawing: no repo-map redirect, no page switch, no camera, no commit.
-  const threadWrite = THREAD_WRITE_OPS.has(name);
-  if (threadWrite && session.readOnly) throw new Error(READ_ONLY_REFUSAL);
-  const mutates = !threadWrite && CAPABILITY_MANIFEST.some(({ action, mutates }) => action === name && mutates);
+  const writes = CAPABILITY_MANIFEST.find(({ action }) => action === name)?.writes ?? null;
+  if (writes === 'threads' && session.readOnly) throw new Error(READ_ONLY_REFUSAL);
+  const drawing = writes === 'diagram';
   const locked = session.lockedPageId ?? null;
   let opened = false;
   // A change for the repo map lands on its drawing, which the person sees first (as Canvas opens it); reads stay on the map.
-  if (mutates && locked !== null && pageId === locked) {
+  if (drawing && locked !== null && pageId === locked) {
     opened = session.openDrawing?.() ?? false;
     if (!opened || session.readOnly) throw new Error(session.readOnly ? READ_ONLY_REFUSAL : REPO_MAP_REFUSAL);
     const drawn = await shown(current, showsDrawingOf(locked));

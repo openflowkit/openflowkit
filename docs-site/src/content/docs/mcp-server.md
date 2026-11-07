@@ -85,12 +85,13 @@ Structurizr DSL and D2 need no prompt: `create_diagram`, `update_diagram` and
 
 ## The operations
 
-One MCP tool per operation; every mutating op has an inverse, and the live editor applies it
-as a single undo step. The manifest names the human operation each one mirrors.
+One MCP tool per operation; every op that changes the diagram has an inverse, and the live editor
+applies it as a single undo step. The comment-thread ops change the threads outside undo history.
+The manifest names the human operation each one mirrors.
 
 ### `create_diagram`
 
-Create diagram — mirrors **Generate diagram from code** in the code panel; changes the document (one undo step in live mode).
+Create diagram — mirrors **Generate diagram from code** in the code panel; changes the diagram (one undo step in live mode).
 
 | Argument | Type |
 | --- | --- |
@@ -101,7 +102,7 @@ Create diagram — mirrors **Generate diagram from code** in the code panel; cha
 
 ### `update_diagram`
 
-Update diagram — mirrors **Regenerate a diagram frame** in the code panel; changes the document (one undo step in live mode).
+Update diagram — mirrors **Regenerate a diagram frame** in the code panel; changes the diagram (one undo step in live mode).
 
 | Argument | Type |
 | --- | --- |
@@ -153,7 +154,7 @@ Find icons for a concept — an agent-only lookup; read-only.
 
 ### `move`
 
-Move shapes — mirrors **Move / nudge shapes** in a canvas gesture; changes the document (one undo step in live mode). Pass exactly one of `to` or `delta`.
+Move shapes — mirrors **Move / nudge shapes** in a canvas gesture; changes the diagram (one undo step in live mode). Pass exactly one of `to` or `delta`.
 
 | Argument | Type |
 | --- | --- |
@@ -164,7 +165,7 @@ Move shapes — mirrors **Move / nudge shapes** in a canvas gesture; changes the
 
 ### `style`
 
-Style shapes — mirrors **Fill / stroke / width / dash / opacity** in the context bar; changes the document (one undo step in live mode).
+Style shapes — mirrors **Fill / stroke / width / dash / opacity** in the context bar; changes the diagram (one undo step in live mode).
 
 | Argument | Type |
 | --- | --- |
@@ -180,7 +181,7 @@ Style shapes — mirrors **Fill / stroke / width / dash / opacity** in the conte
 
 ### `delete`
 
-Delete shapes — mirrors **Delete selection** in a keyboard action; changes the document (one undo step in live mode).
+Delete shapes — mirrors **Delete selection** in a keyboard action; changes the diagram (one undo step in live mode).
 
 | Argument | Type |
 | --- | --- |
@@ -190,7 +191,7 @@ Delete shapes — mirrors **Delete selection** in a keyboard action; changes the
 
 ### `add_shape`
 
-Add shape — mirrors **Create rectangle / ellipse / text** in the toolbar; changes the document (one undo step in live mode).
+Add shape — mirrors **Create rectangle / ellipse / text** in the toolbar; changes the diagram (one undo step in live mode).
 
 | Argument | Type |
 | --- | --- |
@@ -257,6 +258,45 @@ Read the page — mirrors **Read document, page and selection** in a canvas gest
 List pages — mirrors **Page list** in the document bar; read-only.
 
 Takes no arguments.
+
+### `list_threads`
+
+List threads — mirrors **Read threads** in a canvas gesture; read-only.
+
+| Argument | Type |
+| --- | --- |
+| `pageId` | string *(optional)* |
+| `threadId` | string *(optional)* |
+| `unanswered` | boolean *(default `false`)* |
+| `includeResolved` | boolean *(default `false`)* |
+
+### `reply_to_thread`
+
+Reply to a thread — mirrors **Add a comment to a thread** in a canvas gesture; changes the comment threads (no undo step, not part of the diagram).
+
+| Argument | Type |
+| --- | --- |
+| `threadId` | string |
+| `body` | string |
+
+### `resolve_thread`
+
+Resolve a thread — mirrors **Resolve / reopen a thread** in a canvas gesture; changes the comment threads (no undo step, not part of the diagram).
+
+| Argument | Type |
+| --- | --- |
+| `threadId` | string |
+| `resolved` | boolean *(default `true`)* |
+
+### `start_thread`
+
+Start a thread — mirrors **Comment tool: start a thread with its first comment** in a canvas gesture; changes the comment threads (no undo step, not part of the diagram).
+
+| Argument | Type |
+| --- | --- |
+| `nodeId` | string *(optional)* |
+| `point` | object: x (number), y (number) *(optional)* |
+| `body` | string |
 
 ## What it does not do
 

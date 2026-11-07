@@ -335,7 +335,7 @@ interface AgentBundle {
   tablerSvg(nodes: readonly (readonly [string, Readonly<Record<string, string>>])[]): string;
   readonly ICON_PACK_IDS: Readonly<Record<string, string>>;
   /** One row per op: the human operation it mirrors. */
-  readonly CAPABILITY_MANIFEST: readonly { readonly action: string; readonly operation: string; readonly mutates: boolean }[];
+  readonly CAPABILITY_MANIFEST: readonly { readonly action: string; readonly operation: string; readonly writes: 'diagram' | 'threads' | null }[];
   /** A cheap grid layout, for checks that discard positions. */
   readonly deterministicLayout: unknown;
   /** ELK in process: the editor's layout, for file mode and the CLI. */
