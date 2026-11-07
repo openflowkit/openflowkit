@@ -12,7 +12,7 @@ import { CONTAINER_TITLE_HEIGHT } from '../../opencanvas/domain/nodes/nodeLabelB
 import { DEFAULT_NODE_SIZING_POLICY } from '../../opencanvas/domain/node-sizing/model';
 import { validateSceneDocumentV1 } from '../../opencanvas/domain/document/validation';
 import {
-  drawioColor, drawioConnectorAppearance, own, drawioErRelation, drawioImageUrl, drawioLabel, drawioNodeAppearance, drawioShape, drawioShapeName, type DrawioStyle,
+  drawioAnchor, drawioColor, drawioConnectorAppearance, own, drawioErRelation, drawioImageUrl, drawioLabel, drawioNodeAppearance, drawioShape, drawioShapeName, type DrawioStyle,
 } from './drawioStyle';
 import { num, pageCells, pageModel, type Cell, type Geometry } from './drawioCells';
 import { parseXml } from './xmlReader';
@@ -327,12 +327,12 @@ class PageBuilder {
     const number = this.connectors.length + 1;
     const origin = this.originOf(cell.parent);
     const toPage = (point: Point2d): Point2d => ({ x: point.x + origin.x, y: point.y + origin.y });
-    const endpoint = (nodeId: string | null, point: Point2d | null | undefined): ConnectorEndpoint | null => {
-      if (nodeId && this.nodeIds.has(nodeId)) return { nodeId, portId: null, anchor: null, point: null };
+    const endpoint = (nodeId: string | null, point: Point2d | null | undefined, end: 'exit' | 'entry'): ConnectorEndpoint | null => {
+      if (nodeId && this.nodeIds.has(nodeId)) return { nodeId, portId: null, anchor: drawioAnchor(cell.style, end), point: null };
       return point ? { nodeId: null, portId: null, anchor: null, point: toPage(point) } : null;
     };
-    const source = endpoint(cell.source, cell.geometry?.sourcePoint);
-    const target = endpoint(cell.target, cell.geometry?.targetPoint);
+    const source = endpoint(cell.source, cell.geometry?.sourcePoint, 'exit');
+    const target = endpoint(cell.target, cell.geometry?.targetPoint, 'entry');
     const label = drawioLabel(this.valueOf(cell), cell.style);
     if (!source || !target) {
       this.loss(`${label ? `connector “${label}”` : `connector ${number}`}: it has a loose end, so it was left out`);
@@ -343,12 +343,17 @@ class PageBuilder {
     const points = (cell.geometry?.points ?? []).map(toPage);
     if (orthogonal && points.length) this.rerouted += 1;
     const waypoints = orthogonal ? [] : points;
-    const labels: ConnectorLabel[] = label ? [{ id: `${cell.id}:label`, text: label, pathRatio: 0.5, offset: { x: 0, y: 0 }, metadata: {} }] : [];
+    // The line's own label sits at geometry x along it (-1 source, 0 middle, 1 target), nudged by the offset point.
+    const along = (x: number): number => Math.min(1, Math.max(0, (x + 1) / 2));
+    const line = cell.geometry;
+    const labels: ConnectorLabel[] = label
+      ? [{ id: `${cell.id}:label`, text: label, pathRatio: along(line?.x ?? 0), offset: { ...(line?.offset ?? { x: 0, y: 0 }) }, metadata: {} }]
+      : [];
     // A label dragged along an edge is its own vertex, parented to the edge; x runs -1 (source) to 1 (target).
     for (const child of this.childrenOf(cell.id)) {
       const text = drawioLabel(this.valueOf(child), child.style);
       if (!child.vertex || !text) continue;
-      const ratio = Math.min(1, Math.max(0, ((child.geometry?.x ?? 0) + 1) / 2));
+      const ratio = along(child.geometry?.x ?? 0);
       labels.push({ id: `${child.id}:label`, text, pathRatio: ratio, offset: { x: 0, y: 0 }, metadata: {} });
     }
     this.connectors.push({

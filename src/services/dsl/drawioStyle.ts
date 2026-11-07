@@ -1,4 +1,5 @@
 import type { JsonObject } from '../../opencanvas/domain/document/json';
+import type { SceneAnchor } from '../../opencanvas/domain/document/types';
 import type { ShapeKind } from '../../opencanvas/domain/nodes/shapeNode';
 import { decodeEntities } from './xmlReader';
 
@@ -187,4 +188,21 @@ export function drawioLabel(value: string | undefined, style: DrawioStyle): stri
     .replace(/<[^>]*>/g, '')
     .replace(/\ue000+/g, '\n');
   return decodeEntities(text).replace(/\u00a0/g, ' ').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
+/** Where draw.io pinned a line to a shape (`exitX/exitY` or `entryX/entryY`, 0 to 1): a side when on the outline, else a point inside. */
+export function drawioAnchor(style: DrawioStyle, end: 'exit' | 'entry'): SceneAnchor | null {
+  const read = (axis: string): number | null => {
+    const raw = style[`${end}${axis}`];
+    const value = raw === undefined || raw.trim() === '' ? NaN : Number(raw);
+    return Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : null;
+  };
+  const x = read('X');
+  const y = read('Y');
+  if (x === null || y === null) return null;
+  if (x === 0) return { kind: 'side', side: 'left', ratio: y };
+  if (x === 1) return { kind: 'side', side: 'right', ratio: y };
+  if (y === 0) return { kind: 'side', side: 'top', ratio: x };
+  if (y === 1) return { kind: 'side', side: 'bottom', ratio: x };
+  return { kind: 'normalized', x, y };
 }

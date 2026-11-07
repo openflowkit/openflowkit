@@ -278,6 +278,54 @@ describe('draw.io import fits ordinary documents', () => {
   });
 });
 
+describe('draw.io connector ends and labels', () => {
+  const model = (cells: string) => `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>`
+    + '<mxCell id="a" vertex="1" parent="1"><mxGeometry x="0" y="0" width="100" height="60" as="geometry"/></mxCell>'
+    + '<mxCell id="b" vertex="1" parent="1"><mxGeometry x="300" y="0" width="100" height="60" as="geometry"/></mxCell>'
+    + `${cells}</root></mxGraphModel>`;
+  const edge = (style: string, geometry = '<mxGeometry relative="1" as="geometry"/>', value = '') =>
+    `<mxCell id="e" edge="1" parent="1" source="a" target="b" value="${value}" style="${style}">${geometry}</mxCell>`;
+
+  it('leaves and enters shapes where draw.io pinned it', async () => {
+    const { document } = await open(model(edge('exitX=1;exitY=0.25;entryX=0.5;entryY=1;')));
+    const connector = document.pages[0]!.connectors[0]!;
+    expect(connector.source.anchor).toEqual({ kind: 'side', side: 'right', ratio: 0.25 });
+    expect(connector.target.anchor).toEqual({ kind: 'side', side: 'bottom', ratio: 0.5 });
+  });
+
+  it('keeps a pin inside the shape as a point within it, and a free end on the outline when unpinned', async () => {
+    const { document } = await open(model(edge('exitX=0.3;exitY=0.6;')));
+    const connector = document.pages[0]!.connectors[0]!;
+    expect(connector.source.anchor).toEqual({ kind: 'normalized', x: 0.3, y: 0.6 });
+    expect(connector.target.anchor).toBeNull();
+  });
+
+  it('ignores pins that are not numbers or fall outside the shape', async () => {
+    const { document } = await open(model(edge('exitX=abc;exitY=0.5;entryX=7;entryY=-2;')));
+    const connector = document.pages[0]!.connectors[0]!;
+    expect(connector.source.anchor).toBeNull();
+    expect(connector.target.anchor).toEqual({ kind: 'side', side: 'right', ratio: 0 });
+    expect(validateSceneDocumentV1(document).success).toBe(true);
+  });
+
+  it('puts the line’s own label where it was dragged along the line', async () => {
+    const geometry = '<mxGeometry x="-0.5" y="10" relative="1" as="geometry"><mxPoint x="4" y="-6" as="offset"/></mxGeometry>';
+    const { document } = await open(model(edge('', geometry, 'go')));
+    expect(document.pages[0]!.connectors[0]!.labels).toEqual([
+      { id: 'e:label', text: 'go', pathRatio: 0.25, offset: { x: 4, y: -6 }, metadata: {} },
+    ]);
+  });
+
+  it('connects shapes that sit in different groups', async () => {
+    const cells = '<mxCell id="g" vertex="1" parent="1" style="group"><mxGeometry x="0" y="200" width="200" height="100" as="geometry"/></mxCell>'
+      + '<mxCell id="c" vertex="1" parent="g"><mxGeometry x="10" y="10" width="80" height="40" as="geometry"/></mxCell>'
+      + '<mxCell id="e2" edge="1" parent="g" source="c" target="b"><mxGeometry relative="1" as="geometry"/></mxCell>';
+    const { document } = await open(model(cells));
+    const connector = document.pages[0]!.connectors.find((each) => each.id === 'e2');
+    expect(connector).toMatchObject({ source: { nodeId: 'c' }, target: { nodeId: 'b' } });
+  });
+});
+
 describe('big and deep draw.io files', () => {
   const wrap = (cells: string[]) => `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${cells.join('')}</root></mxGraphModel>`;
   const vertex = (id: string, parent: string, style = '') =>
