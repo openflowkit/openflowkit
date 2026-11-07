@@ -1,6 +1,6 @@
 {
   "name": "@openflowkit/openflowkit-mcp",
-  "version": "0.2.4",
+  "version": "0.3.0",
   "mcpName": "io.github.openflowkit/openflowkit-mcp",
   "description": "Local-first Model Context Protocol server for OpenFlowKit — pair the live editor or edit .openflow.json files: create/update/read diagrams from DSL, scene ops, icon search, export. No account, no cloud.",
   "keywords": [
