@@ -1,8 +1,8 @@
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, readFile, rm, symlink } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { createServerWithDeps } from '../src/server.js';
@@ -152,6 +152,34 @@ describe('op tools', () => {
     expect(reopened).toMatchObject({ documentId: created.id, name: 'Round trip' });
     const read = await run(target, 'get_diagram', { documentId: reopened.documentId as string });
     expect(String(read.dsl)).toContain('A -> B');
+  });
+
+  // A file the app opens (one bad thread, say from a merge) opens for the agent too; saving keeps the good threads.
+  it('openflow_open drops a bad comment thread with a warning, and openflow_save keeps the rest', async () => {
+    const target = await client();
+    const dir = await mkdtemp(join(process.cwd(), '.tmp-ops-'));
+    tempDirs.push(dir);
+    const path = join(dir, 'threads.openflow.json');
+    const created = await call(target, 'openflow_create', { name: 'Threads' });
+    await call(target, 'openflow_save', { documentId: created.id, path });
+    const file = JSON.parse(await readFile(path, 'utf8')) as { pages: Record<string, unknown>[] };
+    const thread = (id: string, number: number, body: string) => ({
+      id, number, anchor: { nodeId: null, offset: null, point: { x: 0, y: 0 } }, resolved: false,
+      comments: [{ id: `${id}-m`, author: { kind: 'human', name: 'Ada' }, body, createdAt: '2026-10-26T12:00:00.000Z' }],
+    });
+    file.pages[0]!.threads = [thread('kept', 1, 'Keep me'), thread('twin', 1, 'Same number')];
+    await writeFile(path, JSON.stringify(file), 'utf8');
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      await call(target, 'openflow_open', { path });
+      expect(warn).toHaveBeenCalledTimes(1);
+    } finally {
+      warn.mockRestore();
+    }
+    await call(target, 'openflow_save', { documentId: created.id, path });
+    const saved = JSON.parse(await readFile(path, 'utf8')) as { pages: { threads?: { id: string }[] }[] };
+    expect(saved.pages[0]!.threads!.map(({ id }) => id)).toEqual(['kept']);
   });
 
   it('openflow_save writes the SVG beside the file only when svg is true', async () => {

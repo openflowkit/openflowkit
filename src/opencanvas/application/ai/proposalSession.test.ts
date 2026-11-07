@@ -5,7 +5,9 @@ import { resolveAgentOpCommand } from '../../../agent/runAction';
 import { applyDocumentCommand } from '../../domain/commands/execute';
 import type { BatchDocumentCommand, DocumentCommand } from '../../domain/commands/types';
 import type { SceneDocumentV1 } from '../../domain/document/types';
+import { addThread } from '../../domain/threads/threads';
 import { createTestConnector, createTestDocument, createTestNode } from '../../testing/builders/documentBuilder';
+import { commitSessionCommand, createDocumentSession, redoSessionCommand, undoSessionCommand, updateSessionThreads } from '../session/session';
 import {
   applyCommand, changedRoots, commandTouchedRoots, createProposal, decideChange, StaleProposalError, summarizeChanges,
 } from './proposalSession';
@@ -106,6 +108,27 @@ describe('proposal session', () => {
       expect((error as StaleProposalError).currentRevision).toBe(5);
     }
     expect(applyCommand(proposal, 4, document)).not.toBeNull();
+  });
+
+  // A comment is not a diagram change: the proposal stays current, and applying it keeps the comment, through undo and redo.
+  it('applies after a comment made while it waited, and keeps the comment', async () => {
+    let session = createDocumentSession(fixture());
+    const proposal = await build(session.document, session.contentRevision);
+    session = updateSessionThreads(session, (document) => addThread(document, {
+      pageId: 'page-1', threadId: 't1', nodeId: 'a', point: { x: 5, y: 5 },
+      comment: { id: 'm1', author: { kind: 'human', name: 'Ada' }, body: 'Is this right?', createdAt: '2026-10-26T12:00:00.000Z' },
+    }), session.revision);
+    const command = applyCommand(proposal, session.contentRevision, session.document)!;
+    session = commitSessionCommand(session, command, proposal.baseRevision);
+    const nodeIds = (document: SceneDocumentV1) => document.pages[0]!.nodes.map(({ id }) => id);
+    expect(nodeIds(session.document)).toEqual(['a', 'b', 'c']);
+    expect(session.document.pages[0]!.threads!.map(({ id }) => id)).toEqual(['t1']);
+    session = undoSessionCommand(session, session.contentRevision);
+    expect(nodeIds(session.document)).toEqual(['a', 'b']);
+    expect(session.document.pages[0]!.threads).toHaveLength(1);
+    session = redoSessionCommand(session, session.contentRevision);
+    expect(nodeIds(session.document)).toEqual(['a', 'b', 'c']);
+    expect(session.document.pages[0]!.threads).toHaveLength(1);
   });
 
   it('flattens action batches so the applied command is one level deep', async () => {

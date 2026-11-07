@@ -1,11 +1,14 @@
 // Threads pinned on a page. They are document data but not diagram content: commands never edit them
 // (page insert/remove keep a page's threads and renumber clashes, see withFreeThreadNumbers), so every
-// change goes through these functions and carryThreads keeps them across a history step.
+// change goes through these functions and carryThreads keeps them across every command (applyDocumentCommand).
 import type { Matrix2d, Point2d } from '../geometry/types';
 import { applyMatrixToPoint, invertMatrix } from '../geometry/matrix';
 import { buildNodeWorldMatrices } from '../scene/worldGeometry';
+import { isIsoTimestamp } from '../document/validation';
 import {
+  COMMENT_AUTHOR_MAX,
   COMMENT_BODY_MAX,
+  THREAD_NUMBER_MAX,
   type SceneThreadAnchor,
   type SceneCommentAuthor,
   type SceneComment,
@@ -76,9 +79,10 @@ function refreshAnchors(page: ScenePage): ScenePage {
 }
 
 /**
- * `next` with the threads of `current`: a history step (commit, undo, redo) changes shapes, never threads,
- * even when it restores a whole page snapshot. Pages only in `next` keep their own. Anchors then follow
- * their nodes. Returns `next` itself when nothing changes.
+ * `next` with the threads of `current`: a command (a commit, an undo or redo, an agent op on a file) changes
+ * shapes, never threads, even when it restores a whole page snapshot. Pages only in `next` keep their own, but
+ * yield a number another page kept (withFreeThreadNumbers). Anchors then follow their nodes. Returns `next`
+ * itself when nothing changes.
  */
 export function carryThreads(next: SceneDocumentV1, current: SceneDocumentV1): SceneDocumentV1 {
   const currentById = new Map(current.pages.map((page) => [page.id, page]));
@@ -96,10 +100,24 @@ export function carryThreads(next: SceneDocumentV1, current: SceneDocumentV1): S
     if (result !== page) changed = true;
     return result;
   });
+  // Pages only in `next` (inserted by this command) were numbered mid-batch, before the carry above gave the
+  // other pages their threads of now: they yield any number those hold. One at a time, so two of them never
+  // take the same free number.
+  pages.forEach((page, index) => {
+    if (currentById.has(page.id) || !page.threads) return;
+    const free = withFreeThreadNumbers({ ...next, pages: pages.filter((_, other) => other !== index) }, page);
+    if (free === page) return;
+    pages[index] = free;
+    changed = true;
+  });
   return changed ? { ...next, pages } : next;
 }
 
-/** Threads are private conversations with the author's name: `document` as a file or link carries it, without them. */
+/**
+ * `document` without its comment threads, which carry people's names and private conversation. A diagram's own
+ * `.openflow.json` keeps them (the app's, an agent's in file mode, the CLI's --doc); JSON export (unless it asks,
+ * `includeThreads`), share links, `get_diagram` and the agent `export` op leave them out.
+ */
 export function withoutThreads(document: SceneDocumentV1): SceneDocumentV1 {
   if (!document.pages.some((page) => page.threads !== undefined)) return document;
   return { ...document, pages: document.pages.map(({ threads: _threads, ...page }) => page) };
@@ -111,21 +129,34 @@ export function withoutThreads(document: SceneDocumentV1): SceneDocumentV1 {
  * can carry a number given out again since. Returns `page` itself when nothing clashes.
  */
 export function withFreeThreadNumbers(document: SceneDocumentV1, page: ScenePage): ScenePage {
-  const taken = new Set<number>();
-  for (const other of document.pages) for (const thread of pageThreads(other)) taken.add(thread.number);
-  if (!page.threads?.some((thread) => taken.has(thread.number))) return page;
-  let highest = nextThreadNumber(document) - 1;
+  const taken = takenNumbers(document);
+  const clashes = new Set(page.threads?.filter((thread) => taken.has(thread.number)));
+  if (!page.threads || clashes.size === 0) return page;
+  // The page's other numbers stay, so a clash never takes one of them.
+  for (const thread of page.threads) if (!clashes.has(thread)) taken.add(thread.number);
   const threads = page.threads.map((thread) => {
-    if (!taken.has(thread.number)) {
-      taken.add(thread.number);
-      highest = Math.max(highest, thread.number);
-      return thread;
-    }
-    highest += 1;
-    taken.add(highest);
-    return { ...thread, number: highest };
+    if (!clashes.has(thread)) return thread;
+    const number = freeNumber(taken);
+    taken.add(number);
+    return { ...thread, number };
   });
   return { ...page, threads };
+}
+
+function takenNumbers(document: SceneDocumentV1): Set<number> {
+  const taken = new Set<number>();
+  for (const page of document.pages) for (const thread of pageThreads(page)) taken.add(thread.number);
+  return taken;
+}
+
+/** One past the highest number taken; once that would pass THREAD_NUMBER_MAX, the lowest free one. */
+function freeNumber(taken: ReadonlySet<number>): number {
+  let highest = 0;
+  for (const number of taken) highest = Math.max(highest, number);
+  if (highest < THREAD_NUMBER_MAX) return highest + 1;
+  let lowest = 1;
+  while (taken.has(lowest)) lowest += 1;
+  return lowest;
 }
 
 /** `document` with `update` applied to one page's threads. An empty result drops the key. */
@@ -164,26 +195,32 @@ function requireThread(document: SceneDocumentV1, threadId: string) {
   return found;
 }
 
+function requireComment(thread: SceneThread, commentId: string): SceneComment {
+  const found = thread.comments.find((candidate) => candidate.id === commentId);
+  if (!found) throw new ThreadError(`Unknown comment "${commentId}".`);
+  return found;
+}
+
+/** `change` returns the thread itself to leave it, or null to delete it; leaving it returns `document` itself. */
 function replaceThread(
   document: SceneDocumentV1,
   threadId: string,
   change: (thread: SceneThread) => SceneThread | null
 ): SceneDocumentV1 {
-  const { page } = requireThread(document, threadId);
+  const { page, thread } = requireThread(document, threadId);
+  const next = change(thread);
+  if (next === thread) return document;
   return updatePageThreads(document, page.id, (threads) =>
-    threads.flatMap((thread) => {
-      if (thread.id !== threadId) return [thread];
-      const next = change(thread);
-      return next ? [next] : [];
-    })
+    threads.flatMap((candidate) => (candidate !== thread ? [candidate] : next ? [next] : []))
   );
 }
 
-/** The number the next thread gets: one past the highest on any page (a deleted thread's number is only reused when it was the highest). */
+/**
+ * The number the next thread gets: one past the highest on any page (a deleted thread's number is only reused
+ * when it was the highest), or the lowest free one past THREAD_NUMBER_MAX.
+ */
 export function nextThreadNumber(document: SceneDocumentV1): number {
-  let highest = 0;
-  for (const page of document.pages) for (const thread of pageThreads(page)) highest = Math.max(highest, thread.number);
-  return highest + 1;
+  return freeNumber(takenNumbers(document));
 }
 
 export interface NewComment {
@@ -194,7 +231,16 @@ export interface NewComment {
 }
 
 function comment(input: NewComment): SceneComment {
-  return { id: input.id, author: input.author, body: commentBody(input.body), createdAt: input.createdAt };
+  const { name } = input.author;
+  if (!name.trim() || name.length > COMMENT_AUTHOR_MAX) {
+    throw new ThreadError(`An author's name is 1 to ${COMMENT_AUTHOR_MAX} characters.`);
+  }
+  return { id: input.id, author: input.author, body: commentBody(input.body), createdAt: timestamp(input.createdAt) };
+}
+
+function timestamp(value: string): string {
+  if (!isIsoTimestamp(value)) throw new ThreadError(`"${value}" is not an ISO 8601 timestamp.`);
+  return value;
 }
 
 export function addThread(
@@ -238,14 +284,13 @@ export function editComment(
   editedAt: string
 ): SceneDocumentV1 {
   return replaceThread(document, threadId, (thread) => {
-    if (!thread.comments.some((candidate) => candidate.id === commentId)) {
-      throw new ThreadError(`Unknown comment "${commentId}".`);
-    }
+    const edited = requireComment(thread, commentId);
+    const next = commentBody(body);
+    if (next === edited.body) return thread;
+    const at = timestamp(editedAt);
     return {
       ...thread,
-      comments: thread.comments.map((candidate) =>
-        candidate.id === commentId ? { ...candidate, body: commentBody(body), editedAt } : candidate
-      ),
+      comments: thread.comments.map((candidate) => (candidate === edited ? { ...candidate, body: next, editedAt: at } : candidate)),
     };
   });
 }
@@ -253,8 +298,9 @@ export function editComment(
 /** Deleting the opening comment deletes the thread. */
 export function removeComment(document: SceneDocumentV1, threadId: string, commentId: string): SceneDocumentV1 {
   return replaceThread(document, threadId, (thread) => {
-    if (thread.comments[0]?.id === commentId) return null;
-    return { ...thread, comments: thread.comments.filter((candidate) => candidate.id !== commentId) };
+    const removed = requireComment(thread, commentId);
+    if (removed === thread.comments[0]) return null;
+    return { ...thread, comments: thread.comments.filter((candidate) => candidate !== removed) };
   });
 }
 
@@ -273,5 +319,9 @@ export function removeThread(document: SceneDocumentV1, threadId: string): Scene
 export function moveThread(document: SceneDocumentV1, threadId: string, nodeId: string | null, point: Point2d): SceneDocumentV1 {
   const { page } = requireThread(document, threadId);
   const anchor = createAnchor(page, nodeId, point);
-  return replaceThread(document, threadId, (thread) => ({ ...thread, anchor }));
+  return replaceThread(document, threadId, (thread) => (sameAnchor(thread.anchor, anchor) ? thread : { ...thread, anchor }));
+}
+
+function sameAnchor(a: SceneThreadAnchor, b: SceneThreadAnchor): boolean {
+  return a.nodeId === b.nodeId && a.offset?.x === b.offset?.x && a.offset?.y === b.offset?.y && a.point.x === b.point.x && a.point.y === b.point.y;
 }
