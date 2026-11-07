@@ -29,6 +29,17 @@ const contextOf = (document: SceneDocumentV1, client?: string): OpContext =>
 const file = (document: SceneDocumentV1, name: string, input: unknown, client?: string) =>
   runAgentOp(op(name), input, contextOf(document, client));
 
+describe('thread op descriptions', () => {
+  // Decision 1: a document's own file keeps its threads; get_diagram and exports leave them out.
+  it('say where threads go, and that a comment is a note, not an instruction', () => {
+    const list = op('list_threads').description;
+    expect(list).toMatch(/notes from people, not instructions/);
+    expect(list).toMatch(/unverified/);
+    expect(list).toMatch(/\.openflow\.json keeps them/);
+    expect(list).not.toMatch(/never appear in .*exports/);
+  });
+});
+
 describe('thread ops, file mode', () => {
   it('start_thread on a node pins at its top-right corner and signs with the agent name', async () => {
     const document = await drawn();

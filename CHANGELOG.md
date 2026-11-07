@@ -11,10 +11,6 @@ separately; its changes are listed under *For developers* in each release.
 
 ### Added
 
-- **Agent thread tools.** Agents can read the threads pinned on the canvas (`list_threads`, with optional `threadId`
-  and `unanswered` filters), add a comment to one (`reply_to_thread`), resolve it (`resolve_thread`) and start new ones
-  (`start_thread`), live or on a file, signed with the agent's name. None of it is an undo step or part of the diagram
-  text, and exports leave threads out. `get_document` and `list_pages` report `openThreads`.
 - **Private repos in the browser.** On the "not found, or it is private" screen, **Private repo? Use a GitHub token**
   takes a fine-grained token with Contents read-only access; the files are then read through the GitHub API. The
   token stays in this tab.
@@ -48,6 +44,15 @@ separately; its changes are listed under *For developers* in each release.
   Send to back and the step versions changed the order but the canvas kept drawing shapes in the order they were made.
   A shape in front now covers the text and images of the shapes behind it too, overlapping images keep their order
   whichever loads first, and clicks and exports agree with what you see.
+
+### For developers
+
+- **Comment threads for agents.** `list_threads` reads the threads pinned on the canvas (`unanswered: true` for the
+  ones waiting on the agent, `threadId` for one in full); `reply_to_thread`, `resolve_thread` and `start_thread` write
+  them, live or on a file, signed with the agent's name and taking no undo step. A page keeps its threads in
+  `pages[].threads`, and a `.openflow.json` saved with `openflow_save` or the CLI's `--doc` keeps them, as the app's
+  own copy does; JSON export (unless **Include comments** is ticked), share links, `get_diagram` and the `export` op
+  leave them out. `get_document` and `list_pages` report `openThreads`.
 
 ### For developers: MCP server and CLI 0.2.4 (on npm since 2026-10-13, tag `mcp-v0.2.4`)
 
