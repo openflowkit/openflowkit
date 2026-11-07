@@ -167,7 +167,7 @@ test('Esc and clicking away cancel the composer; an empty comment cannot be sent
   expect(await threads(page)).toHaveLength(0);
 });
 
-test('the comment tool stays active after posting; a second click starts a second thread; Esc leaves it', async ({ page }) => {
+test('the comment tool stays active after posting; a second click starts a second thread; Esc closes a thread, then leaves the tool', { tag: '@gate' }, async ({ page }) => {
   const { centre } = await start(page);
   await comment(page, centre, 'First');
   await expect(page.getByTestId('v2-comment-pin')).toHaveCount(1);
@@ -183,13 +183,71 @@ test('the comment tool stays active after posting; a second click starts a secon
   await page.getByTestId('v2-comment-pin').first().getByRole('button').click();
   await expect(page.getByTestId('v2-comment-thread')).toBeVisible();
   await expect(page.getByTestId('v2-comment-composer')).toHaveCount(0);
-  // Esc leaves the tool: a click on the canvas no longer starts a thread.
-  await page.getByTestId('v2-canvas').focus();
+  // One Escape closes the thread the mouse opened, and only that: the comment tool stays.
   await page.keyboard.press('Escape');
+  await expect(page.getByTestId('v2-comment-thread')).toHaveCount(0);
+  await expect(page.getByTestId('v2-editor')).toHaveAttribute('data-tool', 'comment');
+  // The next Escape leaves the tool: a click on the canvas no longer starts a thread.
   await page.keyboard.press('Escape');
+  await expect(page.getByTestId('v2-editor')).toHaveAttribute('data-tool', 'select');
   await page.mouse.click(centre.x + 200, centre.y - 150);
   await expect(page.getByTestId('v2-comment-composer')).toHaveCount(0);
   expect(await threads(page)).toHaveLength(2);
+});
+
+test('a press anywhere in the editor closes an open thread; the press that closes it starts nothing', { tag: '@gate' }, async ({ page }) => {
+  const { centre } = await start(page);
+  await comment(page, centre, 'First');
+  const pin = page.getByTestId('v2-comment-pin').getByRole('button');
+  const thread = page.getByTestId('v2-comment-thread');
+  // The toolbar is outside the canvas: a press there closes the thread and still does its own job.
+  await pin.click();
+  await expect(thread).toBeVisible();
+  await page.getByRole('toolbar', { name: 'Create' }).getByRole('button', { name: 'Text', exact: true }).click();
+  await expect(thread).toHaveCount(0);
+  await expect(page.getByTestId('v2-editor')).toHaveAttribute('data-tool', 'text');
+  // With the comment tool, the click that closes a thread on the canvas is not also a new thread.
+  await page.keyboard.press('c');
+  await pin.click();
+  await expect(thread).toBeVisible();
+  await page.mouse.click(centre.x + 200, centre.y + 150);
+  await expect(thread).toHaveCount(0);
+  await expect(page.getByTestId('v2-comment-composer')).toHaveCount(0);
+});
+
+test('with the comment tool, the selection bar, Space-drag and a middle-button pan never start a comment', { tag: '@gate' }, async ({ page }) => {
+  const { centre } = await start(page);
+  await page.keyboard.press('v');
+  await page.mouse.click(centre.x, centre.y);
+  // A blank shape takes a typed C as its name: name it first, so C picks the tool with the shape still selected.
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('Queue');
+  await page.keyboard.press('Enter');
+  await page.getByTestId('v2-canvas').focus();
+  const bar = page.locator('[data-context-bar]');
+  await expect(bar).toBeVisible();
+  await page.keyboard.press('c');
+  await expect(page.getByTestId('v2-editor')).toHaveAttribute('data-tool', 'comment');
+  // The bar is inside the canvas section: its Fill still works, and no composer opens under it.
+  await bar.getByRole('button', { name: 'Fill' }).click();
+  await expect(page.getByRole('dialog', { name: 'Fill', exact: true })).toBeVisible();
+  await expect(page.getByTestId('v2-comment-composer')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  // Space held is the hand: a drag pans the canvas.
+  await page.getByTestId('v2-canvas').focus();
+  await page.keyboard.down('Space');
+  await page.mouse.move(centre.x + 150, centre.y + 120);
+  await page.mouse.down();
+  await page.mouse.move(centre.x + 60, centre.y + 40, { steps: 5 });
+  await page.mouse.up();
+  await page.keyboard.up('Space');
+  // So is the middle button.
+  await page.mouse.move(centre.x + 150, centre.y + 120);
+  await page.mouse.down({ button: 'middle' });
+  await page.mouse.move(centre.x + 100, centre.y + 80, { steps: 5 });
+  await page.mouse.up({ button: 'middle' });
+  await expect(page.getByTestId('v2-comment-composer')).toHaveCount(0);
+  expect(await threads(page)).toHaveLength(0);
 });
 
 test('a thread is placed, written and sent with the keyboard alone', async ({ page }) => {

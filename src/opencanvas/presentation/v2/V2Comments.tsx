@@ -13,6 +13,16 @@ import { Placement } from './v2CommentPlacement';
 import type { V2Tool } from './v2ToolCatalog';
 import { FRESH_GUARD, hasDraftText, outsideClick, typed, type DraftGuard } from './v2DraftGuard';
 
+/** The editor's ways into the comment layer, filled by V2Comments (as useV2Pointer fills the gesture API). */
+export interface V2CommentApi {
+  /** Enter with the comment tool: back into the open box, else a new thread at the selection or the centre. False when it did nothing. */
+  readonly enter: () => boolean;
+  /** Escape: closes the open box, first in the editor's chain. False when nothing is open. */
+  readonly escape: () => boolean;
+  /** A click on the canvas with the comment tool (the pointer pipeline's, screen point in the canvas). */
+  readonly click: (point: Point2d) => void;
+}
+
 const placementFor = (cameraRef: RefObject<CanvasCamera>, sectionRef: RefObject<HTMLElement | null>): Placement =>
   new Placement(() => cameraRef.current, () => sectionRef.current?.clientWidth ?? Infinity);
 
@@ -49,8 +59,7 @@ interface Props {
   readonly subscribeCamera: (listener: () => void) => () => void;
   /** The selected node's id, read when a thread is placed from the keyboard. */
   readonly selectedNodeId: () => string | null;
-  /** Filled with the way to open a composer without a pointer (Enter with the comment tool); false when it cannot. */
-  readonly placeRef: RefObject<() => boolean>;
+  readonly apiRef: RefObject<V2CommentApi | null>;
   readonly tool: V2Tool;
   /** Pins and threads show; nothing can be added or changed. */
   readonly readOnly: boolean;
@@ -78,7 +87,7 @@ function shake(section: HTMLElement): void {
 
 /** Comment pins over the canvas, the composer a click with the comment tool opens, and a pin's thread. DOM, so no export ever draws them. */
 export function V2Comments(props: Props): React.JSX.Element | null {
-  const { page, hidden, readOnly, tool, sectionRef, hostRef, cameraRef, updateThreads, subscribeCamera, placeRef, selectedNodeId } = props;
+  const { page, hidden, readOnly, tool, sectionRef, hostRef, cameraRef, updateThreads, subscribeCamera, apiRef, selectedNodeId } = props;
   const [open, setOpen] = useState<Open | null>(null);
   const [now, setNow] = useState(() => Date.now());
   // The loop reads the refs when a frame runs, never during render.
@@ -113,49 +122,68 @@ export function V2Comments(props: Props): React.JSX.Element | null {
 
   const latest = useRef({ open, tool, readOnly, hidden });
   useEffect(() => { latest.current = { open, tool, readOnly, hidden }; });
-  // Enter with the comment tool: the keyboard's click. At the selected node's centre, else the middle of the canvas.
-  useEffect(() => {
-    placeRef.current = () => {
-      const state = latest.current;
-      const host = hostRef.current;
-      const section = sectionRef.current;
-      if (!host || !section || state.open || state.hidden || state.readOnly || state.tool !== 'comment') return false;
-      const nodeId = selectedNodeId();
-      const spot = keyboardSpot(nodeId ? host.getNodeScreenBounds(nodeId) : null, { width: section.clientWidth, height: section.clientHeight });
-      setOpen({ kind: 'composer', world: host.screenToWorld(spot.point), nodeId: spot.onNode ? nodeId : null });
-      return true;
-    };
-    return () => { placeRef.current = () => false; };
-  }, [placeRef, hostRef, sectionRef, selectedNodeId]);
   // What is typed in the open box, and whether a click away has already warned about it.
   const draft = useRef({ text: '', guard: FRESH_GUARD as DraftGuard });
   const onDraft = useCallback((text: string) => { draft.current = { text, guard: typed(draft.current.guard) }; }, []);
   useEffect(() => { draft.current = { text: '', guard: FRESH_GUARD }; }, [open]);
-  // One press on the canvas: clicking away closes what is open (and only that); with nothing open, the comment tool places a composer.
+  /** Closes the open box; focus goes back to the thread's pin, or to the canvas. */
+  const close = useCallback(() => {
+    const current = latest.current.open;
+    setOpen(null);
+    const pin = current?.kind === 'thread'
+      ? sectionRef.current?.querySelector<HTMLElement>(`[data-thread-id="${CSS.escape(current.id)}"]`) : null;
+    (pin ?? sectionRef.current)?.focus({ preventScroll: true });
+  }, [sectionRef]);
+  // Whether the press going on now found a box open: the document hears it before the canvas, so the click it ends in is not a new thread.
+  const pressFoundOpen = useRef(false);
+  // A press anywhere outside the open box (canvas, toolbar, rail, a panel) closes it, as a popover's does; text in it warns first.
   useEffect(() => {
-    const section = sectionRef.current;
-    if (!section) return;
     const onDown = (event: PointerEvent) => {
       const state = latest.current;
-      if (event.button !== 0 || state.hidden) return;
-      const target = event.target as Element;
-      if (target.closest('[data-comment-ui]')) return;
-      if (state.open) {
-        const verdict = outsideClick(draft.current.guard, hasDraftText(draft.current.text));
-        draft.current.guard = verdict.guard;
-        if (verdict.outcome === 'warn') { shake(section); return; }
-        setOpen(null);
-        return;
-      }
-      const host = hostRef.current;
-      if (state.tool !== 'comment' || state.readOnly || !host) return;
-      const rect = section.getBoundingClientRect();
-      const screen = { x: event.clientX - rect.left, y: event.clientY - rect.top };
-      setOpen({ kind: 'composer', world: host.screenToWorld(screen), nodeId: host.pickNode(screen) });
+      pressFoundOpen.current = state.open !== null && !state.hidden;
+      if (!pressFoundOpen.current || event.button !== 0) return;
+      // The open box, the pins and the menus they open.
+      if ((event.target as Element | null)?.closest?.('[data-comment-ui]')) return;
+      const verdict = outsideClick(draft.current.guard, hasDraftText(draft.current.text));
+      draft.current.guard = verdict.guard;
+      if (verdict.outcome === 'warn') { if (sectionRef.current) shake(sectionRef.current); return; }
+      setOpen(null);
     };
-    section.addEventListener('pointerdown', onDown);
-    return () => section.removeEventListener('pointerdown', onDown);
-  }, [sectionRef, hostRef]);
+    document.addEventListener('pointerdown', onDown, true);
+    return () => document.removeEventListener('pointerdown', onDown, true);
+  }, [sectionRef]);
+  useEffect(() => {
+    // A composer at a screen point of the canvas, on the node under it.
+    const compose = (point: Point2d, nodeId: string | null) => {
+      const host = hostRef.current;
+      if (host) setOpen({ kind: 'composer', world: host.screenToWorld(point), nodeId });
+    };
+    const canAdd = () => { const state = latest.current; return !state.hidden && !state.readOnly && state.tool === 'comment'; };
+    apiRef.current = {
+      enter: () => {
+        const section = sectionRef.current;
+        const box = section?.querySelector<HTMLElement>('[data-comment-open] textarea');
+        if (latest.current.open && box) { box.focus({ preventScroll: true }); return true; }
+        const host = hostRef.current;
+        if (!host || !section || latest.current.open || !canAdd()) return false;
+        // At the selected node's centre, else the middle of the canvas.
+        const nodeId = selectedNodeId();
+        const spot = keyboardSpot(nodeId ? host.getNodeScreenBounds(nodeId) : null, { width: section.clientWidth, height: section.clientHeight });
+        compose(spot.point, spot.onNode ? nodeId : null);
+        return true;
+      },
+      escape: () => {
+        if (!latest.current.open || latest.current.hidden) return false;
+        close();
+        return true;
+      },
+      click: (point) => {
+        if (pressFoundOpen.current || latest.current.open || !canAdd()) return;
+        compose(point, hostRef.current?.pickNode(point) ?? null);
+      },
+    };
+    return () => { apiRef.current = null; };
+  }, [apiRef, hostRef, sectionRef, selectedNodeId, close]);
   // Leaving the comment tool abandons a half-written composer.
   useEffect(() => { if (tool !== 'comment') setOpen((current) => (current?.kind === 'composer' ? null : current)); }, [tool]);
 
@@ -209,8 +237,7 @@ export function V2Comments(props: Props): React.JSX.Element | null {
     const next = message(body);
     updateThreads((doc) => addThread(doc, { pageId: page.id, threadId, nodeId: open.nodeId, point: open.world, comment: next }));
     // The comment tool stays active: the next click starts the next thread. Esc or another tool leaves it.
-    setOpen(null);
-    sectionRef.current?.focus({ preventScroll: true });
+    close();
   };
   const reply = (thread: SceneThread, body: string) => {
     const next = message(body);
@@ -224,7 +251,7 @@ export function V2Comments(props: Props): React.JSX.Element | null {
         const selected = open?.kind === 'thread' && open.id === thread.id;
         return (
           <Anchored key={thread.id} world={drag?.id === thread.id ? drag.world : thread.anchor.point} className="ofk-comment-pinned" testId="v2-comment-pin">
-            <button type="button" className="ofk-comment-pin" data-comment-ui data-selected={selected || undefined} data-kind={lead.author.kind}
+            <button type="button" className="ofk-comment-pin" data-comment-ui data-thread-id={thread.id} data-selected={selected || undefined} data-kind={lead.author.kind}
               aria-label={`Comment by ${lead.author.name}${thread.comments.length > 1 ? `, ${thread.comments.length} messages` : ''}`}
               aria-expanded={selected} data-dragging={drag?.id === thread.id || undefined} {...pinHandlers(thread.id)}
               onKeyDown={(event) => {
@@ -239,7 +266,7 @@ export function V2Comments(props: Props): React.JSX.Element | null {
             </button>
             {selected && openThread ? (
               <ThreadPopover thread={openThread} readOnly={readOnly} onDraft={onDraft} now={now}
-                onClose={() => { setOpen(null); sectionRef.current?.focus({ preventScroll: true }); }}
+                onClose={close}
                 onResolve={() => { updateThreads((doc) => setThreadResolved(doc, thread.id, !thread.resolved)); setOpen(null); }}
                 onDeleteThread={() => { updateThreads((doc) => removeThread(doc, thread.id)); setOpen(null); }}
                 onReply={(body) => reply(thread, body)}
@@ -252,18 +279,9 @@ export function V2Comments(props: Props): React.JSX.Element | null {
       {open?.kind === 'composer' ? (
         <Anchored world={open.world} className="ofk-comment-pinned" testId="v2-comment-composer">
           <span className="ofk-comment-pin" data-ghost><Avatar kind="human" name={HUMAN_AUTHOR_NAME} size={22} /></span>
-          <CommentComposer onDraft={onDraft} onSend={create} onCancel={() => { setOpen(null); sectionRef.current?.focus({ preventScroll: true }); }} />
+          <CommentComposer onDraft={onDraft} onSend={create} onCancel={close} />
         </Anchored>
       ) : null}
     </PlacementContext.Provider>
   );
-}
-
-type HostInput = Omit<Props, 'updateThreads'> & {
-  readonly session: { readonly updateThreads: Props['updateThreads'] };
-};
-
-/** V2Comments wired to the editor's session. */
-export function V2CommentsHost({ session, ...rest }: HostInput): React.JSX.Element | null {
-  return <V2Comments {...rest} updateThreads={session.updateThreads} />;
 }

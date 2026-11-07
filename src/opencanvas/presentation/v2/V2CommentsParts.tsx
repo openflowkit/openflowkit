@@ -8,13 +8,24 @@ import { avatarColor, relativeTime } from './v2CommentsView';
 // Keys typed into a comment belong to the comment: they never reach the editor's shortcuts.
 const keep = (event: KeyboardEvent): void => event.stopPropagation();
 
+/** A card's keys: none reaches the editor, and Escape closes the card unless something inside (an edit box, a menu) took it. */
+function cardKeys(onClose: () => void) {
+  return (event: KeyboardEvent) => {
+    keep(event);
+    if (event.key === 'Escape' && !event.defaultPrevented && !(event.target as Element).closest('[role="menu"]')) {
+      event.preventDefault();
+      onClose();
+    }
+  };
+}
+
 export function Avatar({ kind, name, size = 24 }: { readonly kind: 'human' | 'agent'; readonly name: string; readonly size?: number }): React.JSX.Element {
   return kind === 'agent'
     ? <span className="ofk-comment-avatar" data-kind="agent" style={{ width: size, height: size }} aria-hidden="true"><Icon icon={IconSparkles} /></span>
     : <span className="ofk-comment-avatar" style={{ width: size, height: size, background: avatarColor(name) }} aria-hidden="true"><Icon icon={IconUser} /></span>;
 }
 
-/** Enter sends, Shift+Enter breaks a line, Esc leaves; the box grows with its text. */
+/** Enter sends, Shift+Enter breaks a line; `onEscape` gives the box its own Escape (else the card's closes it). The box grows with its text. */
 function CommentInput(props: {
   readonly value: string;
   readonly onChange: (value: string) => void;
@@ -44,8 +55,8 @@ function CommentInput(props: {
       <textarea ref={ref} rows={1} value={props.value} maxLength={COMMENT_BODY_MAX} placeholder={props.placeholder} aria-label={props.label}
         onChange={(event) => props.onChange(event.target.value)}
         onKeyDown={(event) => {
-          keep(event);
-          if (event.key === 'Escape') { event.preventDefault(); props.onEscape?.(); return; }
+          // The card around the box keeps every key from the editor and closes on an Escape this box leaves alone.
+          if (event.key === 'Escape' && props.onEscape) { event.preventDefault(); props.onEscape(); return; }
           if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
             event.preventDefault();
             if (!empty) props.onSend();
@@ -70,8 +81,8 @@ export function CommentComposer(props: {
   const [body, setBody] = useState('');
   return (
     <div className="ofk-comment-card ofk-comment-composer" role="dialog" aria-label="New comment" data-comment-ui data-comment-open
-      onKeyDown={keep}>
-      <CommentInput value={body} onChange={(text) => { setBody(text); props.onDraft(text); }} onSend={() => props.onSend(body)} onEscape={props.onCancel}
+      onKeyDown={cardKeys(props.onCancel)}>
+      <CommentInput value={body} onChange={(text) => { setBody(text); props.onDraft(text); }} onSend={() => props.onSend(body)}
         placeholder="Add a comment" label="Comment" autoFocus />
     </div>
   );
@@ -84,7 +95,7 @@ function MessageMenu(props: { readonly label: string; readonly onEdit: () => voi
     <>
       <IconButton ref={anchor} variant="quiet" label={props.label} aria-haspopup="menu" aria-expanded={open}
         icon={<Icon icon={IconDots} />} onClick={() => setOpen((on) => !on)} />
-      <Menu open={open} anchorRef={anchor} onClose={() => setOpen(false)} label={props.label} placement="bottom-end">
+      <Menu open={open} anchorRef={anchor} onClose={() => setOpen(false)} label={props.label} placement="bottom-end" data-comment-ui>
         <MenuItem icon={<Icon icon={IconPencil} />} onSelect={props.onEdit}>Edit</MenuItem>
         <MenuItem icon={<Icon icon={IconTrash} />} danger onSelect={props.onDelete}>Delete</MenuItem>
       </Menu>
@@ -163,19 +174,14 @@ export function ThreadPopover(props: {
   }
   return (
     <div className="ofk-comment-card ofk-comment-thread" role="dialog" aria-label="Comment thread" data-comment-ui data-comment-open
-      data-testid="v2-comment-thread"
-      onKeyDown={(event) => {
-        keep(event);
-        // The menu, and a box with its own Escape, handle theirs.
-        if (event.key === 'Escape' && !event.defaultPrevented && !(event.target as Element).closest('[role="menu"]')) { event.preventDefault(); props.onClose(); }
-      }}>
+      data-testid="v2-comment-thread" onKeyDown={cardKeys(props.onClose)}>
       <header>
         <h3>Comment</h3>
         {readOnly ? null : (
           <>
             <IconButton ref={menuAnchor} variant="quiet" label="Thread actions" aria-haspopup="menu" aria-expanded={menuOpen}
               icon={<Icon icon={IconDots} />} onClick={() => setMenuOpen((open) => !open)} />
-            <Menu open={menuOpen} anchorRef={menuAnchor} onClose={() => setMenuOpen(false)} label="Thread actions" placement="bottom-end">
+            <Menu open={menuOpen} anchorRef={menuAnchor} onClose={() => setMenuOpen(false)} label="Thread actions" placement="bottom-end" data-comment-ui>
               <MenuItem icon={<Icon icon={IconTrash} />} danger onSelect={() => setConfirming(true)}>Delete thread…</MenuItem>
             </Menu>
             <IconButton variant="quiet" label={thread.resolved ? 'Reopen thread' : 'Resolve thread'} icon={<Icon icon={IconCheck} />} onClick={props.onResolve} />
@@ -195,7 +201,7 @@ export function ThreadPopover(props: {
       {readOnly ? null : (
         <footer>
           <CommentInput value={reply} onChange={(text) => { setReply(text); props.onDraft(text); }} placeholder="Reply" label="Reply" sendLabel="Send reply"
-            onSend={() => { props.onReply(reply); setReply(''); props.onDraft(''); }} onEscape={props.onClose} />
+            onSend={() => { props.onReply(reply); setReply(''); props.onDraft(''); }} />
         </footer>
       )}
     </div>

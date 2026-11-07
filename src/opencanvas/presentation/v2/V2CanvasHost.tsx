@@ -78,6 +78,8 @@ interface V2CanvasHostProps {
   /** Read-only: a double-click or a drag on a node (Map: edit it in the model panel; explain why it does not move). */
   readonly onNodeDoubleClick?: (nodeId: string) => void;
   readonly onNodeDrag?: (nodeId: string) => void;
+  /** A click with the comment tool on the canvas itself (V2Comments opens a composer there). */
+  readonly onCommentClick?: (point: Point2d) => void;
   /** The one selected model element has a deeper view: its name and the way in. */
   readonly zoomInto?: { readonly name: string; readonly open: () => void } | null;
   readonly spacePanRef: RefObject<boolean>;
@@ -160,6 +162,7 @@ export function V2CanvasHost(props: V2CanvasHostProps): React.JSX.Element {
     ...(props.onNodeClick ? { onNodeClick: props.onNodeClick } : {}),
     ...(props.onNodeDoubleClick ? { onNodeDoubleClick: props.onNodeDoubleClick } : {}),
     ...(props.onNodeDrag ? { onNodeDrag: props.onNodeDrag } : {}),
+    ...(props.onCommentClick ? { onCommentClick: props.onCommentClick } : {}),
     spacePanRef: props.spacePanRef,
     readOnlyRef: props.readOnlyRef,
     gestureApiRef: props.gestureApiRef,
