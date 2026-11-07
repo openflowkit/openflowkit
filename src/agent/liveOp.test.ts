@@ -7,7 +7,7 @@ import { createTestCapabilities } from './ops/testHost';
 
 const session = (overrides: Partial<LiveAgentSession> = {}): LiveAgentSession => ({
   document: createTestDocument({ nodes: [createTestNode('a')] }), pageId: 'page-1', capabilities: createTestCapabilities(),
-  commit: vi.fn(), selectedIds: () => ['a'], ...overrides,
+  commit: vi.fn(), threadChange: vi.fn(), selectedIds: () => ['a'], ...overrides,
 });
 
 // The one runner behind the MCP bridge and WebMCP.

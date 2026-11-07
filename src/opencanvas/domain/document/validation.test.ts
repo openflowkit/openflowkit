@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createDefaultSceneLayer } from './defaults';
 import { SCENE_DOCUMENT_FORMAT, SCENE_DOCUMENT_VERSION, type SceneDocumentV1 } from './types';
-import { validateSceneDocumentV1 } from './validation';
+import { isIsoTimestamp, validateSceneDocumentV1 } from './validation';
 
 function createDocument(): SceneDocumentV1 {
   return {
@@ -92,6 +92,24 @@ function createDocument(): SceneDocumentV1 {
     extensions: {},
   };
 }
+
+describe('isIsoTimestamp', () => {
+  it('takes a time as toISOString writes it, or with an offset', () => {
+    expect(isIsoTimestamp('2026-10-26T12:00:00.000Z')).toBe(true);
+    expect(isIsoTimestamp('2026-10-26T23:30:00+05:30')).toBe(true);
+    expect(isIsoTimestamp('2028-02-29T00:00:00.000Z')).toBe(true);
+  });
+
+  // Date.parse rolls a day past the month's end over into the next month.
+  it('refuses a day the month does not have, and anything not ISO', () => {
+    expect(isIsoTimestamp('2026-02-30T00:00:00.000Z')).toBe(false);
+    expect(isIsoTimestamp('2026-02-29T00:00:00.000Z')).toBe(false);
+    expect(isIsoTimestamp('2026-04-31T00:00:00.000Z')).toBe(false);
+    expect(isIsoTimestamp('2026-13-01T00:00:00.000Z')).toBe(false);
+    expect(isIsoTimestamp('last week')).toBe(false);
+    expect(isIsoTimestamp(1)).toBe(false);
+  });
+});
 
 describe('validateSceneDocumentV1', () => {
   it('accepts a complete renderer-independent document', () => {

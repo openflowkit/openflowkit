@@ -38,7 +38,7 @@ describe('webMcpTools', () => {
   });
 
   it('marks reads read-only from the manifest, and document text as untrusted', () => {
-    for (const row of CAPABILITY_MANIFEST) expect(tool(tools, row.action).annotations?.readOnlyHint, row.action).toBe(!row.mutates);
+    for (const row of CAPABILITY_MANIFEST) expect(tool(tools, row.action).annotations?.readOnlyHint, row.action).toBe(row.writes === null);
     expect(tool(tools, 'get_document').annotations?.untrustedContentHint).toBe(true);
     expect(tool(tools, 'get_diagram').annotations?.untrustedContentHint).toBe(true);
     // A picture of the page carries its labels too.
@@ -50,7 +50,10 @@ describe('webMcpTools', () => {
 
   it('a read-only document offers the reads only', () => {
     const reads = webMcpTools(editor(), { readOnly: true }).map(({ name }) => name);
-    expect(reads).toEqual([...CAPABILITY_MANIFEST.filter(({ mutates }) => !mutates).map(({ action }) => action), 'get_view', 'select']);
+    expect(reads).toEqual([...CAPABILITY_MANIFEST.filter(({ writes }) => writes === null).map(({ action }) => action), 'get_view', 'select']);
+    expect(reads).toContain('list_threads');
+    expect(reads).not.toContain('start_thread');
+    expect(tool(tools, 'list_threads').annotations?.untrustedContentHint).toBe(true);
   });
 
   it('an op runs through the editor with the page it names', async () => {

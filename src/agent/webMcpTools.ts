@@ -33,7 +33,7 @@ export interface WebMcpEditor {
 }
 
 /** Results that carry the person's own text (labels, names, DSL, a picture of them): data for the agent, never instructions. */
-const USER_CONTENT = new Set(['get_document', 'get_diagram', 'list_diagrams', 'list_pages', 'export', 'screenshot', 'get_view']);
+const USER_CONTENT = new Set(['get_document', 'list_threads', 'get_diagram', 'list_diagrams', 'list_pages', 'export', 'screenshot', 'get_view']);
 /** Raster animation runs to megabytes: far past what a tool result carries. */
 const MOTION_RASTER = new Set(['gif', 'mp4', 'webm']);
 const pageIdField = z.string().min(1).optional()
@@ -123,8 +123,8 @@ const answered = (run: () => unknown) => async (): Promise<unknown> => {
 
 /** Every op (only the reads when the document is read-only) and the browser's own tools. */
 export function webMcpTools(editor: WebMcpEditor, { readOnly }: { readonly readOnly: boolean }): WebMcpTool[] {
-  const mutates = new Map(CAPABILITY_MANIFEST.map((row) => [row.action, row.mutates]));
-  const ops = AGENT_OPS.filter((op) => !(readOnly && mutates.get(op.name) !== false)).map<WebMcpTool>((op) => ({
+  const writes = new Map(CAPABILITY_MANIFEST.map((row) => [row.action, row.writes]));
+  const ops = AGENT_OPS.filter((op) => !(readOnly && writes.get(op.name) !== null)).map<WebMcpTool>((op) => ({
     name: op.name,
     title: op.title,
     description: op.description,
@@ -135,7 +135,7 @@ export function webMcpTools(editor: WebMcpEditor, { readOnly }: { readonly readO
       }
       return cappedOutput(await editor.run(op.name, input ?? {}, typeof input?.pageId === 'string' ? input.pageId : undefined, options?.signal));
     })(),
-    annotations: { readOnlyHint: mutates.get(op.name) === false, untrustedContentHint: USER_CONTENT.has(op.name) },
+    annotations: { readOnlyHint: writes.get(op.name) === null, untrustedContentHint: USER_CONTENT.has(op.name) },
   }));
   return [
     ...ops,

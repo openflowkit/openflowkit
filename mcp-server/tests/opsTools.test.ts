@@ -1,8 +1,8 @@
 import { existsSync } from 'node:fs';
-import { mkdir, mkdtemp, readFile, rm, symlink } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, describe, expect, it, vi } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { createServerWithDeps } from '../src/server.js';
@@ -37,6 +37,23 @@ async function run(target: Client, name: string, args: Record<string, unknown> =
 }
 
 describe('op tools', () => {
+  it('comment ops work in file mode, signed with the MCP client name, and stay out of the diagram', async () => {
+    const target = await client();
+    const made = await call(target, 'openflow_create', { name: 'Commented' });
+    const documentId = made.id as string;
+    const added = await run(target, 'start_thread', { documentId, point: { x: 10, y: 20 }, body: 'Look here' });
+    const threadId = added.threadId as string;
+    await run(target, 'reply_to_thread', { documentId, threadId, body: 'And here' });
+    const listed = await run(target, 'list_threads', { documentId }) as { threads: { id: string; comments: { author: { kind: string; name: string }; body: string }[] }[] };
+    expect(listed.threads).toHaveLength(1);
+    expect(listed.threads[0]!.comments.map(({ body }) => body)).toEqual(['Look here', 'And here']);
+    expect(listed.threads[0]!.comments[0]!.author).toEqual({ kind: 'agent', name: 'test' });
+    expect(await run(target, 'get_document', { documentId })).toMatchObject({ openThreads: 1 });
+    await run(target, 'resolve_thread', { documentId, threadId });
+    expect(((await run(target, 'list_threads', { documentId })) as { threads: unknown[] }).threads).toHaveLength(0);
+    await expect(call(target, 'start_thread', { documentId, body: 'nowhere' })).rejects.toThrow(/nodeId.*point/);
+  });
+
   it('exposes every op in the manifest with a title and description', async () => {
     const target = await client();
     const { tools } = await target.listTools();
@@ -55,7 +72,7 @@ describe('op tools', () => {
   // which strict tool-calling clients drop or reject. Lookups read no document, so they take no documentId.
   it('advertises self-contained input schemas: no $ref, and no documentId on lookups', async () => {
     const { tools } = await (await client()).listTools();
-    expect(tools).toHaveLength(29);
+    expect(tools).toHaveLength(33);
     for (const tool of tools) expect(JSON.stringify(tool.inputSchema), tool.name).not.toContain('$ref');
     const props = (name: string) => Object.keys((tools.find((tool) => tool.name === name)!.inputSchema as { properties: object }).properties);
     for (const name of ['get_syntax', 'search_icons', 'find_icons_for']) expect(props(name), name).not.toContain('documentId');
@@ -152,6 +169,35 @@ describe('op tools', () => {
     expect(reopened).toMatchObject({ documentId: created.id, name: 'Round trip' });
     const read = await run(target, 'get_diagram', { documentId: reopened.documentId as string });
     expect(String(read.dsl)).toContain('A -> B');
+  });
+
+  // A file the app opens (one bad thread, say from a merge) opens for the agent too; saving keeps the good threads.
+  it('openflow_open drops a bad comment thread with a warning, and openflow_save keeps the rest', async () => {
+    const target = await client();
+    const dir = await mkdtemp(join(process.cwd(), '.tmp-ops-'));
+    tempDirs.push(dir);
+    const path = join(dir, 'threads.openflow.json');
+    const created = await call(target, 'openflow_create', { name: 'Threads' });
+    await call(target, 'openflow_save', { documentId: created.id, path });
+    const file = JSON.parse(await readFile(path, 'utf8')) as { pages: Record<string, unknown>[] };
+    const thread = (id: string, number: number, body: string) => ({
+      id, number, anchor: { nodeId: null, offset: null, point: { x: 0, y: 0 } }, resolved: false,
+      comments: [{ id: `${id}-m`, author: { kind: 'human', name: 'Ada' }, body, createdAt: '2026-10-26T12:00:00.000Z' }],
+    });
+    // A thread with no pin is broken past repair (a clashing number would only be renumbered).
+    file.pages[0]!.threads = [thread('kept', 1, 'Keep me'), { ...thread('broken', 2, 'No pin'), anchor: null }];
+    await writeFile(path, JSON.stringify(file), 'utf8');
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      await call(target, 'openflow_open', { path });
+      expect(warn).toHaveBeenCalledTimes(1);
+    } finally {
+      warn.mockRestore();
+    }
+    await call(target, 'openflow_save', { documentId: created.id, path });
+    const saved = JSON.parse(await readFile(path, 'utf8')) as { pages: { threads?: { id: string }[] }[] };
+    expect(saved.pages[0]!.threads!.map(({ id }) => id)).toEqual(['kept']);
   });
 
   it('openflow_save writes the SVG beside the file only when svg is true', async () => {

@@ -41,7 +41,7 @@ test('a browser agent draws with create_diagram, ⌘Z takes it back in one step,
   await openCanvas(page);
   await expect.poll(() => names(page), { timeout: 10_000 }).toEqual(expect.arrayContaining(['create_diagram', 'get_document', 'get_view', 'select']));
   const registered = await names(page);
-  expect(registered).toHaveLength(18);
+  expect(registered).toHaveLength(22);
   // The schema the agent sees is plain JSON Schema, with read hints from the manifest.
   const create = await page.evaluate(() => {
     const tool = (window as unknown as { __webmcp: Stand }).__webmcp.tool('create_diagram')!;
@@ -95,7 +95,7 @@ test('get_view says what the person sees, select shows them what the agent means
   expect(shot.base64.slice(0, 8)).toBe('iVBORw0K');
 
   await page.getByRole('toolbar', { name: 'Workspace', exact: true }).getByRole('button', { name: 'Connect agent', exact: true }).click();
-  await expect(page.getByTestId('webmcp-status')).toHaveText('WebMCP (experimental): agents in this browser can use 18 tools.');
+  await expect(page.getByTestId('webmcp-status')).toHaveText('WebMCP (experimental): agents in this browser can use 22 tools.');
 });
 
 test('without WebMCP in the browser the panel says nothing about it @gate', async ({ page }) => {

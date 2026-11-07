@@ -124,4 +124,12 @@ describe('a new node and its first label', () => {
     const history = amendNewNode(commitDocumentCommand(before, insert), 'other', labelled);
     expect(history.past).toHaveLength(3);
   });
+
+  it('keeps a batch\'s identity through undo and redo', () => {
+    const batch: DocumentCommand = { kind: 'batch', id: 'agent-1', label: 'Agent change', commands: [editLabelCommand('Edited')] };
+    let history = commitDocumentCommand(createDocumentHistory(createTestDocument({ nodes: [createTestNode('node-1')] })), batch);
+    history = redoDocumentCommand(undoDocumentCommand(history));
+    history = redoDocumentCommand(undoDocumentCommand(history));
+    expect(history.past.at(-1)!.command).toMatchObject({ id: 'agent-1', label: 'Agent change' });
+  });
 });

@@ -1,6 +1,8 @@
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { StaleSessionRevisionError } from '../../application/session/session';
+import { useDocumentSession } from '../../application/session/useDocumentSession';
+import { addComment, addThread } from '../../domain/threads/threads';
 import type { DocumentCommand } from '../../domain/commands/types';
 import type { SceneDocumentV1 } from '../../domain/document/types';
 import { compile } from '../../../dsl/compile';
@@ -24,7 +26,7 @@ function setup(readOnly = false, compileDsl: (text: string) => ReturnType<typeof
   const hook = renderHook(
     (props: { document: SceneDocumentV1; revision: number }) =>
       useV2Proposal({
-        document: props.document, revision: props.revision, pageId: 'page-1',
+        document: props.document, contentRevision: props.revision, pageId: 'page-1',
         commit, readOnly, announce, compileDsl,
       }),
     { initialProps: { document, revision } }
@@ -176,5 +178,38 @@ describe('useV2Proposal', () => {
     await act(async () => { expect(await result.current.apply()).toEqual(['a']); });
     expect(commit).toHaveBeenCalledTimes(1);
     expect(result.current.appliedSummary).toBe('Applied 2 changes.');
+  });
+});
+
+describe('useV2Proposal with the document session', () => {
+  const ada = { kind: 'human' as const, name: 'Ada' };
+  const at = '2026-10-26T12:00:00.000Z';
+  const ignore = () => undefined;
+
+  // A comment typed (or an agent's reply) while a proposal waits is not a diagram change.
+  it('a comment neither makes a proposal stale nor is lost when it applies, and keeps its Undo', async () => {
+    const { result } = renderHook(() => {
+      const session = useDocumentSession({ onStaleRevision: ignore });
+      const proposal = useV2Proposal({
+        document: session.document, contentRevision: session.contentRevision, pageId: 'page-1',
+        commit: session.commit, readOnly: false, announce: ignore, compileDsl: (text) => compile(text),
+      });
+      return { session, proposal };
+    });
+    act(() => result.current.session.openDocument(createTestDocument({ nodes: [createTestNode('a')] })));
+    await act(() => result.current.proposal.propose(draw));
+    act(() => result.current.session.updateThreads((document) => addThread(document, {
+      pageId: 'page-1', threadId: 't1', nodeId: 'a', point: { x: 0, y: 0 }, comment: { id: 'm1', author: ada, body: 'Why?', createdAt: at },
+    })));
+    expect(result.current.proposal.stale).toBe(false);
+    await act(async () => { await result.current.proposal.apply(); });
+    expect(result.current.proposal.phase).toBe('applied');
+    const threads = () => result.current.session.document!.pages[0]!.threads ?? [];
+    expect(threads().map(({ id }) => id)).toEqual(['t1']);
+    act(() => result.current.session.updateThreads((document) => addComment(document, 't1', { id: 'm2', author: ada, body: 'Thanks', createdAt: at })));
+    expect(result.current.proposal.undoable).toBe(true);
+    act(() => result.current.session.undo());
+    expect(result.current.session.document!.pages[0]!.nodes.map(({ id }) => id)).toEqual(['a']);
+    expect(threads()[0]!.comments).toHaveLength(2);
   });
 });

@@ -79,6 +79,29 @@ search connector labels. `Enter` and `Shift + Enter` step through the matches, s
 framing each one. `Esc` closes the bar and puts the selection and view back where they were;
 the close button keeps you on the last match.
 
+## Comments
+
+Press `C` to pick the **Comment** tool and click where the comment belongs (on a shape, it follows the shape, even
+as you drag or turn it). With the keyboard alone, press `Enter` instead: the thread opens on the selected shape, or
+in the middle of the canvas when nothing is selected. Type, then `Enter` to send.
+
+A pin opens its thread, where you can reply, edit, resolve or delete; deleting asks first, because comments are not
+part of undo. `Esc` or a click elsewhere closes it. Text you have not sent is kept: close a thread and its reply is
+still there when you open it again. Drag a pin to move it onto another shape or the page, or focus it and press
+`⌥ + Arrow` (`⇧⌥ + Arrow` for ten times as far); `Delete` on a focused pin asks to delete its thread.
+
+Pins live on the page, not in the picture: PNG, SVG and PDF exports never show them, and a JSON export includes
+comments only when **Include comments** is ticked.
+
+### Threads
+
+The **Threads** button on the right-hand rail opens a panel with every thread in the document, on every page; the
+button shows how many are open. Search reads the comments, the start of a page's name, or a thread's number (`#3`, which also finds the text "#3"). Filters show
+resolved threads, or only the ones still waiting for an answer. Click a thread to open it on the canvas: the editor
+switches page and brings the pin into view. From a thread's menu you can resolve, delete, mark it read or unread, or
+copy a link to it; the link opens the thread in this browser, where the diagram is saved. Read marks and filters are
+kept in this browser. Picking the Comment tool never opens or closes the panel.
+
 ## Structure
 
 - **Layers** (`L`) lists the page's objects front to back, with visibility and lock toggles. A row

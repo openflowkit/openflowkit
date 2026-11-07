@@ -83,6 +83,49 @@ export interface SceneLayer {
   readonly locked: boolean;
 }
 
+export interface SceneCommentAuthor {
+  readonly kind: 'human' | 'agent';
+  /** At most COMMENT_AUTHOR_MAX characters. */
+  readonly name: string;
+}
+
+export interface SceneComment {
+  readonly id: string;
+  readonly author: SceneCommentAuthor;
+  /** Plain text, at most COMMENT_BODY_MAX characters. */
+  readonly body: string;
+  /** ISO 8601 timestamps, as toISOString writes them. */
+  readonly createdAt: string;
+  readonly editedAt?: string;
+}
+
+/**
+ * Where a thread is pinned. `point` is the pin tip in page coordinates; with a `nodeId` it follows the node
+ * (`offset` in the node's own frame, so it also turns with it) and keeps the node's last position when the node is gone.
+ */
+export interface SceneThreadAnchor {
+  readonly nodeId: string | null;
+  readonly offset: Point2d | null;
+  readonly point: Point2d;
+}
+
+/** A discussion pinned on a page. Not part of undo history or the DSL; a diagram's own file keeps it, exports leave it out (see withoutThreads). */
+export interface SceneThread {
+  readonly id: string;
+  /** 1 to THREAD_NUMBER_MAX, unique within the document: the "#3" people say aloud. */
+  readonly number: number;
+  readonly anchor: SceneThreadAnchor;
+  readonly resolved: boolean;
+  /** At least one; the first opens the thread. */
+  readonly comments: readonly SceneComment[];
+}
+
+export const COMMENT_BODY_MAX = 4000;
+/** As long as an agent's name may be (agentName). */
+export const COMMENT_AUTHOR_MAX = 40;
+/** Past it, a new thread takes the lowest free number (nextThreadNumber), so a file holding it never blocks one. */
+export const THREAD_NUMBER_MAX = 99_999;
+
 export interface ScenePage {
   readonly id: string;
   readonly name: string;
@@ -92,6 +135,7 @@ export interface ScenePage {
   readonly connectors: readonly SceneConnector[];
   readonly metadata: JsonObject;
   readonly extensions: JsonObject;
+  readonly threads?: readonly SceneThread[];
 }
 
 export interface SceneDocumentV1 {
