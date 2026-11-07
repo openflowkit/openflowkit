@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { avatarColor, keyboardSpot, pinNudge, pinsOnPreview, PIN_STEP, relativeTime } from './v2CommentsView';
+import { avatarColor, keyboardSpot, pinLabel, pinNudge, pinsOnPreview, PIN_STEP, relativeTime } from './v2CommentsView';
 import { createTestDocument, createTestNode } from '../../testing/builders/documentBuilder';
 import { addThread } from '../../domain/threads/threads';
 import type { SceneNode } from '../../domain/document/types';
@@ -105,5 +105,22 @@ describe('pinsOnPreview', () => {
   it('leaves a pin whose shape is gone where it last was', () => {
     const page = pinned([box('a', 0, 0)], [{ id: 'on-a', nodeId: 'a', point: { x: 10, y: 10 } }]);
     expect(pinsOnPreview({ ...page, nodes: [] }, [box('x', 5, 5)]).size).toBe(0);
+  });
+});
+
+describe('pinLabel', () => {
+  const thread = (number: number, bodies: string[], name = 'User') => ({
+    id: `t${number}`, number, resolved: false, anchor: { nodeId: null, offset: null, point: { x: 0, y: 0 } },
+    comments: bodies.map((body, i) => ({ id: `m${i}`, author: { kind: 'human' as const, name }, body, createdAt: '2026-10-26T12:00:00.000Z' })),
+  });
+
+  it('names the thread by number, author and its first words, so no two pins read alike', () => {
+    expect(pinLabel(thread(3, ['Why is this a queue?']))).toBe('Comment #3 by User: Why is this a queue?');
+    expect(pinLabel(thread(4, ['Why\n  is   this a queue?', 'Latency.', 'Ok']))).toBe('Comment #4 by User: Why is this a queue?, 3 messages');
+  });
+
+  it('cuts a long opening at a word, with an ellipsis', () => {
+    const label = pinLabel(thread(1, ['Rename the cache layer to something that says what it actually stores for the sessions']));
+    expect(label).toBe('Comment #1 by User: Rename the cache layer to something that says…');
   });
 });

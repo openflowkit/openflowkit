@@ -2,6 +2,7 @@ import { createContext, memo, useContext, useLayoutEffect, useRef, type Keyboard
 import type { Point2d } from '../../domain/geometry/types';
 import type { SceneThread } from '../../domain/document/types';
 import { Avatar } from './V2CommentsParts';
+import { pinLabel } from './v2CommentsView';
 import type { Placement } from './v2CommentPlacement';
 
 export const PlacementContext = createContext<Placement | null>(null);
@@ -53,7 +54,7 @@ export const CommentPin = memo(function CommentPin(props: {
     <Anchored world={props.world} card={props.children != null} className="ofk-comment-pinned" testId="v2-comment-pin">
       <button type="button" className="ofk-comment-pin" data-comment-ui data-thread-id={thread.id} data-selected={props.selected || undefined}
         data-kind={lead.author.kind} data-dragging={props.dragging || undefined}
-        aria-label={`Comment by ${lead.author.name}${thread.comments.length > 1 ? `, ${thread.comments.length} messages` : ''}`}
+        aria-label={pinLabel(thread)}
         aria-expanded={props.selected}
         onPointerDown={(event) => actions.press(thread.id, event)} onPointerMove={(event) => actions.drag(thread.id, event)}
         onPointerUp={(event) => actions.drop(thread.id, event)} onPointerCancel={actions.cancel}

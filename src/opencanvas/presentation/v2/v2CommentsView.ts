@@ -1,6 +1,6 @@
 // Pure helpers for the comment overlays: how a message's age reads, the avatar a name gets, where a pin is drawn mid-drag.
 import type { Point2d } from '../../domain/geometry/types';
-import type { SceneNode, ScenePage } from '../../domain/document/types';
+import type { SceneNode, ScenePage, SceneThread } from '../../domain/document/types';
 import { pageThreads, pinOnNode } from '../../domain/threads/threads';
 import { buildNodeWorldMatrices } from '../../domain/scene/worldGeometry';
 
@@ -82,4 +82,16 @@ export function pinsOnPreview(page: ScenePage, nodes: readonly SceneNode[]): Rea
     if (at.x !== anchor.point.x || at.y !== anchor.point.y) moved.set(id, at);
   }
   return moved;
+}
+
+/** At most this many characters of the opening message name a pin, cut at a word. */
+const LABEL_WORDS = 48;
+
+/** A pin's accessible name: "Comment #3 by User: Why is this a queue?, 2 messages". Number and first words tell pins apart. */
+export function pinLabel(thread: SceneThread): string {
+  const lead = thread.comments[0]!;
+  const text = lead.body.replace(/\s+/g, ' ').trim();
+  const cut = text.length <= LABEL_WORDS ? text : `${text.slice(0, LABEL_WORDS + 1).replace(/\s+\S*$/, '')}…`;
+  const count = thread.comments.length > 1 ? `, ${thread.comments.length} messages` : '';
+  return `Comment #${thread.number} by ${lead.author.name}: ${cut}${count}`;
 }

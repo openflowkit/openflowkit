@@ -48,7 +48,8 @@ test('press C, click a node, type, Enter: a pin appears, survives a reload, and 
   const pin = page.getByTestId('v2-comment-pin');
   await expect(pin).toHaveCount(1);
   expect(await threads(page)).toMatchObject([{ anchor: { nodeId: id }, resolved: false, comments: [{ body: 'Why is this a queue?', author: { kind: 'human', name: 'User' } }] }]);
-  await expect(pin.getByRole('button', { name: 'Comment by User' })).toBeVisible();
+  // Each pin has its own name: number, author, first words.
+  await expect(pin.getByRole('button', { name: 'Comment #1 by User: Why is this a queue?' })).toBeVisible();
   await expect(pin.locator('.ofk-comment-avatar svg')).toHaveCount(1);
   // The tip of the pin is where it was clicked.
   const before = (await pin.boundingBox())!;
@@ -367,7 +368,7 @@ test('a thread is placed, written and sent with the keyboard alone', async ({ pa
   expect((await threads(page))[1]).toMatchObject({ anchor: { nodeId: id } });
 
   // The pin itself is a button: Alt+Arrow moves it, Enter opens its thread.
-  const pinButton = page.getByTestId('v2-comment-pin').first().getByRole('button', { name: /^Comment by/ });
+  const pinButton = page.getByTestId('v2-comment-pin').first().getByRole('button', { name: /^Comment #1 by User: From the keyboard/ });
   const x = (await threads(page))[0]!.anchor.point.x;
   await pinButton.focus();
   await page.keyboard.press('Alt+ArrowRight');
