@@ -94,12 +94,23 @@ export interface OpContext {
   readonly capabilities: OpCapabilities;
   /** Node and connector ids the user has selected in a live editor, on the page it shows; absent in file mode. */
   readonly selection?: { readonly pageId: string | null; readonly ids: readonly string[] };
+  /** The agent's MCP clientInfo.name, so a comment is signed by who wrote it (see agentName). */
+  readonly client?: string;
 }
 
-/** What an op hands back: at most one reversible command plus a JSON-safe output. */
+/**
+ * What an op hands back: at most one reversible command plus a JSON-safe output. A thread op returns
+ * `threads` instead: a document transform that never enters undo history (domain/threads).
+ */
 export interface OpOutcome<Output> {
   readonly command: DocumentCommand | null;
+  readonly threads?: (document: SceneDocumentV1) => SceneDocumentV1;
   readonly output: Output;
+  /**
+   * With `threads`: the output read off the document the change was applied to, which in live mode can
+   * differ from the one the op resolved against (a thread number given out in between).
+   */
+  readonly report?: (applied: SceneDocumentV1) => Output;
 }
 
 export interface AgentOp<Input = unknown, Output = unknown> {

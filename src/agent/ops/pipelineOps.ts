@@ -1,6 +1,7 @@
 // Pipeline ops: files and the camera. These never touch the document, so they
 // carry no command — they hand back artefacts or move the viewport.
 import { z } from 'zod';
+import { openThreadCount } from '../../opencanvas/domain/threads/threads';
 import { descendantIds } from '../../opencanvas/domain/scene/queries';
 import { defineOp, requireFrame, requirePage, type ExportedFile } from './types';
 
@@ -97,7 +98,7 @@ export const fitView = defineOp({
 export const getDocument = defineOp({
   name: 'get_document',
   title: 'Read the page',
-  description: 'Nodes and connectors of one page, with ids, labels and geometry, plus `selection`: the ids the user has '
+  description: 'Nodes and connectors of one page, with ids, labels and geometry, plus `openThreads` (unresolved threads; list_threads reads them) and `selection`: the ids the user has '
     + 'selected on that page in the live editor ("the box I selected"; empty in file mode or when nothing is selected). '
     + 'Use get_diagram for a diagram\'s DSL.',
   schema: z.object({ pageId: z.string().min(1).optional().describe('Page to read (see list_pages); defaults to the page the editor shows, or the first page in file mode.') }),
@@ -112,6 +113,7 @@ export const getDocument = defineOp({
         pageId: page.id,
         pageName: page.name,
         // C4 view pages share element ids: a selection belongs to the page the editor shows, and only to it.
+        openThreads: openThreadCount(page),
         selection: context.selection?.pageId === page.id ? context.selection.ids.filter(onPage) : [],
         nodes: page.nodes.map((node) => ({
           id: node.id, kind: node.kind, parentId: node.parentId,
@@ -131,7 +133,7 @@ export const getDocument = defineOp({
 export const listPages = defineOp({
   name: 'list_pages',
   title: 'List pages',
-  description: 'Every page in the document with its shape counts and diagram kind.',
+  description: 'Every page in the document with its shape counts, diagram kind and open threads.',
   schema: z.object({}),
   async run(_input, context) {
     return {
@@ -139,7 +141,7 @@ export const listPages = defineOp({
       output: {
         pages: context.document.pages.map((page, index) => ({
           pageId: page.id, index, name: page.name, diagramKind: page.diagramKind,
-          nodes: page.nodes.length, connectors: page.connectors.length,
+          nodes: page.nodes.length, connectors: page.connectors.length, openThreads: openThreadCount(page),
         })),
       },
     };

@@ -101,7 +101,7 @@ async function runOp(args: readonly string[], io: CliIo): Promise<number> {
   const docPath = values.doc as string | undefined;
   const exists = Boolean(docPath && existsSync(docPath));
   // A read of a file that isn't there is a typo, not an empty diagram; a write may start one.
-  if (docPath && !exists && !CAPABILITY_MANIFEST.find((row) => row.action === op.name)?.mutates) throw new Error(`no such file: ${docPath}`);
+  if (docPath && !exists && !CAPABILITY_MANIFEST.find((row) => row.action === op.name)?.writes) throw new Error(`no such file: ${docPath}`);
   const store = new DocumentStore();
   const document = exists ? await store.open(docPath!) : store.create(docPath ? path.basename(docPath).replace(/\.openflow\.json$|\.json$/, '') : 'Untitled diagram');
   const pageId = (values.page as string | undefined) ?? document.pages[0]!.id;

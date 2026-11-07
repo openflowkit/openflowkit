@@ -37,6 +37,23 @@ async function run(target: Client, name: string, args: Record<string, unknown> =
 }
 
 describe('op tools', () => {
+  it('comment ops work in file mode, signed with the MCP client name, and stay out of the diagram', async () => {
+    const target = await client();
+    const made = await call(target, 'openflow_create', { name: 'Commented' });
+    const documentId = made.id as string;
+    const added = await run(target, 'start_thread', { documentId, point: { x: 10, y: 20 }, body: 'Look here' });
+    const threadId = added.threadId as string;
+    await run(target, 'reply_to_thread', { documentId, threadId, body: 'And here' });
+    const listed = await run(target, 'list_threads', { documentId }) as { threads: { id: string; comments: { author: { kind: string; name: string }; body: string }[] }[] };
+    expect(listed.threads).toHaveLength(1);
+    expect(listed.threads[0]!.comments.map(({ body }) => body)).toEqual(['Look here', 'And here']);
+    expect(listed.threads[0]!.comments[0]!.author).toEqual({ kind: 'agent', name: 'test' });
+    expect(await run(target, 'get_document', { documentId })).toMatchObject({ openThreads: 1 });
+    await run(target, 'resolve_thread', { documentId, threadId });
+    expect(((await run(target, 'list_threads', { documentId })) as { threads: unknown[] }).threads).toHaveLength(0);
+    await expect(call(target, 'start_thread', { documentId, body: 'nowhere' })).rejects.toThrow(/nodeId.*point/);
+  });
+
   it('exposes every op in the manifest with a title and description', async () => {
     const target = await client();
     const { tools } = await target.listTools();
@@ -55,7 +72,7 @@ describe('op tools', () => {
   // which strict tool-calling clients drop or reject. Lookups read no document, so they take no documentId.
   it('advertises self-contained input schemas: no $ref, and no documentId on lookups', async () => {
     const { tools } = await (await client()).listTools();
-    expect(tools).toHaveLength(29);
+    expect(tools).toHaveLength(33);
     for (const tool of tools) expect(JSON.stringify(tool.inputSchema), tool.name).not.toContain('$ref');
     const props = (name: string) => Object.keys((tools.find((tool) => tool.name === name)!.inputSchema as { properties: object }).properties);
     for (const name of ['get_syntax', 'search_icons', 'find_icons_for']) expect(props(name), name).not.toContain('documentId');

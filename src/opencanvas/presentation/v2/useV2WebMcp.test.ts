@@ -6,6 +6,7 @@ import { createTestCapabilities } from '../../../agent/ops/testHost';
 import type { WebMcpTool } from '../../../agent/webMcp';
 import { applyDocumentCommand } from '../../domain/commands/execute';
 import type { DocumentCommand } from '../../domain/commands/types';
+import type { SceneDocumentV1 } from '../../domain/document/types';
 import { createTestDocument } from '../../testing/builders/documentBuilder';
 import { useV2WebMcp, type V2WebMcpOptions } from './useV2WebMcp';
 
@@ -21,7 +22,7 @@ function installModelContext() {
 
 const testDocument = createTestDocument();
 const options = (overrides: Partial<V2WebMcpOptions> = {}): V2WebMcpOptions => ({
-  document: testDocument, pageId: 'page-1', capabilities: createTestCapabilities(), commit: vi.fn(() => true), onActivity: vi.fn(),
+  document: testDocument, pageId: 'page-1', capabilities: createTestCapabilities(), commit: vi.fn(() => true), threadChange: vi.fn(), onActivity: vi.fn(),
   scene: testDocument.pages[0]!, mode: 'canvas', camera: () => ({ x: 0, y: 0, zoom: 1 }),
   screenRect: () => null, viewport: () => ({ width: 800, height: 600 }), select: vi.fn(), ...overrides,
 });
@@ -35,6 +36,22 @@ function useSession(overrides: Partial<V2WebMcpOptions>, commits: DocumentComman
     commit: (command) => { commits.push(command); setTop(command.id); setCurrent((before) => applyDocumentCommand(before, command).document); return true; },
     ...overrides,
   }));
+}
+
+/**
+ * The hook over a session whose thread changes land at once in `session` (as updateThreads writes its ref) and on
+ * the editor's state only at the next render.
+ */
+function threadSession(onActivity: (message: string) => void = vi.fn()) {
+  const session = { document: testDocument };
+  const threadChange = (change: (document: SceneDocumentV1) => SceneDocumentV1) => { session.document = change(session.document); };
+  return () => {
+    const [current, setCurrent] = useState(testDocument);
+    return useV2WebMcp(options({
+      document: current, scene: current.pages[0]!, onActivity,
+      threadChange: (change) => { threadChange(change); setCurrent(session.document); },
+    }));
+  };
 }
 
 const ready = async (result: { current: { tools: number } }) =>
@@ -120,6 +137,35 @@ describe('useV2WebMcp', () => {
     const { result, unmount } = renderHook(() => useV2WebMcp(options({ lockedPageId: 'page-1' })));
     await ready(result);
     await expect(tools.get('get_view')!.execute({})).resolves.toMatchObject({ pageId: 'page-1', readOnly: false });
+    unmount();
+  });
+
+  // One op at a time, each against the document the last one left: a comment too, though it is no commit.
+  it('a call queued right after a comment reads the document with that comment', async () => {
+    const { tools } = installModelContext();
+    const onActivity = vi.fn();
+    const { result, unmount } = renderHook(threadSession(onActivity));
+    await ready(result);
+    const [started, listed] = await Promise.all([
+      tools.get('start_thread')!.execute({ point: { x: 0, y: 0 }, body: 'Why is this here?' }),
+      tools.get('list_threads')!.execute({}),
+    ]) as [{ threadId: string }, { threads: { id: string }[] }];
+    expect(listed.threads.map(({ id }) => id)).toEqual([started.threadId]);
+    expect(onActivity).toHaveBeenCalledWith('An agent in this browser commented on #1.');
+    // A change that changes nothing leaves the document as it was: nothing to wait for.
+    await expect(tools.get('resolve_thread')!.execute({ threadId: started.threadId, resolved: false })).resolves.toMatchObject({ resolved: false });
+    expect(onActivity).not.toHaveBeenCalledWith('An agent in this browser reopened #1.');
+    unmount();
+  });
+
+  // PR #103 review: the comment was in, but the message sent the agent to get_document (no threads there) and a retry posted twice.
+  it('a thread change that never reaches the screen says to check list_threads before posting again', async () => {
+    const { tools } = installModelContext();
+    const { result, unmount } = renderHook(() => useV2WebMcp(options({ threadChange: (change) => { change(testDocument); } })));
+    await ready(result);
+    const outcome = await tools.get('start_thread')!.execute({ point: { x: 0, y: 0 }, body: 'hi' }) as { error: string };
+    expect(outcome.error).toMatch(/list_threads/);
+    expect(outcome.error).not.toMatch(/get_document/);
     unmount();
   });
 

@@ -176,7 +176,7 @@ export function registerOpTools(server: McpServer, deps: OpToolDeps): void {
         const document = id ? deps.store.get(id) as unknown as SceneDocumentV1 : SCRATCH;
         const pageId = requestedPage ?? document.pages[0]?.id ?? '';
         const capabilities = await loadFileCapabilities();
-        const result = await runAgentOp(op, input, { document, pageId, capabilities });
+        const result = await runAgentOp(op, input, { document, pageId, capabilities, ...(agent ? { client: agent } : {}) });
         if (result.changed) deps.store.set(result.document as never);
         // File mode: the diagram lives only in this process until openflow_save, so the link is how a person sees it now.
         const link = DRAWING_OPS.has(op.name) ? openUrl(drawnDsl(input, result.output as DrawnOutput)) : null;

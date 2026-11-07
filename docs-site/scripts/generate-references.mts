@@ -129,7 +129,9 @@ function opSections(): string {
     const argumentTable = argumentRows(op.schema as unknown as ZodLike)
       + (MCP_PAGE_ID.has(op.name) ? '| `pageId` | string (MCP tool; the CLI says `--page`) |\n' : '');
     // `documentId` is added to every op tool by the MCP server; document it once.
-    const where = row.mutates ? 'changes the document (one undo step in live mode)' : 'read-only';
+    const where = row.writes === 'diagram' ? 'changes the diagram (one undo step in live mode)'
+      : row.writes === 'threads' ? 'changes the comment threads (no undo step, not part of the diagram)'
+        : 'read-only';
     const mirrors = row.surface === 'agent'
       ? 'an agent-only lookup'
       : `mirrors **${row.operation}** in ${surfaces[row.surface] ?? row.surface}`;
@@ -180,7 +182,7 @@ created last. Page-scoped ops take a \`pageId\` from \`list_pages\`.\n\n`
     + `## Resources and prompts\n\n`
     + `The server also exposes MCP resources: ${resources.map((name) => `\`${name}\``).join(', ')} — the\ngrammar, the icon catalogs and the starter templates. Two prompts steer a client toward\nthe right tools: \`flowchart_from_description\` and \`architecture_from_codebase\`. Mermaid,\nStructurizr DSL and D2 need no prompt: \`create_diagram\`, \`update_diagram\` and\n\`validate_openflow_dsl\` take them directly.\n\n`
     + `## The operations\n\n`
-    + `One MCP tool per operation; every mutating op has an inverse, and the live editor applies it\nas a single undo step. The manifest names the human operation each one mirrors.\n\n`
+    + `One MCP tool per operation; every op that changes the diagram has an inverse, and the live editor\napplies it as a single undo step. The comment-thread ops change the threads outside undo history.\nThe manifest names the human operation each one mirrors.\n\n`
     + opSections()
     + `\n## What it does not do\n\n`
     + `- **Local by default.** This server runs on your machine over stdio and calls no outside service. The hosted endpoint for chat apps (\`https://mcp.openflowkit.com/mcp\`) is separate, draws cards in the chat only and stores nothing.\n`

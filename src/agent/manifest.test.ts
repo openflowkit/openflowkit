@@ -5,7 +5,9 @@ import { applyDocumentCommand } from '@/opencanvas/domain/commands/execute';
 import type { SceneDocumentV1 } from '@/opencanvas/domain/document/types';
 import { compile, compileWorkspace } from '@/dsl/compile';
 import { deterministicLayout } from '@/dsl/layout';
+import { addThread } from '@/opencanvas/domain/threads/threads';
 import { AGENT_OPS, CAPABILITY_MANIFEST, MANIFEST_VERSION, manifestCoverage, unlistedOps } from './manifest';
+import { THREAD_WRITE_OPS } from './ops/surface';
 import { resolveAgentOpCommand } from './runAction';
 import { createAgentDocument } from './index';
 import type { OpCapabilities, OpContext } from './ops/types';
@@ -52,6 +54,10 @@ async function inputs(document: SceneDocumentV1): Promise<ReadonlyArray<{ op: st
     { op: 'fit_view', input: { frameId } },
     { op: 'get_document', input: { pageId } },
     { op: 'list_pages', input: {} },
+    { op: 'list_threads', input: {} },
+    { op: 'start_thread', input: { nodeId: ids[0], body: 'Why this?' } },
+    { op: 'reply_to_thread', input: { threadId: 't1', body: 'Because.' } },
+    { op: 'resolve_thread', input: { threadId: 't1' } },
     { op: 'delete', input: { ids: [frameId] } },
   ];
 }
@@ -62,7 +68,11 @@ async function fixtureDocument(): Promise<SceneDocumentV1> {
   const context: OpContext = { document: empty, pageId: empty.pages[0]!.id, capabilities };
   const created = await resolveAgentOpCommand(
     AGENT_OPS.find(({ name }) => name === 'create_diagram')!, { dsl: 'flowchart\n  Client [blue] -> API [emerald]\n  API -> Store [cylinder, red]' }, context);
-  return applyDocumentCommand(empty, created.command!).document;
+  const drawn = applyDocumentCommand(empty, created.command!).document;
+  return addThread(drawn, {
+    pageId: drawn.pages[0]!.id, threadId: 't1', nodeId: null, point: { x: 0, y: 0 },
+    comment: { id: 'm1', author: { kind: 'human', name: 'Ada' }, body: 'Is this right?', createdAt: '2026-10-26T12:00:00.000Z' },
+  });
 }
 
 describe('agent manifest', () => {
@@ -81,8 +91,10 @@ describe('agent manifest', () => {
 
   it('has a manifest row per op, with an existing proof file for every mutating op', () => {
     expect(unlistedOps()).toEqual([]);
-    // 16 ops: 7 with a UI twin proven by ops.test.ts, 6 of them mutating.
-    expect(manifestCoverage()).toEqual({ ops: AGENT_OPS.length, withEquivalentUiPath: 7, mutating: 6 });
+    // 20 ops: 10 with a UI twin proven by ops.test.ts or threadOps.test.ts, 9 of them mutating.
+    expect(manifestCoverage()).toEqual({ ops: AGENT_OPS.length, withEquivalentUiPath: 10, mutating: 9 });
+    // The editor's activity line knows the thread writes without loading the registry; they are the manifest's.
+    expect([...THREAD_WRITE_OPS].sort()).toEqual(CAPABILITY_MANIFEST.filter(({ writes }) => writes === 'threads').map(({ action }) => action).sort());
     for (const row of CAPABILITY_MANIFEST) {
       if (!row.equivalenceTest) continue;
       const path = join(process.cwd(), row.equivalenceTest);
@@ -91,7 +103,8 @@ describe('agent manifest', () => {
     }
   });
 
-  it('keeps read-only ops command-free and mutating ops reversible', async () => {
+  // Thread writes change the document outside undo history: no command, no inverse, a thread change instead.
+  it('keeps read-only ops command-free, diagram writes reversible, and thread writes out of history', async () => {
     const document = await fixtureDocument();
     const cases = await inputs(document);
     for (const { op: name, input } of cases) {
@@ -100,8 +113,14 @@ describe('agent manifest', () => {
       const context: OpContext = { document, pageId: document.pages[0]!.id, capabilities };
       const outcome = await resolveAgentOpCommand(op!, input, context);
       const row = CAPABILITY_MANIFEST.find(({ action }) => action === name)!;
-      if (!row.mutates) {
+      if (row.writes !== 'threads') expect(outcome.threads, `${name} changes no thread`).toBeUndefined();
+      if (row.writes === null) {
         expect(outcome.command, `${name} must not mutate`).toBeNull();
+        continue;
+      }
+      if (row.writes === 'threads') {
+        expect(outcome.command, `${name} takes no undo step`).toBeNull();
+        expect(outcome.threads!(document), `${name} changes the threads`).not.toEqual(document);
         continue;
       }
       expect(outcome.command, `${name} produces a command`).not.toBeNull();
