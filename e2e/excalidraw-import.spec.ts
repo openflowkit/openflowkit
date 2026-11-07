@@ -110,13 +110,18 @@ test('Excalidraw labels and words read on the dark canvas @gate', async ({ page 
   await page.addInitScript(() => localStorage.setItem('openflowkit-v2-preferences', JSON.stringify({ theme: 'dark' })));
   await page.goto('/#/home');
   const file = test.info().outputPath('labels.excalidraw');
-  const box = (id: string, x: number, backgroundColor: string) => ({ ...element, id, type: 'rectangle', x, y: 0, width: 160, height: 80, backgroundColor });
+  const box = (id: string, x: number, backgroundColor: string, y = 0, opacity = 100) =>
+    ({ ...element, id, type: 'rectangle', x, y, width: 160, height: 80, backgroundColor, opacity });
   const words = (id: string, x: number, y: number, text: string, containerId: string | null) =>
     ({ ...element, id, type: 'text', x, y, width: 120, height: 25, text, originalText: text, fontSize: 20, containerId });
   writeFileSync(file, JSON.stringify({ type: 'excalidraw', version: 2, elements: [
     box('plain', 0, 'transparent'), words('plain-label', 20, 28, 'default box', 'plain'),
     box('white', 200, '#ffffff'), words('white-label', 220, 28, 'white box', 'white'),
     box('under', 400, '#ffffff'), words('free', 420, 28, 'free on white', null),
+    // A white card on a pastel zone, and a blue fill at 30% (slate grey on the dark canvas): white words on both.
+    { ...box('zone', 0, '#ffec99', 120), width: 400, height: 160 }, box('card', 20, '#ffffff', 140), words('on-card', 40, 168, 'on a card', null),
+    box('faint', 420, '#a5d8ff', 140, 30), words('faint-label', 440, 168, 'faint', 'faint'),
+    box('under-faint', 620, '#a5d8ff', 140, 30), words('on-faint', 640, 168, 'free on faint', null),
   ], files: {} }));
   await page.locator('input[type="file"]').setInputFiles(file);
   await expect(page.getByText('Imported 1 diagram')).toBeVisible({ timeout: 20_000 });
@@ -126,7 +131,8 @@ test('Excalidraw labels and words read on the dark canvas @gate', async ({ page 
     const api = (window as unknown as { __V2__?: { getNodeDebugSnapshot(): { id: string; textColor?: number }[] | undefined } }).__V2__;
     return Object.fromEntries((api?.getNodeDebugSnapshot() ?? []).map(({ id, textColor }) => [id, textColor]));
   });
-  await expect.poll(inks, { timeout: 20_000 }).toMatchObject({ plain: 0xffffff, white: 0xffffff, free: 0xffffff });
+  await expect.poll(inks, { timeout: 20_000 }).toMatchObject({ plain: 0xffffff, white: 0xffffff, free: 0xffffff,
+    'on-card': 0xffffff, faint: 0xffffff, 'on-faint': 0xffffff });
 });
 
 test('a bent Excalidraw arrow pastes with its shape in one undo step @gate', async ({ page }) => {
