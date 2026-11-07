@@ -1,4 +1,4 @@
-import { UNTITLED_DOCUMENT_NAME } from '../../opencanvas/domain/document/defaults';
+import { DEFAULT_SCENE_LAYER_ID, UNTITLED_DOCUMENT_NAME } from '../../opencanvas/domain/document/defaults';
 import type { JsonObject } from '../../opencanvas/domain/document/json';
 import {
   SCENE_DOCUMENT_FORMAT, SCENE_DOCUMENT_VERSION,
@@ -12,7 +12,7 @@ import { CONTAINER_TITLE_HEIGHT } from '../../opencanvas/domain/nodes/nodeLabelB
 import { DEFAULT_NODE_SIZING_POLICY } from '../../opencanvas/domain/node-sizing/model';
 import { validateSceneDocumentV1 } from '../../opencanvas/domain/document/validation';
 import {
-  drawioColor, drawioConnectorAppearance, drawioErRelation, drawioImageUrl, drawioLabel, drawioNodeAppearance, drawioShape, drawioShapeName, parseDrawioStyle, type DrawioStyle,
+  drawioColor, drawioConnectorAppearance, own, drawioErRelation, drawioImageUrl, drawioLabel, drawioNodeAppearance, drawioShape, drawioShapeName, parseDrawioStyle, type DrawioStyle,
 } from './drawioStyle';
 import { parseXml, type XmlElement } from './xmlReader';
 
@@ -200,14 +200,16 @@ class PageBuilder {
         : `${stranded} shapes or connectors sit in a parent loop or under a missing parent, so they were left out`);
     }
     const layerCells = [...this.cells.values()].filter((cell) => cell !== root && cell.parent === root?.id && !cell.vertex && !cell.edge);
+    // The first layer is the app's default one, so Diagram as code, AI and pastes land on a layer this page has.
+    const layerIdOf = (index: number, cell: Cell) => (index === 0 ? DEFAULT_SCENE_LAYER_ID : `layer:${cell.id}`);
     for (const [index, cell] of layerCells.entries()) {
       this.layers.push({
-        id: `layer:${cell.id}`, name: cell.value.trim() || (index === 0 ? 'Default' : `Layer ${index + 1}`),
+        id: layerIdOf(index, cell), name: cell.value.trim() || (index === 0 ? 'Default' : `Layer ${index + 1}`),
         visible: cell.visible, locked: cell.style.locked === '1',
       });
     }
-    if (!this.layers.length) this.layers.push({ id: 'layer:default', name: 'Default', visible: true, locked: false });
-    for (const layer of layerCells) this.addChildren(layer.id, null, `layer:${layer.id}`);
+    if (!this.layers.length) this.layers.push({ id: DEFAULT_SCENE_LAYER_ID, name: 'Default', visible: true, locked: false });
+    for (const [index, layer] of layerCells.entries()) this.addChildren(layer.id, null, layerIdOf(index, layer));
     for (const cell of this.cells.values()) if (cell.edge && reachesRoot(cell)) this.addConnector(cell);
     if (this.rerouted) this.loss(this.rerouted === 1 ? '1 right-angle connector is re-routed, so its bends may move' : `${this.rerouted} right-angle connectors are re-routed, so their bends may move`);
     if (this.libraryImages) {
@@ -276,7 +278,7 @@ class PageBuilder {
     // draw.io turns a shape about its centre; ours turn about the top-left corner, so the corner moves.
     // draw.io's triangle points east unless `direction` says otherwise; ours points north. Turning it east or
     // west turns its box too, so the box is drawn upright with the sides swapped.
-    const turn = name === 'triangle' ? TRIANGLE_TURN[style.direction ?? 'east'] ?? 90 : 0;
+    const turn = name === 'triangle' ? own(TRIANGLE_TURN, style.direction ?? 'east') ?? 90 : 0;
     if (turn % 180 !== 0) [width, height] = [height, width];
     const at = turn % 180 !== 0 ? { x: x + (height - width) / 2, y: y + (width - height) / 2 } : { x, y };
     const rotation = ((num(style.rotation) + turn) * Math.PI) / 180;
@@ -284,16 +286,14 @@ class PageBuilder {
     const transform = { translation, rotationRadians: rotation, scale: { x: 1, y: 1 } };
     const imageUrl = drawioImageUrl(style);
     if ((name === 'image' || style.image) && !imageUrl) this.libraryImages += 1;
-    if (CONTAINER_KIND[name] || style.container === '1' || hasChildren) {
-      // Our container draws a title band over its top; a draw.io lane with a hairline header (a kanban column)
-      // or none at all has its shapes up there, so the band is hidden and the title set just above the lane.
+    if (own(CONTAINER_KIND, name) || style.container === '1' || hasChildren) {
       // Our container draws a 40px title band over its top. A draw.io lane's own band (`startSize`, 23 unless
       // set) is often thinner — an entity table's 22px header over its first row, a kanban column's hairline —
       // so then ours is hidden and the title set in draw.io's band, or just above the lane when it is a hairline.
       const band = num(style.startSize, 23);
       const thin = name === 'swimlane' && band < CONTAINER_TITLE_HEIGHT;
       this.nodes.push({
-        id: cell.id, kind: CONTAINER_KIND[name] ?? 'section', ...base,
+        id: cell.id, kind: own(CONTAINER_KIND, name) ?? 'section', ...base,
         transform,
         size: { width, height },
         content: { label, ...(thin || !label ? { showHeader: false } : {}) },
@@ -316,7 +316,7 @@ class PageBuilder {
       }
       // A label set outside its shape (a checkbox's beside it, an icon's below) becomes its own text there;
       // a picture's always does, since our image node draws no label.
-      const outside = OUTSIDE[style.labelPosition ?? ''] ?? OUTSIDE[`v-${style.verticalLabelPosition ?? ''}`]
+      const outside = own(OUTSIDE, style.labelPosition ?? '') ?? own(OUTSIDE, `v-${style.verticalLabelPosition ?? ''}`)
         ?? (imageUrl && label ? OUTSIDE['v-bottom']! : null);
       if (imageUrl) {
         this.nodes.push({ ...createImageNode(page, { id: cell.id, at, size: { width, height }, label: label || 'Image', url: imageUrl }), ...base, transform });

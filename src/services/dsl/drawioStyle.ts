@@ -8,9 +8,15 @@ import { decodeEntities } from './xmlReader';
 
 export type DrawioStyle = Readonly<Record<string, string>>;
 
+/** `table[key]` only when the table itself has it: "constructor" in a file is a word, not Object's own. */
+export function own<T>(table: Readonly<Record<string, T>>, key: string): T | undefined {
+  return Object.hasOwn(table, key) ? table[key] : undefined;
+}
+
 /** `ellipse;fillColor=#fff` → `{ ellipse: '', fillColor: '#fff' }`. A bare first word is the cell's base shape. */
 export function parseDrawioStyle(style: string | undefined): DrawioStyle {
-  const parsed: Record<string, string> = {};
+  // No prototype: a `__proto__=x` key in a hand-edited style stays a key.
+  const parsed: Record<string, string> = Object.create(null) as Record<string, string>;
   for (const part of (style ?? '').split(';')) {
     const trimmed = part.trim();
     if (!trimmed) continue;
@@ -56,7 +62,7 @@ const BARE = new Set(['mxgraph.bootstrap.anchor']);
 export function drawioShape(style: DrawioStyle, width: number, height: number): { readonly kind: ShapeKind; readonly unknown?: string } {
   const name = drawioShapeName(style);
   if (name === 'text') return { kind: 'text' };
-  const kind = SHAPES[name.replace(/\./g, '_')];
+  const kind = own(SHAPES, name.replace(/\./g, '_'));
   if (!kind) return { kind: 'rectangle', unknown: name };
   if (kind === 'rectangle' && style.rounded === '1') return { kind: 'rounded' };
   if (kind === 'ellipse' && Math.abs(width - height) < 1) return { kind: 'circle' };
@@ -146,8 +152,8 @@ const ER_ENDS: Readonly<Record<string, readonly [source: string, target: string]
  * (`}|--||`): one many-or-more end, one exactly-one end. Null unless both ends are entity-relation ends.
  */
 export function drawioErRelation(style: DrawioStyle): string | null {
-  const source = ER_ENDS[style.startArrow ?? ''];
-  const target = ER_ENDS[style.endArrow ?? ''];
+  const source = own(ER_ENDS, style.startArrow ?? '');
+  const target = own(ER_ENDS, style.endArrow ?? '');
   if (!source || !target) return null;
   return `${source[0]}${style.dashed === '1' ? '..' : '--'}${target[1]}`;
 }

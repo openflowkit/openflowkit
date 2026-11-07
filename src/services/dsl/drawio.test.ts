@@ -1,6 +1,8 @@
 import { deflateRawSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 import type { SceneDocumentV1 } from '../../opencanvas/domain/document/types';
+import { DEFAULT_SCENE_LAYER_ID } from '../../opencanvas/domain/document/defaults';
+import { validateSceneDocumentV1 } from '../../opencanvas/domain/document/validation';
 import { drawioToDocument, looksLikeDrawio } from './drawio';
 import flow from './fixtures/drawio/flow.drawio?raw';
 
@@ -62,7 +64,7 @@ describe('drawioToDocument', () => {
     const { document, losses } = await open(flow);
     const services = document.pages[1]!;
     expect(services.layers).toEqual([
-      { id: 'layer:1', name: 'Base', visible: true, locked: false },
+      { id: 'default', name: 'Base', visible: true, locked: false },
       { id: 'layer:2', name: 'Annotations', visible: false, locked: false },
     ]);
     const byId = new Map(services.nodes.map((node) => [node.id, node]));
@@ -242,5 +244,36 @@ describe('broken draw.io input', () => {
     expect(await drawioToDocument('', 'doc', NOW)).toHaveProperty('error');
     expect(await drawioToDocument('just some text', 'doc', NOW)).toHaveProperty('error');
     expect(await drawioToDocument('<svg xmlns="http://www.w3.org/2000/svg"/>', 'doc', NOW)).toEqual({ error: 'It has no draw.io pages in it.' });
+  });
+});
+
+describe('draw.io import fits ordinary documents', () => {
+  const page = (cells: string) => `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${cells}</root></mxGraphModel>`;
+
+  it('puts the first layer on the default layer id, so content from Diagram as code or AI pastes in', async () => {
+    const { document } = await open(page('<mxCell id="a" value="A" vertex="1" parent="1"><mxGeometry width="80" height="40" as="geometry"/></mxCell>'));
+    const [first] = document.pages;
+    expect(first!.layers[0]!.id).toBe(DEFAULT_SCENE_LAYER_ID);
+    const pasted = { ...first!.nodes[0]!, id: 'from-dsl', layerId: DEFAULT_SCENE_LAYER_ID };
+    const withPaste = { ...document, pages: [{ ...first!, nodes: [...first!.nodes, pasted] }] };
+    expect(validateSceneDocumentV1(withPaste).success).toBe(true);
+  });
+
+  it('treats style words like "constructor" and "__proto__" as plain unknowns, not as code', async () => {
+    const cell = (id: string, style: string) =>
+      `<mxCell id="${id}" value="${id}" style="${style}" vertex="1" parent="1"><mxGeometry width="80" height="40" as="geometry"/></mxCell>`;
+    const result = await drawioToDocument(page(
+      cell('a', 'constructor;')
+      + cell('b', 'shape=toString;labelPosition=constructor;verticalLabelPosition=hasOwnProperty')
+      + cell('c', 'triangle;direction=constructor')
+      + cell('d', '__proto__=x;fillColor=#ff0000')
+      + '<mxCell id="e" edge="1" source="a" target="b" parent="1" style="startArrow=constructor;endArrow=toString"><mxGeometry as="geometry"/></mxCell>',
+    ), 'doc', NOW);
+    if ('error' in result) throw new Error(result.error);
+    const nodes = result.document.pages[0]!.nodes;
+    expect(nodes.map((node) => node.id)).toEqual(['a', 'b', 'c', 'd']);
+    expect(nodes.every((node) => node.kind === 'process')).toBe(true);
+    expect(result.document.pages[0]!.connectors).toHaveLength(1);
+    expect(result.losses).toEqual(expect.arrayContaining(['draw.io’s “constructor” shape is drawn as a box', 'draw.io’s “toString” shape is drawn as a box']));
   });
 });
