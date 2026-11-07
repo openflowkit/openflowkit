@@ -100,8 +100,9 @@ const drawioLine = (value: string | undefined): string | undefined => {
 
 /** A near-black grey (`#000` to `#555`): the ink draw.io writes by default, meant for a light page. */
 export function drawioDarkInk(value: unknown): boolean {
-  if (typeof value !== 'string' || !/^#[0-9a-f]{3}([0-9a-f]{3})?$/.test(value)) return false;
-  const hex = value.length === 4 ? value.replace(/[0-9a-f]/g, (digit) => digit + digit) : value;
+  if (typeof value !== 'string' || !/^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(value)) return false;
+  const lower = value.toLowerCase();
+  const hex = lower.length === 4 ? lower.replace(/[0-9a-f]/g, (digit) => digit + digit) : lower;
   const [r, g, b] = [1, 3, 5].map((at) => Number.parseInt(hex.slice(at, at + 2), 16));
   return Math.max(r!, g!, b!) <= 0x55 && Math.max(r!, g!, b!) - Math.min(r!, g!, b!) <= 8;
 }

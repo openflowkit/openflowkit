@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
 import {
-  drawioColor, drawioConnectorAppearance, drawioErRelation, drawioImageUrl, drawioLabel, drawioNodeAppearance, drawioShape, drawioShapeName, parseDrawioStyle,
+  describe, expect, it } from 'vitest';
+import {
+  drawioColor, drawioDarkInk, drawioConnectorAppearance, drawioErRelation, drawioImageUrl, drawioLabel, drawioNodeAppearance, drawioShape, drawioShapeName, parseDrawioStyle,
 } from './drawioStyle';
 
 describe('draw.io styles', () => {
@@ -94,5 +95,18 @@ describe('draw.io styles', () => {
     expect(drawioLabel('<style></style>'.repeat(50_000) + 'y', { html: '1' })).toBe('y');
     drawioLabel('<div>'.repeat(100_000) + '&amp;'.repeat(100_000), { html: '1' });
     expect(performance.now() - started).toBeLessThan(500);
+  });
+});
+
+describe('drawioDarkInk', () => {
+  it('knows the near-black greys draw.io writes for a light page, in any case', () => {
+    for (const ink of ['#000', '#000000', '#333333', '#555555', '#2B2B2B']) expect(drawioDarkInk(ink), ink).toBe(true);
+    for (const ink of ['#666666', '#1c2b55', '#ff0000', 'default', 'none', undefined, 7]) expect(drawioDarkInk(ink), String(ink)).toBe(false);
+  });
+
+  it('leaves draw.io’s default black lines unset and keeps picked ones', () => {
+    expect(drawioNodeAppearance({ strokeColor: '#000000' }).stroke).toBeUndefined();
+    expect(drawioNodeAppearance({ strokeColor: '#B85450' }).stroke).toBe('#b85450');
+    expect(drawioConnectorAppearance({ strokeColor: '#000' }).stroke).toBeUndefined();
   });
 });
