@@ -363,7 +363,7 @@ export function V2EditorPage({ shared }: { readonly shared?: V2SharedView } = {}
     showDrawing, setActivePageId, writable, landingDirection, toastZoomedToRead, setAnnouncement, pushToast,
   });
 
-  const threads = useV2Threads({ session, page, setActivePageId, panels, tool, camera, rendererReady, map, lockedMapPageId: repo.lockedPageId, preferences, updatePreferences, pushToast, readOnly: docReadOnly });
+  const threads = useV2Threads({ session, page, setActivePageId, panels, camera, rendererReady, map, lockedMapPageId: repo.lockedPageId, preferences, updatePreferences, pushToast, readOnly: docReadOnly });
   const input = useV2EditorInput({
     hostRef, pageRef, sectionRef, selectionRef, readOnlyRef, drawCommit, applySelection, applyConnectorSelection, setAnnouncement,
     pushToast, setTool, openEditor, openChart, editLocked, editActions, code, preferences, updatePreferences,

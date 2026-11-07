@@ -10,7 +10,6 @@ import type { ToastItem } from '../design-system';
 import type { OpenThreadRequest } from './V2Comments';
 import type { useV2Camera } from './useV2Camera';
 import type { useV2Panels } from './useV2Panels';
-import type { V2Tool } from './v2ToolCatalog';
 import type { useV2Preferences } from './useV2Preferences';
 import {
   isUnread, lastActivity, openThreadTotal, selectThreads, threadLinkText, threadParam, unreadIds, withRead, withUnread, collectThreads,
@@ -21,7 +20,6 @@ interface ThreadsInput {
   readonly page: ScenePage | null;
   readonly setActivePageId: (pageId: string | null) => void;
   readonly panels: ReturnType<typeof useV2Panels>;
-  readonly tool: V2Tool;
   readonly camera: ReturnType<typeof useV2Camera>;
   readonly rendererReady: boolean;
   /** Map hides pins, so a thread is opened from Canvas. */
@@ -38,23 +36,16 @@ interface ThreadsInput {
 const SETTLE_FRAMES = 2;
 
 export function useV2Threads(input: ThreadsInput) {
-  const { page, setActivePageId, panels, tool, camera, rendererReady, lockedMapPageId, preferences, updatePreferences, pushToast, readOnly } = input;
+  const { page, setActivePageId, panels, camera, rendererReady, lockedMapPageId, preferences, updatePreferences, pushToast, readOnly } = input;
   const { document, updateThreads } = input.session;
   const mapActive = input.map.active;
   const leaveMap = useCallback(() => input.map.choose('canvas'), [input.map]);
   const [query, setQuery] = useState('');
-  // The panel opened by itself (the comment tool, a card, a link): it leaves focus where it was.
+  // The panel opened by itself (a link): it leaves focus where it was. Picking the comment tool never opens or closes a panel.
   const [quiet, setQuiet] = useState(false);
-  const { workspace, openWorkspace } = panels;
+  const { openWorkspace } = panels;
   const openPanel = useCallback(() => { setQuiet(true); openWorkspace('threads'); }, [openWorkspace]);
   const toggleFromRail = useCallback(() => { setQuiet(false); panels.toggleWorkspace('threads'); }, [panels]);
-  // Only the moment the tool is picked opens it: closing the panel with the tool still on leaves it closed. Code stays (it may hold a draft).
-  const previousTool = useRef(tool);
-  useEffect(() => {
-    const was = previousTool.current;
-    previousTool.current = tool;
-    if (tool === 'comment' && was !== 'comment' && workspace !== 'code') openPanel();
-  }, [tool, workspace, openPanel]);
   const [openThreadId, setOpenThreadId] = useState<string | null>(null);
   const [pending, setPending] = useState<OpenThreadRequest | null>(null);
   const [request, setRequest] = useState<OpenThreadRequest | null>(null);

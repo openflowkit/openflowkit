@@ -22,7 +22,7 @@ interface Props {
   readonly onFilters: (patch: Partial<ThreadFilters>) => void;
   /** Nothing can be resolved, deleted or started; the list, search, open and copy link still work. */
   readonly readOnly: boolean;
-  /** False when the panel opened by itself (the comment tool, a link): focus stays where it was. */
+  /** False when the panel opened by itself (a link): focus stays where it was. */
   readonly focusOnOpen: boolean;
   readonly onSelect: (threadId: string) => void;
   readonly onToggleResolved: (threadId: string) => void;

@@ -95,20 +95,21 @@ const openPanel = async (page: Page) => {
 };
 const order = (page: Page) => cards(page).evaluateAll((items) => items.map((item) => item.getAttribute('data-thread-id')));
 
-test('the panel opens with C and from the toolbar button, which counts the open threads', { tag: '@gate' }, async ({ page }) => {
+test('the panel opens only from its toolbar button; picking the comment tool opens and closes nothing', { tag: '@gate' }, async ({ page }) => {
   await drawn(page);
   await expect(panel(page)).toHaveCount(0);
-  // No threads yet: the button carries no count and the panel says so.
-  await expect(page.getByRole('button', { name: 'Threads', exact: true })).toBeVisible();
+  // C picks the tool and leaves the panels as they are.
   await page.getByTestId('v2-canvas').focus();
   await page.keyboard.press('c');
+  await expect(page.getByTestId('v2-editor')).toHaveAttribute('data-tool', 'comment');
+  await expect(panel(page)).toHaveCount(0);
+  // No threads yet: the button carries no count and the panel says so.
+  await page.getByRole('button', { name: 'Threads', exact: true }).click();
   await expect(panel(page)).toBeVisible();
   await expect(panel(page).getByRole('heading', { name: 'Threads', exact: true })).toBeVisible();
   await expect(panel(page).getByTestId('v2-threads-empty')).toContainText('No threads yet');
-  // Closable, and the comment tool still on leaves it closed.
   await panel(page).getByRole('button', { name: 'Close threads' }).click();
   await expect(panel(page)).toHaveCount(0);
-
   await page.getByRole('button', { name: 'Threads', exact: true }).click();
   await expect(panel(page)).toBeVisible();
   // It shares the slot with the AI assistant: one at a time.
@@ -116,6 +117,26 @@ test('the panel opens with C and from the toolbar button, which counts the open 
   await expect(panel(page)).toHaveCount(0);
   await page.getByRole('button', { name: 'Threads', exact: true }).click();
   await expect(page.getByRole('complementary', { name: 'AI assistant' })).toHaveCount(0);
+});
+
+test('picking C keeps the open panel and what is typed in it', { tag: '@gate' }, async ({ page }) => {
+  await drawn(page);
+  await page.getByRole('button', { name: 'AI assistant', exact: true }).click();
+  const assistant = page.getByRole('complementary', { name: 'AI assistant' });
+  await expect(assistant).toBeVisible();
+  const prompt = assistant.getByRole('textbox', { name: 'Ask AI assistant' });
+  await prompt.fill('Make the queue a cylinder');
+  // From the toolbar and from the keyboard.
+  await page.getByRole('button', { name: 'Select options' }).click();
+  await page.getByRole('option', { name: 'Comment' }).click();
+  await expect(page.getByTestId('v2-editor')).toHaveAttribute('data-tool', 'comment');
+  await page.keyboard.press('v');
+  await page.getByTestId('v2-canvas').focus();
+  await page.keyboard.press('c');
+  await expect(page.getByTestId('v2-editor')).toHaveAttribute('data-tool', 'comment');
+  await expect(assistant).toBeVisible();
+  await expect(panel(page)).toHaveCount(0);
+  await expect(prompt).toHaveValue('Make the queue a cylinder');
 });
 
 test('the toolbar button shows how many threads are open, and the panel lists them newest activity first', async ({ page }) => {
@@ -355,9 +376,9 @@ test('resolving from a card, and deleting after a confirmation', async ({ page }
 
 test('numbers continue from the highest across pages when a thread is started', async ({ page }) => {
   await open(page);
+  await openPanel(page);
   await page.getByTestId('v2-canvas').focus();
   await page.keyboard.press('c');
-  await expect(panel(page)).toBeVisible();
   await page.mouse.click(700, 500);
   const box = page.getByTestId('v2-comment-composer').getByRole('textbox', { name: 'Comment' });
   await box.fill('A fifth thread');
@@ -420,7 +441,7 @@ test('a pin drags to a new place with either tool: onto a node it follows it, on
   await page.keyboard.press('v');
   at = await centreOf();
   // Zoom to fit left the shape filling the middle; below it is empty canvas.
-  const empty = { x: 420, y: 650 }; // clear of the shape, and still on screen when the comment tool opens the panel and the canvas narrows
+  const empty = { x: 420, y: 650 }; // clear of the shape
   await dragTo(at, empty);
   await expect(page.getByTestId('v2-comment-thread')).toHaveCount(0); // a drop is not a click
   await expect.poll(async () => (await anchor()).anchor.nodeId).toBeNull();
@@ -434,7 +455,8 @@ test('a pin drags to a new place with either tool: onto a node it follows it, on
 
   // The comment tool: drop on a node, and the thread follows it.
   await page.keyboard.press('c');
-  await expect(panel(page)).toBeVisible();
+  // Picking the tool opens no panel.
+  await expect(panel(page)).toHaveCount(0);
   at = await centreOf();
   const rect = (await page.evaluate((id) => (window as unknown as { __V2__: V2Api }).__V2__.getNodeRect(id), nodeId))!;
   await dragTo(at, { x: rect.x + rect.width / 2, y: Math.min(rect.y + rect.height / 2, 760) });
@@ -465,7 +487,7 @@ test('a click away from a box with text shakes it once instead of closing it; ty
   await page.mouse.click(away.x, away.y);
   await expect(composer.locator('.ofk-comment-card')).toHaveAttribute('data-wiggle', /.*/);
   await expect(box).toHaveValue('Half-written thought!');
-  // The second click without typing closes it, text and all.
+  // The second click without typing closes it; the text waits for the next new comment on this page.
   await page.mouse.click(away.x, away.y);
   await expect(composer).toHaveCount(0);
   expect(await threadsOf(page)).toHaveLength(4);
