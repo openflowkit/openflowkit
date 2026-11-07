@@ -4,10 +4,10 @@
 import type { Point2d } from '../geometry/types';
 import { buildNodeWorldMatrices } from '../scene/worldGeometry';
 import { isIsoTimestamp } from '../document/validation';
+import { freeThreadId, freeThreadNumber } from './threadKeys';
 import {
   COMMENT_AUTHOR_MAX,
   COMMENT_BODY_MAX,
-  THREAD_NUMBER_MAX,
   type SceneThreadAnchor,
   type SceneCommentAuthor,
   type SceneComment,
@@ -72,8 +72,8 @@ function refreshAnchors(page: ScenePage): ScenePage {
 /**
  * `next` with the threads of `current`: a command (a commit, an undo or redo, an agent op on a file) changes
  * shapes, never threads, even when it restores a whole page snapshot. Pages only in `next` keep their own, but
- * yield a number another page kept (withFreeThreadNumbers). Anchors then follow their nodes. Returns `next`
- * itself when nothing changes.
+ * yield an id or a number another page kept (withFreeThreadIds, withFreeThreadNumbers). Anchors then follow
+ * their nodes. Returns `next` itself when nothing changes.
  */
 export function carryThreads(next: SceneDocumentV1, current: SceneDocumentV1): SceneDocumentV1 {
   const currentById = new Map(current.pages.map((page) => [page.id, page]));
@@ -91,12 +91,13 @@ export function carryThreads(next: SceneDocumentV1, current: SceneDocumentV1): S
     if (result !== page) changed = true;
     return result;
   });
-  // Pages only in `next` (inserted by this command) were numbered mid-batch, before the carry above gave the
-  // other pages their threads of now: they yield any number those hold. One at a time, so two of them never
-  // take the same free number.
+  // Pages only in `next` (inserted by this command, such as a page an undo brings back) hold the threads they
+  // had when they went: they yield any id or number the other pages, with their threads of now, hold. One at a
+  // time, so two of them never take the same free one.
   pages.forEach((page, index) => {
     if (currentById.has(page.id) || !page.threads) return;
-    const free = withFreeThreadNumbers({ ...next, pages: pages.filter((_, other) => other !== index) }, page);
+    const others = { ...next, pages: pages.filter((_, other) => other !== index) };
+    const free = withFreeThreadIds(others, withFreeThreadNumbers(others, page));
     if (free === page) return;
     pages[index] = free;
     changed = true;
@@ -127,9 +128,24 @@ export function withFreeThreadNumbers(document: SceneDocumentV1, page: ScenePage
   for (const thread of page.threads) if (!clashes.has(thread)) taken.add(thread.number);
   const threads = page.threads.map((thread) => {
     if (!clashes.has(thread)) return thread;
-    const number = freeNumber(taken);
+    const number = freeThreadNumber(taken);
     taken.add(number);
     return { ...thread, number };
+  });
+  return { ...page, threads };
+}
+
+/** Like withFreeThreadNumbers, for ids: a thread whose id the document already has gets a free one. */
+function withFreeThreadIds(document: SceneDocumentV1, page: ScenePage): ScenePage {
+  const taken = new Set(document.pages.flatMap((other) => pageThreads(other).map(({ id }) => id)));
+  const clashes = new Set(page.threads?.filter((thread) => taken.has(thread.id)));
+  if (!page.threads || clashes.size === 0) return page;
+  for (const thread of page.threads) if (!clashes.has(thread)) taken.add(thread.id);
+  const threads = page.threads.map((thread) => {
+    if (!clashes.has(thread)) return thread;
+    const id = freeThreadId(taken, thread.id);
+    taken.add(id);
+    return { ...thread, id };
   });
   return { ...page, threads };
 }
@@ -138,16 +154,6 @@ function takenNumbers(document: SceneDocumentV1): Set<number> {
   const taken = new Set<number>();
   for (const page of document.pages) for (const thread of pageThreads(page)) taken.add(thread.number);
   return taken;
-}
-
-/** One past the highest number taken; once that would pass THREAD_NUMBER_MAX, the lowest free one. */
-function freeNumber(taken: ReadonlySet<number>): number {
-  let highest = 0;
-  for (const number of taken) highest = Math.max(highest, number);
-  if (highest < THREAD_NUMBER_MAX) return highest + 1;
-  let lowest = 1;
-  while (taken.has(lowest)) lowest += 1;
-  return lowest;
 }
 
 /** `document` with `update` applied to one page's threads. An empty result drops the key. */
@@ -211,7 +217,7 @@ function replaceThread(
  * when it was the highest), or the lowest free one past THREAD_NUMBER_MAX.
  */
 export function nextThreadNumber(document: SceneDocumentV1): number {
-  return freeNumber(takenNumbers(document));
+  return freeThreadNumber(takenNumbers(document));
 }
 
 export interface NewComment {
