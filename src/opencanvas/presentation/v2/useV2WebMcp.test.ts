@@ -154,6 +154,7 @@ describe('useV2WebMcp', () => {
     expect(onActivity).toHaveBeenCalledWith('An agent in this browser commented on #1.');
     // A change that changes nothing leaves the document as it was: nothing to wait for.
     await expect(tools.get('resolve_thread')!.execute({ threadId: started.threadId, resolved: false })).resolves.toMatchObject({ resolved: false });
+    expect(onActivity).not.toHaveBeenCalledWith('An agent in this browser reopened #1.');
     unmount();
   });
 

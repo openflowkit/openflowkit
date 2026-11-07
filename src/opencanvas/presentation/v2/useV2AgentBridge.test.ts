@@ -320,10 +320,13 @@ describe('useV2AgentBridge', () => {
 
   // Read aloud after the agent's name ("Claude Code commented on #3."), not "Claude Code ran start_thread."
   it('says what a thread write did by the thread number people use', () => {
-    expect(agentCommented('start_thread', { threadId: 't', number: 3 })).toBe('commented on #3');
-    expect(agentCommented('reply_to_thread', { threadId: 't', number: 3 })).toBe('commented on #3');
-    expect(agentCommented('resolve_thread', { threadId: 't', number: 3, resolved: true })).toBe('resolved #3');
-    expect(agentCommented('resolve_thread', { threadId: 't', number: 3, resolved: false })).toBe('reopened #3');
-    expect(agentCommented('list_threads', { threads: [] })).toBeNull();
+    const changed = (output: unknown) => ({ output, threadsChanged: true as const });
+    expect(agentCommented('start_thread', changed({ threadId: 't', number: 3 }))).toBe('commented on #3');
+    expect(agentCommented('reply_to_thread', changed({ threadId: 't', number: 3 }))).toBe('commented on #3');
+    expect(agentCommented('resolve_thread', changed({ threadId: 't', number: 3, resolved: true }))).toBe('resolved #3');
+    expect(agentCommented('resolve_thread', changed({ threadId: 't', number: 3, resolved: false }))).toBe('reopened #3');
+    expect(agentCommented('list_threads', { output: { threads: [] } })).toBeNull();
+    // PR #103 review: resolving a resolved thread changes nothing, so there is nothing to announce.
+    expect(agentCommented('resolve_thread', { output: { threadId: 't', number: 3, resolved: true } })).toBeNull();
   });
 });

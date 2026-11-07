@@ -17,7 +17,7 @@ import {
 } from '../../../agent/bridge/protocol';
 import { agentName } from '../../../agent/agentName';
 import { THREAD_WRITE_OPS } from '../../../agent/ops/surface';
-import { runLiveAgentOp, type LiveAgentSession } from '../../../agent/liveOp';
+import { runLiveAgentOp, type LiveAgentSession, type LiveOpResult } from '../../../agent/liveOp';
 
 /** `waiting`: nothing answers yet, the normal state until the agent starts its server. `elsewhere`: another tab has it. */
 export type V2BridgeStatus = 'off' | 'connecting' | 'waiting' | 'connected' | 'elsewhere' | 'error';
@@ -90,10 +90,13 @@ export function agentDid(op: string, input: unknown, label: string): string {
   }
 }
 
-/** What a thread write did, as a person would say it ("commented on #3"), after the agent's name; null for other ops. */
-export function agentCommented(op: string, output: unknown): string | null {
+/**
+ * What a thread write did, as a person would say it ("commented on #3"), after the agent's name; null for other ops
+ * and for a write that changed nothing (resolving a resolved thread).
+ */
+export function agentCommented(op: string, { output, threadsChanged }: Pick<LiveOpResult, 'output' | 'threadsChanged'>): string | null {
   const { number, resolved } = (output && typeof output === 'object' ? output : {}) as { number?: unknown; resolved?: unknown };
-  if (typeof number !== 'number') return null;
+  if (!threadsChanged || typeof number !== 'number') return null;
   switch (op) {
     case 'start_thread': case 'reply_to_thread': return `commented on #${number}`;
     case 'resolve_thread': return `${resolved === false ? 'reopened' : 'resolved'} #${number}`;
@@ -206,8 +209,9 @@ export function useV2AgentBridge(options: V2AgentBridgeOptions): V2AgentBridge {
         setActivity((last) => ({ agent, doing: READS.has(request.op) ? 'reading the canvas' : THREAD_WRITE_OPS.has(request.op) ? 'commenting' : 'drawing', change: last?.change ?? null }));
         let result: { id: string; ok: boolean; output?: unknown; error?: string };
         try {
-          const { command, output } = await runLiveAgentOp(() => optionsRef.current, request.op, request.input, request.pageId, undefined, request.client);
-          const did = command ? agentDid(request.op, request.input, command.label) : agentCommented(request.op, output);
+          const ran = await runLiveAgentOp(() => optionsRef.current, request.op, request.input, request.pageId, undefined, request.client);
+          const { command, output } = ran;
+          const did = command ? agentDid(request.op, request.input, command.label) : agentCommented(request.op, ran);
           setActivity((last) => ({ agent, doing: null, change: command && did ? { label: did, id: command.id } : last?.change ?? null }));
           optionsRef.current.onActivity(did ? `${agent} ${did}.` : `${agent} ran ${request.op}.`);
           result = { id: request.id, ok: true, output };

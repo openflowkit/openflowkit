@@ -74,11 +74,12 @@ export function useV2WebMcp(options: V2WebMcpOptions): V2WebMcp {
       const signal = eitherSignal(controller.signal, callSignal);
       const next = queue.then(async () => {
         const before = optionsRef.current.document;
-        const { command, output, threadsChanged } = await runLiveAgentOp(() => optionsRef.current, name, input, pageId, signal);
+        const ran = await runLiveAgentOp(() => optionsRef.current, name, input, pageId, signal);
+        const { command, output, threadsChanged } = ran;
         trackOnce('agent_webmcp');
         if (command) setActivity({ label: command.label, id: command.id });
         if (command || threadsChanged) await settled(() => optionsRef.current.document, before);
-        const commented = agentCommented(name, output);
+        const commented = agentCommented(name, ran);
         optionsRef.current.onActivity(commented ? `An agent in this browser ${commented}.` : `${name} ran from an agent in this browser.`);
         return output;
       });
