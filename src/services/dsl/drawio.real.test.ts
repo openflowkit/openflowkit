@@ -87,7 +87,7 @@ function contrasts(document: SceneDocumentV1, canvas: string): Map<string, numbe
 describe('draw.io labels in the dark theme', () => {
   it.each([
     ['flowchart', flowchart], ['swimlanes', swimlanes], ['architecture-images', architectureImages],
-    ['aws-compressed', awsCompressed], ['dark-drawn', darkDrawn],
+    ['aws-compressed', awsCompressed], ['multi-page', multiPage], ['dark-drawn', darkDrawn],
   ])('%s: no label reads worse on the dark canvas than draw.io drew it on white', async (_name, text) => {
     const result = await drawioToDocument(text, 'doc', NOW);
     if ('error' in result) throw new Error(result.error);

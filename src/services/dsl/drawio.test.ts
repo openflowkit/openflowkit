@@ -482,6 +482,17 @@ describe('draw.io colours in either theme', () => {
     expect(losses).toContain('2 label colours are changed so they read on a dark canvas');
   });
 
+  it('gives dark ink to a coloured label whose see-through light fill turns mid-grey on the dark canvas', async () => {
+    const { document, losses } = await open(model([
+      box('red-on-misty-blue', 'fillColor=#BAC8D3;opacity=70;fontColor=#AE4132;', 0, 0),
+      box('short-hex', 'fillColor=#BCD;opacity=70;fontColor=#A43;', 140, 0),
+    ].join('')));
+    const nodes = new Map(document.pages[0]!.nodes.map((node) => [node.id, node]));
+    expect(nodes.get('red-on-misty-blue')!.appearance.textColor).toBe('#0f172a');
+    expect(nodes.get('short-hex')!.appearance.textColor).toBe('#0f172a');
+    expect(losses).toContain('2 label colours are changed so they read on a dark canvas');
+  });
+
   it('leaves draw.io’s default black lines to the theme, so they show on a dark canvas', async () => {
     const { document } = await open(model([
       box('a', 'strokeColor=#000000;', 0, 0), box('b', 'strokeColor=#b85450;', 200, 0), box('c', 'strokeColor=#333333;', 400, 0),
