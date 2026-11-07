@@ -3,7 +3,7 @@
 // panel says so in a banner; an agent gets the list: each node or connector that differs from what the
 // frame's authored text compiles to, and the attributes that keep it where the language can say it.
 import { areStructurallyEqual } from '../../opencanvas/domain/commands/equality';
-import type { CompileOptions, CompileResult, CompileWorkspaceResult } from '../../dsl/compile';
+import { hashDslScene, type CompileOptions, type CompileResult, type CompileWorkspaceResult } from '../../dsl/compile';
 import { frameEdited } from '../../dsl/frameScene';
 import { dslFrameMeta, dslFrameRaw, type DslFrameScene } from '../../dsl/sceneMeta';
 import { quote } from '../../dsl/text';
@@ -161,6 +161,21 @@ export type BaselineCache = Map<string, Promise<CompileWorkspaceResult>>;
 const tooBig = (scene: DslFrameScene) => (scene.nodes.length + (scene.groups?.length ?? 0) > HEADLESS_LAYOUT_LIMITS.nodes
   || scene.connectors.length > HEADLESS_LAYOUT_LIMITS.edges);
 
+/** What a frame's baseline is compiled from: its authored text, and the palette and icons setting it was drawn with. */
+function baselineKey(frame: SceneNode): string {
+  const meta = dslFrameMeta(frame);
+  return JSON.stringify([meta.source, meta.appearance?.palette ?? null, dslFrameRaw(frame).autoIcons ?? null]);
+}
+
+/**
+ * Names what the frame's canvas is compared against (see frameBaseline). A redraw from other text, or the same text
+ * in another palette, changes it; canvas edits and where the frame was placed do not. Null without authored text.
+ * Not the frame's scene hash: placing a frame re-takes that over renamed ids, so a new title alone can keep it.
+ */
+export function frameRevision(frame: SceneNode): string | null {
+  return typeof dslFrameMeta(frame).source === 'string' ? hashDslScene(baselineKey(frame)) : null;
+}
+
 /** What the frame's authored text compiles to, or null and why it could not be compiled. */
 export type FrameBaselineResult =
   | { readonly baseline: CompileResult; readonly note?: undefined }
@@ -184,7 +199,7 @@ export async function frameBaseline(scene: DslFrameScene, capabilities: OpCapabi
     ...(palette ? { appearance: { palette: palette as NonNullable<CompileOptions['appearance']>['palette'] } } : {}),
     ...(typeof raw.autoIcons === 'boolean' ? { autoIcons: raw.autoIcons } : {}),
   };
-  const key = JSON.stringify([meta.source, palette ?? null, raw.autoIcons ?? null]);
+  const key = baselineKey(scene.frame);
   try {
     let pending = cache.get(key);
     if (!pending) { pending = capabilities.compileWorkspace(meta.source, options); cache.set(key, pending); }
