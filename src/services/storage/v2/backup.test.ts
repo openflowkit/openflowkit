@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { createTestDocument, createTestNode } from '@/opencanvas/testing/builders/documentBuilder';
 import { UNTITLED_DOCUMENT_NAME } from '@/opencanvas/domain/document/defaults';
 import { FLOW_PERSISTENCE_DB_NAME } from '../indexedDbSchema';
-import { V2_BACKUP_FORMAT, buildV2Backup, importFiles, openedNotice, readAllDocuments, importSummary } from './backup';
+import { V2_BACKUP_FORMAT, buildV2Backup, importFiles, openedNotice, readAllDocuments, importSummary, importDetail } from './backup';
 import { createV2Repository } from './v2Repository';
 import drawio from '../../dsl/fixtures/drawio/flow.drawio?raw';
 
@@ -83,7 +83,7 @@ describe('importFiles', () => {
     expect(report.documents[0]).toMatchObject({ id: 'new-1', name: 'checkout' });
     expect(report.documents[0]!.pages).toHaveLength(2);
     expect(report).toMatchObject({ notes: [] });
-    expect(report.losses).toEqual(['checkout.drawio: 1 thing didn’t come across: Services: draw.io’s “mxgraph.aws4.lambda_function” shape is drawn as a box.']);
+    expect(report.losses).toEqual(['checkout.drawio: 2 things didn’t come across: Checkout: bold, colour and size set on words inside a label are drawn plain; Services: draw.io’s “mxgraph.aws4.lambda_function” shape is drawn as a box.']);
   });
 
   it('opens the diagram a draw.io SVG or PNG export carries, named without .drawio', async () => {
@@ -99,6 +99,18 @@ describe('importFiles', () => {
   it('says an image without a draw.io diagram has none', async () => {
     const report = await importFiles([fileOf('<svg xmlns="http://www.w3.org/2000/svg"/>', 'logo.svg'), bytesOf(new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]), 'shot.png')], repository(), mint);
     expect(report).toMatchObject({ count: 0, problems: ['logo.svg: It’s an image with no draw.io diagram in it.', 'shot.png: It’s an image with no draw.io diagram in it.'] });
+  });
+
+  it('says a .drawio file with no draw.io in it is not one, instead of asking for JSON', async () => {
+    const report = await importFiles([fileOf('', 'empty.drawio'), fileOf('<catalogue/>', 'index.xml')], repository(), mint);
+    expect(report).toMatchObject({ count: 0, problems: ['empty.drawio: It’s empty.', 'index.xml: It has no draw.io pages in it.'] });
+  });
+
+  it('keeps an import note short however many files it covers', () => {
+    const many = Array.from({ length: 40 }, (_, index) => `f${index}.drawio: 2 things didn’t come across: a; b.`);
+    const detail = importDetail({ problems: ['x.drawio: broken', 'y.drawio: broken', 'z.drawio: broken', 'w.drawio: broken'], notes: [], losses: many });
+    expect(detail).toBe('Couldn’t open x.drawio: broken; y.drawio: broken; z.drawio: broken; and 1 more. '
+      + 'f0.drawio: 2 things didn’t come across: a; b. f1.drawio: 2 things didn’t come across: a; b. and 38 more files lost something.');
   });
 
   it('says why a broken draw.io file did not open', async () => {

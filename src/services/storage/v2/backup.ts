@@ -70,7 +70,24 @@ async function drawioIn(file: File, text: string): Promise<string | null> {
   // Loaded on first use, like the Excalidraw importer: Home's list doesn't wait on it.
   const [{ looksLikeDrawio }, { drawioFromPng, drawioFromSvg }] = await Promise.all([import('../../dsl/drawio'), import('../../dsl/drawioFile')]);
   if (/\.png$/i.test(file.name)) return drawioFromPng(new Uint8Array(await file.arrayBuffer()));
-  return looksLikeDrawio(text) ? text : drawioFromSvg(text);
+  if (looksLikeDrawio(text)) return text;
+  const svg = drawioFromSvg(text);
+  // A `.drawio`, or XML, is meant as draw.io: the importer says what is wrong with it, not the JSON reader.
+  return svg ?? (/\.drawio$/i.test(file.name) || (/\.xml$/i.test(file.name) && text.trimStart().startsWith('<')) ? text : null);
+}
+
+/** The few first lines of what went wrong and what didn't come across, so a toast for 150 files still fits. */
+export function importDetail(report: Pick<ImportReport, 'problems' | 'notes' | 'losses'>): string {
+  const first = (items: readonly string[], keep: number) => items.slice(0, keep);
+  const parts: string[] = [];
+  if (report.problems.length) {
+    const more = report.problems.length > 3 ? `; and ${report.problems.length - 3} more` : '';
+    parts.push(`Couldn’t open ${first(report.problems, 3).join('; ')}${more}`.replace(/([^.])$/, '$1.'));
+  }
+  const said = [...report.notes, ...report.losses];
+  parts.push(...first(said, 2));
+  if (said.length > 2) parts.push(`and ${said.length - 2} more ${said.length - 2 === 1 ? 'file' : 'files'} lost something.`);
+  return parts.join(' ');
 }
 const SOURCE = /\.(mmd|mermaid|d2|dsl|ofk|txt)$/i;
 

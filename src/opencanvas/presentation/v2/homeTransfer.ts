@@ -1,7 +1,7 @@
 import type { Dispatch, SetStateAction } from 'react';
 import type { ToastItem } from '../design-system';
 import type { V2DocumentRepository, V2Thumbnail } from '../../../services/storage/v2/v2Repository';
-import { buildV2Backup, importFiles as importDocumentFiles, readAllDocuments } from '../../../services/storage/v2/backup';
+import { buildV2Backup, importDetail, importFiles as importDocumentFiles, readAllDocuments } from '../../../services/storage/v2/backup';
 import { downloadTextFile } from './v2Export';
 import { track } from '../../../services/usage/usage';
 import { buildV2Thumbnail } from './v2Thumbnail';
@@ -37,7 +37,7 @@ export async function importHomeFiles({ repository, toast, create, refresh, setT
     }
     repository.listThumbnails().then(setThumbnails, () => undefined);
   })();
-  const description = [...(report.problems.length ? [`Couldn’t open ${report.problems.join('; ')}`.replace(/([^.])$/, '$1.')] : []), ...report.notes, ...report.losses].join(' ');
+  const description = importDetail(report);
   toast({
     tone: report.problems.length ? (report.count ? 'warning' : 'danger') : report.notes.length + report.losses.length ? 'warning' : 'success',
     title: report.count ? `Imported ${plural(report.count, 'diagram')}` : 'Nothing was imported',
