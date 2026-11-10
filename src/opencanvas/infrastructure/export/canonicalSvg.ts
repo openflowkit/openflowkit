@@ -77,7 +77,7 @@ function exportNode(
   const freeform = resolveFreeformNodePresentation(node);
   if (freeform && (freeform.kind === 'pen' || freeform.kind === 'highlighter'
     || freeform.kind === 'line' || freeform.kind === 'arrow')) {
-    return exportStrokeNode(node, matrix, freeform, wrapper);
+    return exportStrokeNode(node, matrix, freeform, wrapper, theme);
   }
   if (freeform?.kind === 'text') return exportTextNode(node, matrix, freeform, theme, wrapper);
   if (freeform?.kind === 'image') return exportImageNode(node, matrix, freeform, theme, wrapper);

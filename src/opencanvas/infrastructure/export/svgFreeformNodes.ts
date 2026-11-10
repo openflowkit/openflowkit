@@ -44,9 +44,12 @@ export function exportStrokeNode(
   node: SceneNode,
   matrix: Matrix2d,
   presentation: StrokeNodePresentation,
-  frame: { readonly className: string; readonly style: string } | null
+  frame: { readonly className: string; readonly style: string } | null,
+  theme: 'light' | 'dark' | 'print' = 'light'
 ): string {
-  const color = safeColor(presentation.color, '#334155');
+  // A line with no colour of its own (an imported draw.io pen) follows the theme, as the canvas draws it.
+  const themed = theme === 'dark' && typeof node.content.strokeColor !== 'string' && presentation.kind !== 'highlighter';
+  const color = themed ? '#e2e8f0' : safeColor(presentation.color, '#334155');
   const inputSamples = presentation.inputSamples;
   const smoothed = inputSamples || (presentation.kind !== 'pen' && presentation.kind !== 'highlighter')
     ? presentation.points : smoothStroke(presentation.points);

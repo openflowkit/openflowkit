@@ -272,6 +272,13 @@ describe('canonical SVG export', () => {
     expect(svg).not.toContain('Pressure-pen');
   });
 
+  it('draws a pen line with no colour of its own light on the dark preview, as the canvas does', () => {
+    const pen = createTestNode('ink', { kind: 'pen', size: { width: 20, height: 10 }, content: { points: [{ x: 0, y: 0 }, { x: 20, y: 10 }], strokeWidth: 2 } });
+    const document = createTestDocument({ nodes: [pen] });
+    expect(exportCanonicalSvg(document, { theme: 'dark' })).toContain('stroke="#e2e8f0"');
+    expect(exportCanonicalSvg(document, { theme: 'light' })).toContain('stroke="#334155"');
+  });
+
   it('exports rich text, annotation, and safe image interiors', () => {
     const text = createTestNode('text', {
       kind: 'text',
