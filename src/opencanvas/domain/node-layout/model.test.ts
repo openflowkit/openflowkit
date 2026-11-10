@@ -11,6 +11,17 @@ describe('node content layout model', () => {
     expect(start.iconBounds).not.toBeNull();
   });
 
+  it('keeps an oversize label on its aligned side, as the SVG exporter anchors it', () => {
+    const metrics = { iconSize: null, labelSize: { width: 60, height: 16 }, subLabelSize: null, nodeSize: { width: 30, height: 20 } };
+    const padding = { top: 0, right: 0, bottom: 0, left: 0 };
+    const end = layoutNodeContent({ ...DEFAULT_NODE_CONTENT_LAYOUT, padding, horizontal: 'end', vertical: 'end' }, metrics);
+    expect(end.labelBounds).toMatchObject({ x: -30, y: 4 });
+    const centre = layoutNodeContent({ ...DEFAULT_NODE_CONTENT_LAYOUT, padding, horizontal: 'center', vertical: 'center' }, metrics);
+    expect(centre.labelBounds).toMatchObject({ x: -15, y: 2 });
+    const start = layoutNodeContent({ ...DEFAULT_NODE_CONTENT_LAYOUT, padding, horizontal: 'start', vertical: 'start' }, metrics);
+    expect(start.labelBounds).toMatchObject({ x: 0, y: 0 });
+  });
+
   it('preserves legacy top-centered defaults when field is absent', () => {
     expect(validateNodeContentLayout(undefined)).toEqual({
       success: true,
