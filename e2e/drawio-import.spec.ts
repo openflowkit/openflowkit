@@ -30,7 +30,7 @@ test('draw.io’s AWS template opens in the dark theme with every label readable
   // The importer loads on the first import: on a cold dev server its modules take seconds to arrive.
   await expect(page.getByText('Imported 1 diagram')).toBeVisible({ timeout: 20_000 });
   // The toast names the first losses and counts the rest.
-  await expect(page.getByText(/multi-page\.drawio: 8 things didn’t come across: Page 1: 8 right-angle connectors .* and 5 more\./)).toBeVisible();
+  await expect(page.getByText(/multi-page\.drawio: 5 things didn’t come across: Page 1: 8 right-angle connectors .* icons from draw\.io’s “aws4” set .* and 2 more\./)).toBeVisible();
   await page.getByRole('list', { name: 'Diagrams' }).locator('.ofk-home-card-hit', { hasText: 'multi-page' }).click();
   await expect.poll(() => page.url()).toContain('#/d/');
   await expect.poll(() => page.evaluate(() => (window as unknown as { __V2__?: { getDocument(): { pages: unknown[] } | null } })

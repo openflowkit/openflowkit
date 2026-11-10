@@ -76,7 +76,7 @@ describe('drawioToDocument', () => {
     expect(byId.get('lane')).toMatchObject({ kind: 'swimlane', content: { label: 'Backend' }, parentId: null });
     expect(byId.get('api')).toMatchObject({ parentId: 'lane', transform: { translation: { x: 20, y: 40 } } });
     expect(byId.get('worker')).toMatchObject({ parentId: 'lane', content: { label: 'Worker', shape: 'rectangle' } });
-    expect(byId.get('note')).toMatchObject({ kind: 'text', layerId: 'layer:2', content: { label: 'TODO' } });
+    expect(byId.get('note')).toMatchObject({ layerId: 'layer:2', content: { label: 'TODO' }, appearance: { fill: 'transparent', stroke: 'transparent' } });
     // A bend inside a container is container space in draw.io, page space here.
     expect(services.connectors[0]!.waypoints).toEqual([{ x: 240, y: 220 }]);
     expect(losses).toContain('Services: draw.io’s “mxgraph.aws4.lambda_function” shape is drawn as a box');
@@ -89,6 +89,78 @@ describe('drawioToDocument', () => {
     const { document, losses } = await open(`<mxfile><diagram name="Zipped" id="z">${compress(model)}</diagram></mxfile>`);
     expect(document.pages[0]!.nodes[0]).toMatchObject({ id: 'a', content: { label: 'Hello & welcome', shape: 'rectangle' } });
     expect(losses).toEqual([]);
+  });
+
+  it('draws a freehand line as a pen stroke over its box, not as a box', async () => {
+    // draw.io keeps a freehand line as a stencil: a path on a 0–100 grid, stretched over the cell.
+    const path = '<shape strokewidth="inherit"><foreground><path><move x="0" y="0"/><line x="50" y="100"/><line x="100" y="50"/></path><stroke/></foreground></shape>';
+    const stencil = (style: string) => `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>`
+      + `<mxCell id="s" value="" style="shape=stencil(${compress(path)});${style}" vertex="1" parent="1"><mxGeometry x="10" y="20" width="200" height="40" as="geometry"/></mxCell>`
+      + '</root></mxGraphModel>';
+    const { document, losses } = await open(stencil('lineShape=1;strokeColor=#ff0000;strokeWidth=3;'));
+    expect(document.pages[0]!.nodes).toEqual([expect.objectContaining({
+      id: 's', kind: 'pen', transform: expect.objectContaining({ translation: { x: 10, y: 20 } }), size: { width: 200, height: 40 },
+      content: { points: [{ x: 0, y: 0 }, { x: 100, y: 40 }, { x: 200, y: 20 }], strokeColor: '#ff0000', strokeWidth: 3 },
+    })]);
+    expect(losses).toEqual([]);
+    // draw.io's default ink is left to the theme, as lines are.
+    const plain = await open(stencil('lineShape=1;strokeColor=default;'));
+    expect(plain.document.pages[0]!.nodes[0]!.content).toEqual({ points: [{ x: 0, y: 0 }, { x: 100, y: 40 }, { x: 200, y: 20 }], strokeWidth: 1 });
+  });
+
+  it('draws a freehand outline, as draw.io saves a pen stroke, as one line down its middle at its width', async () => {
+    // Out along one edge and back along the other, 4 apart: draw.io fills it, a pen draws its middle 4 wide.
+    const outline = '<shape strokewidth="inherit"><foreground><path><move x="0" y="0"/><line x="50" y="0"/><line x="100" y="0"/>'
+      + '<line x="100" y="40"/><line x="50" y="40"/><line x="0" y="40"/><line x="0" y="0"/></path><fillstroke/></foreground></shape>';
+    const { document } = await open('<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>'
+      + `<mxCell id="s" style="shape=stencil(${compress(outline)});lineShape=1;" vertex="1" parent="1"><mxGeometry width="100" height="10" as="geometry"/></mxCell>`
+      + '</root></mxGraphModel>');
+    expect(document.pages[0]!.nodes[0]!.content).toEqual({ points: [{ x: 0, y: 2 }, { x: 50, y: 2 }, { x: 100, y: 2 }], strokeWidth: 4 });
+  });
+
+  it('sizes a container draw.io lays out on open around its children, with its title centred in its band', async () => {
+    // A layout container is saved with no geometry: draw.io runs ELK on open and wraps the children in its padding.
+    const layout = encodeURIComponent('[{"layout":"elkLayered","config":{"elk.padding":"[top=40,left=20,bottom=20,right=20]"}}]');
+    const { document } = await open('<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>'
+      + `<mxCell id="c" value="Vertical Flow Layout" style="swimlane;html=1;startSize=20;containerType=tree;childLayout=${layout};" vertex="1" parent="1"><mxGeometry as="geometry"/></mxCell>`
+      + '<mxCell id="a" value="Start" vertex="1" parent="c"><mxGeometry x="136" y="330" width="100" height="40" as="geometry"/></mxCell>'
+      + '<mxCell id="b" value="End" vertex="1" parent="c"><mxGeometry x="120" y="510" width="230" height="40" as="geometry"/></mxCell>'
+      + '<mxCell id="e" edge="1" parent="c" source="a" target="b" style="endArrow=none;"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="186" y="450"/></Array></mxGeometry></mxCell>'
+      + '</root></mxGraphModel>');
+    const [container, title, start, end] = document.pages[0]!.nodes;
+    expect(container).toMatchObject({ id: 'c', transform: { translation: { x: 100, y: 290 } }, size: { width: 270, height: 280 } });
+    // Children stay where draw.io drew them on the page: their own coordinates are inside the container now.
+    expect(start).toMatchObject({ id: 'a', parentId: 'c', transform: { translation: { x: 36, y: 40 } } });
+    expect(end).toMatchObject({ id: 'b', parentId: 'c', transform: { translation: { x: 20, y: 220 } } });
+    expect(document.pages[0]!.connectors[0]!.waypoints).toEqual([{ x: 186, y: 450 }]);
+    // The title fills the container's width, so its words centre across the band and never hang past its sides.
+    expect(title).toMatchObject({ id: 'c:label', transform: { translation: { x: 100, y: 290 } }, size: { width: 270 } });
+  });
+
+  it('outlines a shape we draw as a stand-in box dashed, and draws table cells as cells', async () => {
+    const { document, losses } = await open('<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>'
+      + '<mxCell id="p" style="shape=mxgraph.flowchart.parallel_mode;fillColor=#ff0000;" vertex="1" parent="1"><mxGeometry width="95" height="40" as="geometry"/></mxCell>'
+      + '<mxCell id="c" style="shape=partialRectangle;top=0;left=0;bottom=0;right=0;fillColor=none;" vertex="1" parent="1"><mxGeometry x="200" width="60" height="40" as="geometry"/></mxCell>'
+      + '</root></mxGraphModel>');
+    const [standIn, cell] = document.pages[0]!.nodes;
+    expect(standIn!.appearance).toMatchObject({ fill: 'transparent', stroke: '#ff0000', strokeStyle: 'dashed' });
+    expect(cell!.appearance.strokeStyle).toBeUndefined();
+    expect(losses).toEqual(['draw.io’s “mxgraph.flowchart.parallel_mode” shape is drawn as a box']);
+  });
+
+  it('draws an uncoloured container neutral, not in a colour picked from its id', async () => {
+    // Our swimlanes cycle colours by the digits in their id; draw.io's are plain, and its ids are full of digits.
+    const { document } = await open('<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>'
+      + '<mxCell id="8kCe2PUUIjDvka_Ryf0c-3" value="Lane" style="swimlane;" vertex="1" parent="1"><mxGeometry width="200" height="100" as="geometry"/></mxCell>'
+      + '</root></mxGraphModel>');
+    expect(document.pages[0]!.nodes[0]!.content.color).toBe('slate');
+  });
+
+  it('says a gradient to the page colour is drawn solid', async () => {
+    const { losses } = await open('<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>'
+      + '<mxCell id="a" style="ellipse;fillColor=#60a917;gradientColor=default;" vertex="1" parent="1"><mxGeometry width="80" height="40" as="geometry"/></mxCell>'
+      + '</root></mxGraphModel>');
+    expect(losses).toEqual(['gradient fills are drawn solid']);
   });
 
   it('says what came across badly instead of dropping it silently', async () => {
@@ -121,14 +193,14 @@ describe('drawioToDocument', () => {
     // Its centre stays at (200, 120): the corner, turned 270°, sits at (180, 220).
     expect(bar.transform.translation.x).toBeCloseTo(180);
     expect(bar.transform.translation.y).toBeCloseTo(220);
-    // A tiny text cell grows to its words around the same centre, at draw.io's 12px.
+    // A tiny text cell keeps draw.io's box, its words centred along the top and running on past it, as draw.io's do.
     const text = byId.get('t')!;
-    expect(text).toMatchObject({ kind: 'text', content: { label: 'Desired \nfunctionality', fontSize: 12 } });
-    expect(text.size.width).toBeGreaterThan(60);
-    expect(text.transform.translation.x + text.size.width / 2).toBeCloseTo(115);
-    // A wrapping one keeps its width unless a single word is wider.
-    expect(byId.get('w')!.size.width).toBeGreaterThan(30);
-    expect(byId.get('w')!.size.width).toBeLessThan(text.size.width);
+    expect(text).toMatchObject({ content: { label: 'Desired \nfunctionality', sizingPolicy: { overflow: 'visible' } } });
+    expect(text.appearance).toMatchObject({ fontSize: 12, textAlign: 'center', textVerticalAlign: 'top', textPadding: 2 });
+    expect({ ...text.transform.translation, ...text.size }).toEqual({ x: 100, y: 300, width: 30, height: 20 });
+    // A wrapping one wraps at that same box.
+    expect(byId.get('w')!.size).toEqual({ width: 30, height: 20 });
+    expect(byId.get('w')!.content.sizingPolicy).toMatchObject({ overflow: 'wrap' });
     expect(losses).toEqual(['draw.io’s “mxgraph.cabinets.cb_1p” shape is drawn as a box (2 shapes)']);
   });
 
@@ -153,7 +225,7 @@ describe('drawioToDocument', () => {
     expect(play.transform.rotationRadians).toBeCloseTo(Math.PI / 2);
     expect(byId.get('box')).toMatchObject({ content: { label: '' }, size: { width: 14, height: 14 } });
     const label = byId.get('box:label')!;
-    expect(label).toMatchObject({ kind: 'text', content: { label: 'Top Management' } });
+    expect(label).toMatchObject({ content: { label: 'Top Management' }, appearance: { textAlign: 'start' } });
     expect(label.transform.translation.x).toBeCloseTo(70 + 14 + 7);
     // An icon's label below it: centred under the icon, its top just past the icon's bottom.
     const under = byId.get('icon:label')!;
@@ -171,7 +243,7 @@ describe('drawioToDocument', () => {
     ));
     const byId = new Map(document.pages[0]!.nodes.map((node) => [node.id, node]));
     expect(byId.get('logo')).toMatchObject({ kind: 'image', content: { imageUrl: 'data:image/svg+xml;base64,PHN2Zy8+' } });
-    expect(byId.get('logo:label')).toMatchObject({ kind: 'text', content: { label: 'Logo' } });
+    expect(byId.get('logo:label')).toMatchObject({ content: { label: 'Logo' } });
     expect(byId.get('lib')).toMatchObject({ content: { shape: 'rectangle' } });
     expect(losses).toEqual(['2 pictures come from draw.io’s own image library, so they are drawn as a box']);
   });
@@ -193,7 +265,7 @@ describe('drawioToDocument', () => {
     // The lane draws no band over its cards; its title sits just above it.
     expect(byId.get('lane')).toMatchObject({ kind: 'swimlane', content: { label: 'TO DO', showHeader: false } });
     const title = byId.get('lane:label')!;
-    expect(title).toMatchObject({ kind: 'text', content: { label: 'TO DO' } });
+    expect(title).toMatchObject({ content: { label: 'TO DO' } });
     expect(title.transform.translation.y + title.size.height).toBeCloseTo(40 - 2);
   });
 
@@ -208,10 +280,10 @@ describe('drawioToDocument', () => {
     // The title is centred in draw.io's 22px band, not under our 40px one.
     const title = byId.get('a:label')!;
     expect(title.transform.translation.y + title.size.height / 2).toBeCloseTo(100 + 11);
-    // A row starts at the table's left edge and its own top, hugging its words.
+    // A row's words start where draw.io sets them: 6px in (its own 4 and draw.io's 2), wrapping at the row's width.
     const row = byId.get('ar1')!;
-    expect(row.transform.translation).toEqual({ x: 0, y: 22 });
-    expect(row.size.width).toBeLessThan(140);
+    expect({ ...row.transform.translation, ...row.size }).toEqual({ x: 6, y: 24, width: 132, height: 22 });
+    expect(row.appearance).toMatchObject({ textAlign: 'start', textPadding: 0 });
     expect(document.pages[0]!.connectors[0]).toMatchObject({ semantics: { erRelation: '}|--||' } });
   });
 
@@ -313,11 +385,12 @@ describe('draw.io connector ends and labels', () => {
     expect(validateSceneDocumentV1(document).success).toBe(true);
   });
 
+  // geometry y sets the label 10 off the line, square to it (above a line running right), then the offset moves it.
   it('puts the line’s own label where it was dragged along the line', async () => {
     const geometry = '<mxGeometry x="-0.5" y="10" relative="1" as="geometry"><mxPoint x="4" y="-6" as="offset"/></mxGeometry>';
     const { document } = await open(model(edge('', geometry, 'go')));
     expect(document.pages[0]!.connectors[0]!.labels).toEqual([
-      { id: 'e:label', text: 'go', pathRatio: 0.25, offset: { x: 4, y: -6 }, metadata: {} },
+      { id: 'e:label', text: 'go', pathRatio: 0.25, offset: { x: 4, y: -16 }, metadata: {} },
     ]);
   });
 
@@ -356,7 +429,7 @@ describe('draw.io containers and groups', () => {
     const byId = new Map(document.pages[0]!.nodes.map((node) => [node.id, node]));
     expect(byId.get('lane')!.content.showHeader).toBe(false);
     const title = byId.get('lane:label')!;
-    expect(title).toMatchObject({ kind: 'text', content: { label: 'lane' } });
+    expect(title).toMatchObject({ content: { label: 'lane' } });
     expect(title.transform.rotationRadians).toBeCloseTo(-Math.PI / 2);
     // Turned about its centre, the title's centre is the band's centre: (15, 100).
     const { width, height } = title.size;

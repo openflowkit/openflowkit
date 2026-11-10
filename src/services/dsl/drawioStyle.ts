@@ -1,6 +1,7 @@
 import type { JsonObject } from '../../opencanvas/domain/document/json';
 import type { SceneAnchor } from '../../opencanvas/domain/document/types';
 import type { ShapeKind } from '../../opencanvas/domain/nodes/shapeNode';
+import { DRAWIO_STYLESHEET } from './drawioStylesheet';
 import { decodeEntities } from './xmlReader';
 
 // draw.io's cell `style` ("rounded=1;fillColor=#dae8fc;ellipse") read into the
@@ -14,18 +15,31 @@ export function own<T>(table: Readonly<Record<string, T>>, key: string): T | und
   return Object.hasOwn(table, key) ? table[key] : undefined;
 }
 
-/** `ellipse;fillColor=#fff` → `{ ellipse: '', fillColor: '#fff' }`. A bare first word is the cell's base shape. */
-export function parseDrawioStyle(style: string | undefined): DrawioStyle {
-  // No prototype: a `__proto__=x` key in a hand-edited style stays a key.
-  const parsed: Record<string, string> = Object.create(null) as Record<string, string>;
-  for (const part of (style ?? '').split(';')) {
+/**
+ * A cell's style as draw.io reads it (mxStylesheet.getCellStyle): its default shape or connector style, then the
+ * string left to right, each bare word merging that named style from draw.io's sheet and each `key=value` setting
+ * one key. A string starting with `;` starts from nothing. Two departures keep the rest of the importer reading as
+ * it does: the bare word stays as a key (`text: ''`), and the default `shape` (draw.io's `label` box and
+ * `connector` line, both drawn as ours by default) is left out so a bare word still names the shape.
+ * draw.io deletes a key set to `none`; it is kept here, read everywhere as "no paint", which draws the same.
+ */
+export function resolveDrawioStyle(style: string | undefined, kind: 'vertex' | 'edge'): DrawioStyle {
+  const resolved: Record<string, string> = Object.create(null) as Record<string, string>;
+  const text = style ?? '';
+  if (!text.startsWith(';')) {
+    const { shape: _shape, ...defaults } = DRAWIO_STYLESHEET[kind === 'edge' ? 'defaultEdge' : 'defaultVertex']!;
+    Object.assign(resolved, defaults);
+  }
+  for (const part of text.split(';')) {
     const trimmed = part.trim();
     if (!trimmed) continue;
     const equals = trimmed.indexOf('=');
-    if (equals === -1) parsed[trimmed] = '';
-    else parsed[trimmed.slice(0, equals)] = trimmed.slice(equals + 1);
+    if (equals !== -1) { resolved[trimmed.slice(0, equals)] = trimmed.slice(equals + 1); continue; }
+    const named = own(DRAWIO_STYLESHEET, trimmed);
+    if (named) Object.assign(resolved, named);
+    resolved[trimmed] = '';
   }
-  return parsed;
+  return resolved;
 }
 
 /** The shape a cell names: `shape=` wins over a bare word (`ellipse`, `rhombus`, `text`, `swimlane`). */
@@ -35,7 +49,7 @@ export function drawioShapeName(style: DrawioStyle): string {
 }
 
 const SHAPES: Readonly<Record<string, ShapeKind>> = {
-  '': 'rectangle', rect: 'rectangle', rectangle: 'rectangle', label: 'rectangle', process: 'rectangle',
+  '': 'rectangle', rect: 'rectangle', rectangle: 'rectangle', label: 'rectangle', process: 'rectangle', partialRectangle: 'rectangle',
   ellipse: 'ellipse', doubleEllipse: 'ellipse', rhombus: 'diamond', triangle: 'triangle',
   hexagon: 'hexagon', parallelogram: 'parallelogram', trapezoid: 'trapezoid',
   cylinder: 'cylinder', cylinder2: 'cylinder', cylinder3: 'cylinder', datastore: 'cylinder',
@@ -93,7 +107,7 @@ export function drawioColor(value: string | undefined): string | undefined {
 }
 
 /** A line colour: draw.io's default black (and near-black grey) is left unset, so lines follow our theme and show on a dark canvas. */
-const drawioLine = (value: string | undefined): string | undefined => {
+export const drawioLine = (value: string | undefined): string | undefined => {
   const color = drawioColor(value);
   return drawioDarkInk(color) ? undefined : color;
 };
@@ -138,7 +152,8 @@ export function drawioNodeAppearance(style: DrawioStyle): JsonObject {
   if (fontSize !== undefined && fontSize > 0) appearance.fontSize = fontSize;
   // fontStyle is a bit mask: 1 bold, 2 italic, 4 underline.
   const fontStyle = finite(style.fontStyle) ?? 0;
-  if (fontStyle & 1) appearance.fontWeight = 700;
+  // draw.io sets words in a regular weight unless bold.
+  appearance.fontWeight = fontStyle & 1 ? 700 : 400;
   if (fontStyle & 2) appearance.fontStyle = 'italic';
   if (fontStyle & 4) appearance.textDecoration = 'underline';
   if (style.dashed === '1') appearance.strokeStyle = 'dashed';
@@ -160,7 +175,7 @@ const OUR_FONTS = new Set(['helvetica', 'arial', 'verdana', 'inter', 'sans-serif
  */
 export function drawioStyleLosses(style: DrawioStyle, of: 'shape' | 'connector'): string[] {
   const losses: string[] = [];
-  if (style.gradientColor && style.gradientColor !== 'none' && style.gradientColor !== 'default') losses.push('gradient fills are drawn solid');
+  if (style.gradientColor && style.gradientColor !== 'none') losses.push('gradient fills are drawn solid');
   if (style.shadow === '1') losses.push('shadows are left off');
   if (style.sketch === '1' || style.comic === '1') losses.push('the hand-drawn sketch look is drawn clean');
   if (style.fillStyle && style.fillStyle !== 'solid' && style.fillStyle !== 'auto') losses.push('hatched and patterned fills are drawn solid');
@@ -222,6 +237,18 @@ export function drawioConnectorAppearance(style: DrawioStyle): JsonObject {
   if (style.dashed === '1') appearance.dashPattern = 'dashed';
   const opacity = finite(style.opacity);
   if (opacity !== undefined && opacity < 100) appearance.opacity = Math.max(0, opacity) / 100;
+  // draw.io's connector is rounded unless `rounded=0`, by half its `arcSize` (default 20).
+  appearance.cornerRadius = style.rounded === '0' ? 0 : Math.min(24, Math.max(0, (finite(style.arcSize) ?? 20) / 2));
+  // Its label sits on the page's colour (ours: the canvas's, the unset plate) with no border unless one is set;
+  // a black border is left to the theme, as lines are.
+  const border = style.labelBorderColor;
+  if (!border || border === 'none') appearance.labelBorder = 'transparent';
+  else if (drawioLine(border)) appearance.labelBorder = drawioLine(border)!;
+  const plate = style.labelBackgroundColor;
+  if (plate && plate !== 'default') appearance.labelBackground = drawioColor(plate) ?? 'transparent';
+  appearance.labelFontSize = finite(style.fontSize) ?? 11;
+  const ink = drawioColor(style.fontColor);
+  if (ink && ink !== 'transparent') appearance.labelColor = ink;
   return appearance;
 }
 
@@ -273,4 +300,43 @@ export function drawioAnchor(style: DrawioStyle, end: 'exit' | 'entry'): SceneAn
   if (y === 0) return { kind: 'side', side: 'top', ratio: x };
   if (y === 1) return { kind: 'side', side: 'bottom', ratio: x };
   return { kind: 'normalized', x, y };
+}
+
+export interface Box { readonly x: number; readonly y: number; readonly width: number; readonly height: number }
+
+/**
+ * A layout container (`childLayout`) is saved with no size: draw.io runs its layout on open and wraps the children
+ * in the layout's padding (ELK's `elk.padding`, else 20 a side and the title band on top). Ours keeps the children
+ * where they were saved and wraps them the same way, in the container's own coordinates; null with no children.
+ * ponytail: no layout runs, so children saved mid-edit keep their places — run ELK here if that shows.
+ */
+export function drawioLayoutBox(children: readonly Box[], style: DrawioStyle): Box | null {
+  if (!children.length) return null;
+  let layout = style.childLayout ?? '';
+  try { layout = decodeURIComponent(layout); } catch { /* left as written */ }
+  const padding = /elk\.padding[^\]]*\]/.exec(layout)?.[0] ?? '';
+  const band = Number(style.startSize ?? 23);
+  const side = (name: string, fallback: number) => {
+    const value = Number(new RegExp(`${name}=(-?[\\d.]+)`).exec(padding)?.[1]);
+    return Number.isFinite(value) ? value : fallback;
+  };
+  // A loop, not Math.min(...): a container with tens of thousands of children would overflow the stack.
+  let [left, top, right, bottom] = [Infinity, Infinity, -Infinity, -Infinity];
+  for (const { x, y, width, height } of children) {
+    left = Math.min(left, x); top = Math.min(top, y); right = Math.max(right, x + width); bottom = Math.max(bottom, y + height);
+  }
+  left -= side('left', 20);
+  top -= side('top', (Number.isFinite(band) ? band : 23) + 20);
+  return { x: left, y: top, width: right + side('right', 20) - left, height: bottom + side('bottom', 20) - top };
+}
+
+/**
+ * A box standing in for a shape we don't draw is a dashed outline, so it reads as a stand-in. An icon's fill is
+ * its ink (an AWS icon's green, a floor plan's black walls), so the outline takes that colour and the box stays
+ * open: a filled slab would hide what is under it. draw.io's default black is left to the theme, as lines are.
+ */
+export function drawioStandIn(style: DrawioStyle): JsonObject {
+  const { stroke: _stroke, ...appearance } = drawioNodeAppearance(style);
+  const ink = drawioLine(style.fillColor) ?? drawioLine(style.strokeColor);
+  return { ...appearance, fill: 'transparent', ...(ink && ink !== 'transparent' ? { stroke: ink } : {}), strokeStyle: 'dashed' };
 }

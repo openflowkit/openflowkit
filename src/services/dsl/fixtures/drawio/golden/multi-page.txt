@@ -1,5 +1,6 @@
-page "Page 1": 1 layer(s), 59 nodes, 29 connectors
-  process rectangle "Project" @154,851 2030x80 fill #23445d ink #ffffff
+page "Page 1": 1 layer(s), 60 nodes, 29 connectors
+  process rectangle @154,851 2030x80 fill #23445d ink #ffffff
+  process rectangle "Project" @239,853 1943x68 fill transparent ink #ffffff
   process rectangle "Lane 1" @154,931 50x300 fill #23445d ink #ffffff
   process rectangle "Lane 1.1" @204,931 40x100 fill #5d7f99 ink #ffffff
   process rectangle "v 1.0" @154,851 90x80 fill #5d7f99 ink #ffffff
@@ -54,7 +55,7 @@ page "Page 1": 1 layer(s), 59 nodes, 29 connectors
   process rounded @1587,1456 127x50 fill #23445d
   process rounded @1808,1556 127x50 fill #23445d
   process rounded @1808,956 127x50 fill #23445d
-  group @244,891 647x40
+  group @244,891 647x40 fill transparent
   process rectangle "Milestone 1" @0,0 647x40 fill #5d7f99 ink #ffffff in 140
   process rectangle "Milestone 2" @647,0 647x40 fill #5d7f99 ink #ffffff in 140
   process rectangle "Milestone 3" @1293,0 647x40 fill #5d7f99 ink #ffffff in 140
@@ -91,32 +92,32 @@ page "Page 2": 1 layer(s), 30 nodes, 13 connectors
   section @340,290 480x430 fill transparent
   section "AWS Cloud" @50,80 780x650 fill transparent
   section "AWS Cloud" @850,80 270x650 fill transparent
-  process rectangle @90,140 78x78 fill #277116 ink #232f3e
-  text "Object" @90,220 78x19
-  process rectangle @210,140 75x78 fill #277116 ink #232f3e
-  text "Bucket" @210,220 75x19
-  process rectangle @1020,140 75x78 fill #277116 ink #232f3e
-  text "Bucket" @1020,220 75x19
-  process rectangle @370,310 78x78 fill #bc1356 ink #232f3e
-  text "AWS⏎CloudTrail" @368,390 83x33
-  process rectangle @480,310 78x78 fill #bc1356 ink #232f3e
-  text "Amazon⏎CloudWatch" @472,390 94x33
-  process rectangle @600,310 78x78 fill #bc1356 ink #232f3e
-  text "Amazon Simple⏎Notification Service" @564,390 150x33
-  process rectangle @723,310 78x78 fill #bc1356 ink #232f3e
-  text "Amazon Simple⏎Queue Service" @708,390 109x33
-  process rectangle @880,310 78x78 fill #bc1356 ink #232f3e
-  text "Amazon⏎CloudWatch" @872,390 94x33
-  process rectangle @1019,310 78x78 fill #bc1356 ink #232f3e
-  text "AWS⏎CloudTrail" @1016,390 83x33
-  process rectangle @599,450 78x78 fill #d05c17 ink #232f3e
-  text "AWS Lambda" @591,536 95x19
-  process rectangle @489,590 78x78 fill #5a30b5 ink #232f3e
-  text "Amazon Kinesis⏎Data Firehose" @472,670 113x33
-  process rectangle @710,590 78x78 fill #3334b9 ink #232f3e
-  text "Amazon⏎DynamoDB" @710,670 79x33
-  process rectangle @120,590 75x78 fill #277116 ink #232f3e
-  text "Bucket" @120,670 75x19
+  process rectangle @90,140 78x78 fill transparent
+  process rectangle "Object" @92,220 74x78 fill transparent
+  process rectangle @210,140 75x78 fill transparent
+  process rectangle "Bucket" @212,220 71x78 fill transparent
+  process rectangle @1020,140 75x78 fill transparent
+  process rectangle "Bucket" @1022,220 71x78 fill transparent
+  process rectangle @370,310 78x78 fill transparent
+  process rectangle "AWS⏎CloudTrail" @372,390 74x78 fill transparent
+  process rectangle @480,310 78x78 fill transparent
+  process rectangle "Amazon⏎CloudWatch" @482,390 74x78 fill transparent
+  process rectangle @600,310 78x78 fill transparent
+  process rectangle "Amazon Simple⏎Notification Service" @602,390 74x78 fill transparent
+  process rectangle @723,310 78x78 fill transparent
+  process rectangle "Amazon Simple⏎Queue Service" @725,390 74x78 fill transparent
+  process rectangle @880,310 78x78 fill transparent
+  process rectangle "Amazon⏎CloudWatch" @882,390 74x78 fill transparent
+  process rectangle @1019,310 78x78 fill transparent
+  process rectangle "AWS⏎CloudTrail" @1021,390 74x78 fill transparent
+  process rectangle @599,450 78x78 fill transparent
+  process rectangle "AWS Lambda" @601,536 74x78 fill transparent
+  process rectangle @489,590 78x78 fill transparent
+  process rectangle "Amazon Kinesis⏎Data Firehose" @491,670 74x78 fill transparent
+  process rectangle @710,590 78x78 fill transparent
+  process rectangle "Amazon⏎DynamoDB" @712,670 74x78 fill transparent
+  process rectangle @120,590 75x78 fill transparent
+  process rectangle "Bucket" @122,670 71x78 fill transparent
   section @860,290 250x430 fill transparent
   UEzPUAAOIrF-is8g5C7q-76 -> UEzPUAAOIrF-is8g5C7q-77 orthogonal, 0 bends
   UEzPUAAOIrF-is8g5C7q-77 -> UEzPUAAOIrF-is8g5C7q-79 orthogonal, 0 bends
@@ -131,4 +132,4 @@ page "Page 2": 1 layer(s), 30 nodes, 13 connectors
   UEzPUAAOIrF-is8g5C7q-85 -> UEzPUAAOIrF-is8g5C7q-86 orthogonal, 0 bends
   UEzPUAAOIrF-is8g5C7q-85 -> UEzPUAAOIrF-is8g5C7q-87 orthogonal, 0 bends
   UEzPUAAOIrF-is8g5C7q-86 -> UEzPUAAOIrF-is8g5C7q-98 orthogonal, 0 bends
-losses: Page 1: 8 right-angle connectors are re-routed, so their bends may move; Page 2: 5 right-angle connectors are re-routed, so their bends may move; Page 2: draw.io’s “mxgraph.aws4.object” shape is drawn as a box; Page 2: draw.io’s “mxgraph.aws4.bucket_with_objects” shape is drawn as a box (2 shapes); Page 2: draw.io’s “mxgraph.aws4.resourceIcon” shape is drawn as a box (9 shapes); Page 2: draw.io’s “mxgraph.aws4.bucket” shape is drawn as a box; Page 2: gradient fills are drawn solid (9 places); Page 2: 15 label colours are changed so they read on a dark canvas
+losses: Page 1: 8 right-angle connectors are re-routed, so their bends may move; Page 2: 5 right-angle connectors are re-routed, so their bends may move; Page 2: 13 icons from draw.io’s “aws4” set are drawn as boxes (object, bucket with objects, cloudtrail and 7 more); Page 2: gradient fills are drawn solid (9 places); Page 2: 28 label colours are changed so they read on a dark canvas

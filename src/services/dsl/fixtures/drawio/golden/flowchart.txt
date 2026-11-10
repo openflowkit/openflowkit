@@ -1,5 +1,6 @@
-page "Page 1": 1 layer(s), 59 nodes, 29 connectors
-  process rectangle "Project" @154,851 2030x80 fill #23445d ink #ffffff
+page "Page 1": 1 layer(s), 60 nodes, 29 connectors
+  process rectangle @154,851 2030x80 fill #23445d ink #ffffff
+  process rectangle "Project" @239,853 1943x68 fill transparent ink #ffffff
   process rectangle "Lane 1" @154,931 50x300 fill #23445d ink #ffffff
   process rectangle "Lane 1.1" @204,931 40x100 fill #5d7f99 ink #ffffff
   process rectangle "v 1.0" @154,851 90x80 fill #5d7f99 ink #ffffff
@@ -54,7 +55,7 @@ page "Page 1": 1 layer(s), 59 nodes, 29 connectors
   process rounded @1587,1456 127x50 fill #23445d
   process rounded @1808,1556 127x50 fill #23445d
   process rounded @1808,956 127x50 fill #23445d
-  group @244,891 647x40
+  group @244,891 647x40 fill transparent
   process rectangle "Milestone 1" @0,0 647x40 fill #5d7f99 ink #ffffff in 140
   process rectangle "Milestone 2" @647,0 647x40 fill #5d7f99 ink #ffffff in 140
   process rectangle "Milestone 3" @1293,0 647x40 fill #5d7f99 ink #ffffff in 140

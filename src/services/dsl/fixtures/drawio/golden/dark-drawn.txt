@@ -5,41 +5,41 @@ page "Page 1": 1 layer(s), 61 nodes, 20 connectors
   process circle @896,1256 350x350 fill #282828 ink #dddddd
   process circle @1223,1010 350x350 fill #282828 ink #dddddd
   process circle @1223,518 350x350 fill #282828 ink #dddddd
-  text "LESS IS MORE" @949,386 196x33 ink #dddddd
-  text "1" @873,309 55x124 ink #f18808
-  text "2" @1194,531 85x124 ink #f18808
-  text "3" @875,799 85x124 ink #f18808
-  text "4" @1199,1029 85x124 ink #f18808
-  text "5" @874,1251 85x124 ink #f18808
-  text "Reduce it to purely the essential⏎information." @949,459 302x43 ink #888888
+  process rectangle "LESS IS MORE" @951,384 186x30 fill transparent ink #dddddd
+  process rectangle "1" @875,307 106x120 fill transparent ink #f18808
+  process rectangle "2" @1196,529 70x120 fill transparent ink #f18808
+  process rectangle "3" @877,797 70x120 fill transparent ink #f18808
+  process rectangle "4" @1201,1027 70x120 fill transparent ink #f18808
+  process rectangle "5" @876,1249 70x120 fill transparent ink #f18808
+  process rectangle "Reduce it to purely the essential⏎information." @951,457 276x40 fill transparent ink #888888
   process rectangle "DESIGN RULES" @888,79 700x78 fill transparent ink #dddddd
-  text "for infographics" @892,163 332x46 ink #888888
-  text "IT'S ALL ABOUT⏎VISION-TRACKING" @1275,604 232x62 ink #dddddd
-  text "GIVE ME SPACE" @949,875 211x33 ink #dddddd
-  text "USE A CONSISTENT⏎STYLE" @1275,1102 248x62 ink #dddddd
-  text "DON’T MESS⏎WITH ALIGNMENT⏎AND SPACING" @949,1324 236x91 ink #dddddd
-  text "Scribble down your content." @949,430 257x24 ink #888888
-  text "Guide the viewer's eye through⏎the content." @1275,687 282x43 ink #888888
-  text "Each part of the graphic should⏎be well-structured." @1275,735 292x43 ink #888888
-  text "It groups content visually." @949,967 248x24 ink #888888
-  text "Enough "white space" makes⏎an infographic look tidy." @949,919 256x43 ink #888888
-  text "Each element should have⏎the same styling and the same⏎placement." @1275,1185 273x62 ink #888888
-  text "Each section or group of⏎content should use the same⏎spacing to the next, and should⏎be strictly aligned." @949,1442 287x81 ink #888888
+  process rectangle "for infographics" @894,161 632x96 fill transparent ink #888888
+  process rectangle "IT'S ALL ABOUT⏎VISION-TRACKING" @1277,602 236x70 fill transparent ink #dddddd
+  process rectangle "GIVE ME SPACE" @951,873 206x30 fill transparent ink #dddddd
+  process rectangle "USE A CONSISTENT⏎STYLE" @1277,1100 266x70 fill transparent ink #dddddd
+  process rectangle "DON’T MESS⏎WITH ALIGNMENT⏎AND SPACING" @951,1322 236x110 fill transparent ink #dddddd
+  process rectangle "Scribble down your content." @951,428 232x18 fill transparent ink #888888
+  process rectangle "Guide the viewer's eye through⏎the content." @1277,685 263x36 fill transparent ink #888888
+  process rectangle "Each part of the graphic should⏎be well-structured." @1277,733 258x38 fill transparent ink #888888
+  process rectangle "It groups content visually." @951,965 217x19 fill transparent ink #888888
+  process rectangle "Enough "white space" makes⏎an infographic look tidy." @951,917 240x36 fill transparent ink #888888
+  process rectangle "Each element should have⏎the same styling and the same⏎placement." @1277,1183 256x60 fill transparent ink #888888
+  process rectangle "Each section or group of⏎content should use the same⏎spacing to the next, and should⏎be strictly aligned." @951,1440 261x73 fill transparent ink #888888
   image "Image" @1375,1637 215x56
-  text "Created with draw.io" @1174,1663 193x24 ink #888888
-  group @1212,358 66x66
+  process rectangle "Created with draw.io" @1176,1661 176x20 fill transparent ink #888888
+  group @1212,358 66x66 fill transparent
   process circle @0,0 66x66 fill transparent ink #dddddd in 1016
   process circle @4,4 58x58 fill #666666 ink #dddddd in 1016
-  group @1183,683 66x66
+  group @1183,683 66x66 fill transparent
   process circle @0,0 66x66 fill transparent ink #dddddd in 1019
   process circle @4,4 58x58 fill #666666 ink #dddddd in 1019
-  group @1212,893 66x66
+  group @1212,893 66x66 fill transparent
   process circle @0,0 66x66 fill transparent ink #dddddd in 1022
   process circle @4,4 58x58 fill #666666 ink #dddddd in 1022
-  group @1183,1177 66x66
+  group @1183,1177 66x66 fill transparent
   process circle @0,0 66x66 fill transparent ink #dddddd in 1025
   process circle @4,4 58x58 fill #666666 ink #dddddd in 1025
-  group @1212,1396 66x66
+  group @1212,1396 66x66 fill transparent
   process circle @0,0 66x66 fill transparent ink #dddddd in 1028
   process circle @4,4 58x58 fill #666666 ink #dddddd in 1028
   process rectangle @1228,909 33x34 fill transparent ink #dddddd
@@ -80,4 +80,4 @@ page "Page 1": 1 layer(s), 61 nodes, 20 connectors
   (1209,1219) -> (1209,1227) direct, 0 bends
   (1231,1214) -> (1237,1218) direct, 0 bends
   (1195,1202) -> (1201,1206) direct, 0 bends
-losses: draw.io’s “mxgraph.ios7.icons.eye” shape is drawn as a box
+losses: draw.io’s “mxgraph.ios7.icons.eye” shape is drawn as a box; bold, colour and size set on words inside a label are drawn plain (9 places)

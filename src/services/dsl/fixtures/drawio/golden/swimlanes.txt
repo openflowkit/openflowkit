@@ -1,34 +1,34 @@
 page "Page 1": 1 layer(s), 31 nodes, 21 connectors
   swimlane "Pool" @70,40 960x750
-  text "Pool" @70,40 960x20
+  process rectangle "Pool" @70,40 960x20 fill transparent
   swimlane "Lane 1" @0,20 160x730 in 77e6c97f196da883-1
-  text "Lane 1" @0,20 160x20 in 77e6c97f196da883-1
+  process rectangle "Lane 1" @0,20 160x20 fill transparent in 77e6c97f196da883-1
   process rounded @20,65 100x60 fill #fdfdfb in 77e6c97f196da883-2
   process rounded @20,155 100x60 fill #fdfdfb in 77e6c97f196da883-2
   process rounded @30,560 100x60 fill #fdfdfb in 77e6c97f196da883-2
   swimlane "Lane 2" @160,20 160x730 in 77e6c97f196da883-1
-  text "Lane 2" @160,20 160x20 in 77e6c97f196da883-1
+  process rectangle "Lane 2" @160,20 160x20 fill transparent in 77e6c97f196da883-1
   process rounded @30,65 100x60 fill #fdfdfb in 77e6c97f196da883-3
   swimlane "Lane 3" @320,20 160x730 in 77e6c97f196da883-1
-  text "Lane 3" @320,20 160x20 in 77e6c97f196da883-1
+  process rectangle "Lane 3" @320,20 160x20 fill transparent in 77e6c97f196da883-1
   process rounded @30,155 100x60 fill #fdfdfb in 77e6c97f196da883-4
   process diamond @40,240 80x60 fill #fdfdfb in 77e6c97f196da883-4
   process rounded @30,560 100x60 fill #fdfdfb in 77e6c97f196da883-4
   swimlane "Lane 4" @480,20 160x730 in 77e6c97f196da883-1
-  text "Lane 4" @480,20 160x20 in 77e6c97f196da883-1
+  process rectangle "Lane 4" @480,20 160x20 fill transparent in 77e6c97f196da883-1
   process rounded @30,240 100x60 fill #fdfdfb in 77e6c97f196da883-5
   process diamond @40,320 80x60 fill #fdfdfb in 77e6c97f196da883-5
   process rounded @30,400 100x60 fill #fdfdfb in 77e6c97f196da883-5
   process rounded @30,560 100x60 fill #fdfdfb in 77e6c97f196da883-5
   process diamond @40,640 80x60 fill #fdfdfb in 77e6c97f196da883-5
   swimlane "Lane 5" @640,20 160x730 in 77e6c97f196da883-1
-  text "Lane 5" @640,20 160x20 in 77e6c97f196da883-1
+  process rectangle "Lane 5" @640,20 160x20 fill transparent in 77e6c97f196da883-1
   process rounded @30,400 100x60 fill #fdfdfb in 77e6c97f196da883-6
   process rounded @30,480 100x60 fill #fdfdfb in 77e6c97f196da883-6
   process rounded @30,560 100x60 fill #fdfdfb in 77e6c97f196da883-6
   process rounded @30,640 100x60 fill #fdfdfb in 77e6c97f196da883-6
   swimlane "Lane 6" @800,20 160x730 in 77e6c97f196da883-1
-  text "Lane 6" @800,20 160x20 in 77e6c97f196da883-1
+  process rectangle "Lane 6" @800,20 160x20 fill transparent in 77e6c97f196da883-1
   process rounded @30,640 100x60 fill #fdfdfb in 77e6c97f196da883-7
   77e6c97f196da883-8 -> 77e6c97f196da883-11 orthogonal, 0 bends
   77e6c97f196da883-11 -> 77e6c97f196da883-9 orthogonal, 0 bends

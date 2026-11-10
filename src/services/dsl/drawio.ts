@@ -7,16 +7,18 @@ import {
 import type { Point2d } from '../../opencanvas/domain/geometry/types';
 import { createImageNode } from '../../opencanvas/domain/nodes/imageNode';
 import { createShapeNode } from '../../opencanvas/domain/nodes/shapeNode';
-import { measurePortableText } from '../../opencanvas/domain/text/measurement';
 import { CONTAINER_TITLE_HEIGHT } from '../../opencanvas/domain/nodes/nodeLabelBounds';
-import { DEFAULT_NODE_SIZING_POLICY } from '../../opencanvas/domain/node-sizing/model';
 import { validateSceneDocumentV1 } from '../../opencanvas/domain/document/validation';
-import { resolveNodeStyle } from '../../opencanvas/domain/nodes/nodeStyle';
-import { DEFAULT_CANVAS_COLOR, contrastRatio, darkInkReadsOn, paintOver, readableTextOn } from '../../opencanvas/domain/color/adaptiveColor';
 import {
-  drawioAnchor, drawioColor, drawioConnectorAppearance, drawioDarkInk, drawioStyleLosses, own, drawioErRelation, drawioImageUrl, drawioLabel, drawioNodeAppearance, drawioShape, drawioShapeName, type DrawioStyle,
+  drawioAnchor, drawioConnectorAppearance, drawioLayoutBox, type Box, drawioStyleLosses, own, drawioErRelation, drawioImageUrl, drawioLabel, drawioNodeAppearance, drawioShape, drawioShapeName, drawioStandIn, type DrawioStyle,
 } from './drawioStyle';
 import { num, pageCells, pageModel, type Cell, type Geometry } from './drawioCells';
+import { inkForEitherTheme } from './drawioInk';
+import { drawioFreehands, freehandContent } from './drawioStencil';
+import { richText, standInLosses } from './drawioLosses';
+import { besideLine } from './drawioEdgeLabel';
+import { drawioLabelBox, drawioLabelFit, type DrawioLabelBox } from './drawioLabelBox';
+import { labelLayout, labelNode } from './drawioLabelNode';
 import { parseXml } from './xmlReader';
 
 // A draw.io file (`.drawio`, or its `.xml` export) as an OpenFlowKit document.
@@ -41,34 +43,10 @@ function turnedCorner(x: number, y: number, width: number, height: number, radia
   return { x: x + half.x - (half.x * cos - half.y * sin), y: y + half.y - (half.x * sin + half.y * cos) };
 }
 
-const { minSize, maxSize } = DEFAULT_NODE_SIZING_POLICY;
-/** The app's default sizing policy, spelt out as JSON: a fixed box whose label is not wrapped. */
-const SPILL: JsonObject = { ...DEFAULT_NODE_SIZING_POLICY, minSize: { ...minSize }, maxSize: { ...maxSize } };
-
-interface Outside {
-  readonly side: 'left' | 'right' | 'top' | 'bottom';
-  /** The style key draw.io widens that gap with. */
-  readonly spacing: string;
-  /** How the words sit against the shape: away from it, centred along it. */
-  readonly style: DrawioStyle;
-}
-
-/** draw.io's `labelPosition` (beside) and `verticalLabelPosition` (above, below; `v-` here) as where our text goes. */
-const OUTSIDE: Readonly<Record<string, Outside>> = {
-  right: { side: 'right', spacing: 'spacingLeft', style: { align: 'left', verticalAlign: 'middle' } },
-  left: { side: 'left', spacing: 'spacingRight', style: { align: 'right', verticalAlign: 'middle' } },
-  'v-bottom': { side: 'bottom', spacing: 'spacingTop', style: { align: 'center', verticalAlign: 'top' } },
-  'v-top': { side: 'top', spacing: 'spacingBottom', style: { align: 'center', verticalAlign: 'bottom' } },
-};
-
 /** Degrees our north-pointing triangle turns to point where draw.io's `direction` says. */
 const TRIANGLE_TURN: Readonly<Record<string, number>> = { north: 0, east: 90, south: 180, west: 270 };
 
 const CONTAINER_KIND: Readonly<Record<string, string>> = { swimlane: 'swimlane', group: 'group', table: 'section' };
-
-/** Our dark canvas: what shows through a see-through fill or a dark wash. */
-const DARK_CANVAS = '#191b19';
-const LIGHT_CANVAS = DEFAULT_CANVAS_COLOR;
 
 class PageBuilder {
   readonly cells = new Map<string, Cell>();
@@ -83,10 +61,14 @@ class PageBuilder {
   /** A style we don't draw → how many shapes and connectors asked for it, said once per style. */
   private readonly styleLosses = new Map<string, number>();
   private rerouted = 0;
+  /** Cells draw.io hides (`visible="0"`), with everything inside them and every line to them. */
+  private readonly hidden = new Set<string>();
+  private readonly autoBoxes = new Map<string, Box | null>();
   /** Pictures from draw.io's own image library: only its servers have them. */
   private libraryImages = 0;
 
-  constructor(cells: readonly Cell[], private readonly loss: (message: string) => void) {
+  /** `freehand`: each freehand line's points as fractions of its cell's box (`drawioFreehands`). */
+  constructor(cells: readonly Cell[], private readonly loss: (message: string) => void, private readonly freehand: ReadonlyMap<string, readonly (readonly Point2d[])[]> = new Map()) {
     for (const cell of cells) {
       if (this.cells.has(cell.id)) { loss(`two cells share the id “${cell.id}”, so the later one was left out`); continue; }
       this.cells.set(cell.id, cell);
@@ -123,73 +105,33 @@ class PageBuilder {
     }
     if (!this.layers.length) this.layers.push({ id: DEFAULT_SCENE_LAYER_ID, name: 'Default', visible: true, locked: false });
     for (const [index, layer] of layerCells.entries()) this.addTree(layer.id, layerIdOf(index, layer));
-    for (const cell of this.cells.values()) if (cell.edge && attached.has(cell.id)) this.addConnector(cell);
+    for (const cell of this.cells.values()) {
+      if (!cell.edge || !attached.has(cell.id) || this.hidden.has(cell.id)) continue;
+      if (!cell.visible || this.hidden.has(cell.source ?? '') || this.hidden.has(cell.target ?? '')) this.hidden.add(cell.id);
+      else this.addConnector(cell);
+    }
+    if (this.hidden.size) this.loss(this.hidden.size === 1 ? '1 shape or connector hidden in draw.io was left out' : `${this.hidden.size} shapes or connectors hidden in draw.io were left out`);
     if (this.rerouted) this.loss(this.rerouted === 1 ? '1 right-angle connector is re-routed, so its bends may move' : `${this.rerouted} right-angle connectors are re-routed, so their bends may move`);
     if (this.libraryImages) {
       this.loss(`${this.libraryImages === 1 ? '1 picture comes' : `${this.libraryImages} pictures come`} from draw.io’s own image library, so ${this.libraryImages === 1 ? 'it is' : 'they are'} drawn as a box`);
     }
-    for (const [name, count] of this.unknownShapes) {
-      this.loss(`draw.io’s “${name}” shape is drawn as a box${count > 1 ? ` (${count} shapes)` : ''}`);
-    }
+    for (const message of standInLosses(this.unknownShapes)) this.loss(message);
     for (const [message, count] of this.styleLosses) this.loss(count > 1 ? `${message} (${count} places)` : message);
-    this.inkForEitherTheme();
+    inkForEitherTheme(this.nodes, this.loss);
   }
 
-  private noteStyle(style: DrawioStyle, of: 'shape' | 'connector'): void {
-    for (const message of drawioStyleLosses(style, of)) this.styleLosses.set(message, (this.styleLosses.get(message) ?? 0) + 1);
+  private noteStyle(style: DrawioStyle, of: 'shape' | 'connector', value: string): void {
+    const rich = style.html === '1' && richText(value) ? ['bold, colour and size set on words inside a label are drawn plain'] : [];
+    for (const message of [...drawioStyleLosses(style, of), ...rich]) this.styleLosses.set(message, (this.styleLosses.get(message) ?? 0) + 1);
   }
 
-  /**
-   * draw.io's ink is picked for a white page. It stays where the theme doesn't change what is under the words
-   * (a deep fill stays solid in both), or where it also reads on what our dark theme shows there (teal, a pastel lane
-   * seen through a washed white card); anywhere else it is left to the theme, so it turns white on dark. Near-black
-   * looks the same either way; a colour (AWS navy, red on a see-through fill) is counted in the report, since light
-   * loses it too. What shows is the node's fill over its containers', bottom up: parents are placed before children,
-   * so each backdrop is one lookup. ponytail: free text over a shape it isn't inside reads only its containers.
-   */
-  private inkForEitherTheme(): void {
-    // Only containers and nodes with their own ink need a backdrop: resolving every node's style would slow a 50,000-cell file.
-    const parents = new Set(this.nodes.map((node) => node.parentId));
-    const seen = new Map<string, { dark: string; light: string }>();
-    const over = (node: SceneNode, below: string, canvas: string) => {
-      if (node.kind === 'text') return below;
-      const { fill, opacity } = resolveNodeStyle(node, canvas);
-      return paintOver(fill, below, opacity);
-    };
-    let recoloured = 0;
-    for (const [index, node] of this.nodes.entries()) {
-      const ink = node.kind === 'text' ? node.content.customColor : node.appearance.textColor;
-      const hex = typeof ink === 'string' && ink.startsWith('#') ? ink : undefined;
-      if (!parents.has(node.id) && !hex) continue;
-      const below = (node.parentId && seen.get(node.parentId)) || { dark: DARK_CANVAS, light: LIGHT_CANVAS };
-      const backdrop = { dark: over(node, below.dark, DARK_CANVAS), light: over(node, below.light, LIGHT_CANVAS) };
-      seen.set(node.id, backdrop);
-      // Under words the theme doesn't change (a deep fill stays solid in both), the ink stays as the author drew it.
-      if (!hex || backdrop.dark === backdrop.light) continue;
-      if (drawioDarkInk(hex)) {
-        if (darkInkReadsOn(backdrop.dark)) continue;
-      } else {
-        if (contrastRatio(hex, backdrop.dark) >= Math.min(4.5, contrastRatio(hex, backdrop.light))) continue;
-        recoloured += 1;
-        // A see-through light fill turns mid-grey on the dark canvas, where the theme's white is lost too: dark ink
-        // reads there and on the light page, so it is fixed for both.
-        if (darkInkReadsOn(backdrop.dark) && darkInkReadsOn(backdrop.light)) {
-          this.nodes[index] = node.kind === 'text'
-            ? { ...node, content: { ...node.content, customColor: readableTextOn(backdrop.dark) } }
-            : { ...node, appearance: { ...node.appearance, textColor: readableTextOn(backdrop.dark) } };
-          continue;
-        }
-      }
-      if (node.kind === 'text') {
-        const { customColor: _ink, ...content } = node.content;
-        this.nodes[index] = { ...node, content };
-      } else {
-        const { textColor: _ink, ...appearance } = node.appearance;
-        this.nodes[index] = { ...node, appearance };
-      }
-    }
-    if (recoloured) {
-      this.loss(recoloured === 1 ? '1 label colour is changed so it reads on a dark canvas' : `${recoloured} label colours are changed so they read on a dark canvas`);
+  /** A hidden cell and everything inside it. */
+  private hide(id: string): void {
+    for (const queue = [id]; queue.length; ) {
+      const next = queue.pop()!;
+      if (this.hidden.has(next)) continue;
+      this.hidden.add(next);
+      queue.push(...this.childrenOf(next).map((child) => child.id));
     }
   }
 
@@ -203,6 +145,7 @@ class PageBuilder {
       this.childrenOf(parentCellId).filter((cell) => cell.vertex).reverse().map((cell) => ({ cell, parentNodeId }));
     for (const stack = pending(layerCellId, null); stack.length; ) {
       const { cell, parentNodeId } = stack.pop()!;
+      if (!cell.visible) { this.hide(cell.id); continue; }
       if (this.addNode(cell, parentNodeId, layerId)) stack.push(...pending(cell.id, cell.id));
     }
   }
@@ -246,14 +189,15 @@ class PageBuilder {
     if (!geometry) { this.loss(`“${this.labelOf(cell)}”: a shape without a position was left out`); return false; }
     const style = this.inherited(cell);
     const name = drawioShapeName(style);
-    this.noteStyle(style, 'shape');
+    this.noteStyle(style, 'shape', cell.value);
     const label = drawioLabel(this.valueOf(cell), style);
-    const { x, y } = this.placed(cell, geometry);
+    const { x, y } = this.nodeAt(cell, geometry);
     // A folded container opens unfolded, so its children sit inside it rather than spilling out.
     const unfolded = cell.collapsed ? geometry.unfolded : null;
     if (unfolded) this.loss(`${label ? `“${label}”` : 'A container'} was folded in draw.io, so it opens unfolded`);
-    let width = Math.max(1, unfolded?.width ?? (geometry.width || 120));
-    let height = Math.max(1, unfolded?.height ?? (geometry.height || 60));
+    const sizedOnOpen = this.autoBox(cell);
+    let width = Math.max(1, unfolded?.width ?? sizedOnOpen?.width ?? (geometry.width || 120));
+    let height = Math.max(1, unfolded?.height ?? sizedOnOpen?.height ?? (geometry.height || 60));
     const hasChildren = this.childrenOf(cell.id).some((child) => child.vertex);
     // The node factories scan `page.nodes` for the next z-index, which `base` sets anyway: an empty page keeps this one pass.
     const page: ScenePage = { id: '', name: '', diagramKind: 'flowchart', layers: this.layers, nodes: [], connectors: [], metadata: {}, extensions: {} };
@@ -269,6 +213,18 @@ class PageBuilder {
     const transform = { translation, rotationRadians: rotation, scale: { x: 1, y: 1 } };
     const imageUrl = drawioImageUrl(style);
     if ((name === 'image' || style.image) && !imageUrl) this.libraryImages += 1;
+    const strokes = this.freehand.get(cell.id);
+    if (strokes && !hasChildren) {
+      // One pen node a stroke: the first keeps the cell's id, so lines drawn to it still land.
+      for (const [index, line] of strokes.entries()) {
+        this.nodes.push({
+          id: index ? `${cell.id}:stroke-${index + 1}` : cell.id, kind: 'pen', ...base, zIndex: this.nodes.length, transform, size: { width, height },
+          content: freehandContent(line, style, width, height), appearance: {}, ports: [], metadata: {}, extensions: {},
+        });
+      }
+      this.nodeIds.add(cell.id);
+      return false;
+    }
     if (own(CONTAINER_KIND, name) || style.container === '1' || hasChildren) {
       // Our container draws a 40px title band over its top. A draw.io lane's own band (`startSize`, 23 unless
       // set) is often thinner — an entity table's 22px header over its first row, a kanban column's hairline —
@@ -280,97 +236,76 @@ class PageBuilder {
         id: cell.id, kind: own(CONTAINER_KIND, name) ?? 'section', ...base,
         transform,
         size: { width, height },
-        content: { label, ...(thin || !label ? { showHeader: false } : {}) },
+        // Ours cycle colours by id when none is set; draw.io's are plain. Its own colours, if any, are the appearance's.
+        content: { label, color: 'slate', ...(thin || !label ? { showHeader: false } : {}) },
         appearance: drawioNodeAppearance(style),
         ports: [], metadata: {}, extensions: {},
       });
       if (sideways && label) {
         // A sideways lane's title reads up its left band: an upright box on the band's centre, turned a quarter.
         const centre = { x: x + band / 2, y: y + height / 2 };
-        const upright = { ...geometry, x: centre.x - height / 2, y: centre.y - band / 2, width: height, height: band, relative: false };
-        this.addText({ ...cell, id: `${cell.id}:label`, geometry: upright, style: { ...style, align: 'center', verticalAlign: 'middle', whiteSpace: '' } }, label, { ...base, zIndex: this.nodes.length }, -Math.PI / 2);
+        const upright = { x: centre.x - height / 2, y: centre.y - band / 2, width: height, height: band };
+        this.nodes.push(labelNode({ id: `${cell.id}:label`, box: { ...upright, align: 'center', verticalAlign: 'middle', wrap: false }, label, paint: textPaint(style), about: upright, radians: -Math.PI / 2, base: { ...base, zIndex: this.nodes.length }, corner: turnedCorner }));
       } else if (thin && label) {
         const title = band < 12
-          ? { geometry: { ...geometry, x, y: y - num(style.spacing, 2) - 1, width, height: 1, relative: false }, verticalAlign: 'bottom' }
-          : { geometry: { ...geometry, x, y, width, height: band, relative: false }, verticalAlign: 'middle' };
-        this.addText({ ...cell, id: `${cell.id}:label`, geometry: title.geometry, style: { ...style, verticalAlign: title.verticalAlign, whiteSpace: '' } }, label, { ...base, zIndex: this.nodes.length }, 0);
+          ? { geometry: { x, y: y - num(style.spacing, 2) - 1, width, height: 1 }, verticalAlign: 'bottom' as const }
+          : { geometry: { x, y, width, height: band }, verticalAlign: 'middle' as const };
+        const box: DrawioLabelBox = { ...title.geometry, align: style.align === 'left' || style.align === 'right' ? style.align : 'center', verticalAlign: title.verticalAlign, wrap: false };
+        this.nodes.push(labelNode({ id: `${cell.id}:label`, box, label, paint: textPaint(style), about: box, radians: 0, base: { ...base, zIndex: this.nodes.length }, corner: turnedCorner }));
       }
     } else {
       const shape = drawioShape(style, width, height);
-      if (shape.unknown && name !== 'image' && !imageUrl) this.unknownShapes.set(shape.unknown, (this.unknownShapes.get(shape.unknown) ?? 0) + 1);
+      if (shape.unknown && name !== 'image' && !imageUrl) {
+        // AWS's resource icons are one shape; the icon is named in `resIcon`.
+        const unknown = style.resIcon?.startsWith('mxgraph.') ? style.resIcon : shape.unknown;
+        this.unknownShapes.set(unknown, (this.unknownShapes.get(unknown) ?? 0) + 1);
+      }
+      // draw.io lays the words out in its label box, from the cell's own (unturned) box and style alone.
+      const drawn = turn % 180 !== 0 ? { x, y, width: height, height: width } : { x, y, width, height };
+      const box = drawioLabelBox(drawn, style);
+      const fit = drawioLabelFit(drawn, box);
       if (shape.kind === 'text' && !imageUrl) {
-        // draw.io's `text` style sets its words top-left unless the cell says otherwise.
-        this.addText({ ...cell, style: { align: 'left', verticalAlign: 'top', ...style } }, label, base, rotation);
+        // A text cell is a box with no fill or line round its words: the shape's box if they sit evenly in it.
+        this.nodes.push(labelNode({ id: cell.id, box: fit.inside ? { ...box, ...drawn } : box, padding: fit.padding, label, paint: drawioNodeAppearance(style), about: drawn, radians: rotation, base, corner: turnedCorner }));
+        this.nodeIds.add(cell.id);
         return false;
       }
-      // A label set outside its shape (a checkbox's beside it, an icon's below) becomes its own text there;
-      // a picture's always does, since our image node draws no label.
-      const outside = own(OUTSIDE, style.labelPosition ?? '') ?? own(OUTSIDE, `v-${style.verticalLabelPosition ?? ''}`)
-        ?? (imageUrl && label ? OUTSIDE['v-bottom']! : null);
+      // Words set evenly in the shape are its label; beside, above, below or unevenly in it (and always a
+      // picture's, as our image node draws none) they get a box of their own where draw.io puts them.
+      const inside = fit.inside && !imageUrl;
       if (imageUrl) {
         this.nodes.push({ ...createImageNode(page, { id: cell.id, at, size: { width, height }, label: label || 'Image', url: imageUrl }), ...base, transform });
       } else {
-        const node = createShapeNode(page, { kind: shape.kind, id: cell.id, at, size: { width, height }, label: outside ? '' : label, appearance: drawioNodeAppearance(style) });
-        // Without `whiteSpace=wrap` draw.io lets a label run past its box; the fixed policy draws it the same way.
-        const content = style.whiteSpace === 'wrap' ? node.content : { ...node.content, sizingPolicy: SPILL };
-        this.nodes.push({ ...node, ...base, transform, content });
+        const layout = labelLayout(box, fit.padding);
+        const appearance = { ...(shape.unknown ? drawioStandIn(style) : drawioNodeAppearance(style)), ...(inside ? layout.appearance : {}) };
+        const node = createShapeNode(page, { kind: shape.kind, id: cell.id, at, size: { width, height }, label: inside ? label : '', appearance });
+        this.nodes.push({ ...node, ...base, transform, content: { ...node.content, sizingPolicy: layout.sizingPolicy } });
       }
-      if (outside && label) {
-        const gap = num(style.spacing, 2) + num(style[outside.spacing]);
-        const box = { ...geometry, x, y, width, height, relative: false };
-        const anchor = {
-          right: { ...box, x: x + width + gap, width: 1 },
-          left: { ...box, x: x - gap - 1, width: 1 },
-          bottom: { ...box, y: y + height + gap, height: 1 },
-          top: { ...box, y: y - gap - 1, height: 1 },
-        }[outside.side];
-        this.addText({ ...cell, id: `${cell.id}:label`, geometry: anchor, style: { ...style, ...outside.style, whiteSpace: '' } }, label, { ...base, zIndex: this.nodes.length }, 0);
+      if (!inside && label) {
+        this.nodes.push(labelNode({ id: `${cell.id}:label`, box, label, paint: textPaint(style), about: drawn, radians: rotation, base: { ...base, zIndex: this.nodes.length }, corner: turnedCorner }));
       }
     }
     this.nodeIds.add(cell.id);
     return true;
   }
 
-  /**
-   * A text cell. Ours carry font and colour in `content`, and wrap inside their box. draw.io text cells are
-   * often drawn tiny ("Desired functionality" in 30×20) with the words spilling out, so the box grows to the
-   * measured words around draw.io's anchor: centred unless aligned left/right or top/bottom.
-   */
-  private addText(cell: Cell, label: string, base: Pick<SceneNode, 'parentId' | 'layerId' | 'zIndex'>, rotation: number): void {
-    const { style, geometry } = cell;
-    const fontSize = num(style.fontSize, 12);
-    const fontWeight = (num(style.fontStyle) & 1) ? 700 : 500;
-    const measure = (text: string) => measurePortableText(text, { fontSize, fontWeight, overflow: 'visible' });
-    const measured = measure(label);
-    const box = { ...geometry!, ...this.placed(cell, geometry!) };
-    // Wrapped text still never splits a word in draw.io: the box is at least its longest word wide.
-    const widest = style.whiteSpace === 'wrap' ? label.split(/\s+/).reduce((most, word) => Math.max(most, measure(word).width), 0) : measured.width;
-    // A text node wraps 8px inside each side. ponytail: the portable measure runs a few percent under the
-    // canvas font, hence the 5% — measure with the canvas font if labels still break.
-    const fit = (measuredWidth: number) => Math.ceil(measuredWidth * 1.05) + 20;
-    // Our text node centres its words, so text set against a side hugs them instead of filling draw.io's box;
-    // wrapped text that won't fit one line keeps the box's width.
-    const side = style.align === 'left' || style.align === 'right';
-    const width = Math.max(1, side
-      ? (style.whiteSpace === 'wrap' ? Math.max(fit(widest), Math.min(box.width, fit(measured.width))) : fit(measured.width))
-      : Math.max(box.width, fit(widest)));
-    const hug = style.verticalAlign === 'top' || style.verticalAlign === 'bottom';
-    const height = hug ? Math.ceil(measured.height) + 4 : Math.max(box.height, Math.ceil(measured.height) + 4);
-    const x = style.align === 'left' ? box.x : style.align === 'right' ? box.x + box.width - width : box.x + (box.width - width) / 2;
-    const y = style.verticalAlign === 'top' ? box.y : style.verticalAlign === 'bottom' ? box.y + box.height - height : box.y + (box.height - height) / 2;
-    const color = drawioColor(style.fontColor);
-    this.nodes.push({
-      id: cell.id, kind: 'text', ...base,
-      transform: { translation: rotation ? turnedCorner(x, y, width, height, rotation) : { x, y }, rotationRadians: rotation, scale: { x: 1, y: 1 } },
-      size: { width, height },
-      content: {
-        label, fontSize, fontWeight: String(fontWeight),
-        ...(num(style.fontStyle) & 2 ? { fontStyle: 'italic' } : {}),
-        ...(color && color !== 'transparent' ? { customColor: color } : {}),
-      },
-      appearance: {}, ports: [], metadata: {}, extensions: {},
-    });
-    this.nodeIds.add(cell.id);
+  /** Where a vertex's node sits in its parent node: draw.io's place, moved where a container is sized on open. */
+  private nodeAt(cell: Cell, geometry: Geometry): Point2d {
+    const at = this.placed(cell, geometry);
+    const own = this.autoBox(cell);
+    const up = this.autoBox(cell.parent ? this.cells.get(cell.parent) : undefined);
+    if (!own && !up) return at;
+    return { x: at.x + (own?.x ?? 0) - (up?.x ?? 0), y: at.y + (own?.y ?? 0) - (up?.y ?? 0) };
+  }
+
+  /** A container draw.io sizes on open (`drawioLayoutBox`), in its own coordinates; worked out once each. */
+  private autoBox(cell: Cell | undefined): Box | null {
+    if (!cell?.vertex || !cell.geometry || cell.geometry.width || cell.geometry.height) return null;
+    if (!this.autoBoxes.has(cell.id)) {
+      const children = this.childrenOf(cell.id).filter((child) => child.vertex && child.geometry && !child.geometry.relative);
+      this.autoBoxes.set(cell.id, drawioLayoutBox(children.map((child) => child.geometry!), cell.style));
+    }
+    return this.autoBoxes.get(cell.id)!;
   }
 
   /** A vertex's top-left in its parent's space: relative ones are fractions of the parent's size plus an offset. */
@@ -381,6 +316,13 @@ class PageBuilder {
       x: geometry.x * (parent?.width ?? 0) + geometry.offset.x,
       y: geometry.y * (parent?.height ?? 0) + geometry.offset.y,
     };
+  }
+
+  /** A connector end on the page: its point, or draw.io's exit/entry fraction of its shape (else the middle). */
+  private endAt(end: ConnectorEndpoint, style: DrawioStyle, side: 'exit' | 'entry'): Point2d {
+    const [at, size] = [end.nodeId ? this.originOf(end.nodeId) : null, end.nodeId ? this.cells.get(end.nodeId)?.geometry : null];
+    if (!at || end.point) return end.point ?? { x: 0, y: 0 };
+    return { x: at.x + (size?.width ?? 0) * num(style[`${side}X`], 0.5), y: at.y + (size?.height ?? 0) * num(style[`${side}Y`], 0.5) };
   }
 
   /** Where a cell's own coordinates start on the page: the sum of its container vertices' positions. */
@@ -417,7 +359,7 @@ class PageBuilder {
       return;
     }
     const style = cell.style;
-    this.noteStyle(style, 'connector');
+    this.noteStyle(style, 'connector', cell.value);
     const orthogonal = /orthogonal|elbow|isometric|entityRelation/i.test(style.edgeStyle ?? '');
     const points = (cell.geometry?.points ?? []).map(toPage);
     if (orthogonal && points.length) this.rerouted += 1;
@@ -426,7 +368,7 @@ class PageBuilder {
     const along = (x: number): number => Math.min(1, Math.max(0, (x + 1) / 2));
     const line = cell.geometry;
     const labels: ConnectorLabel[] = label
-      ? [{ id: `${cell.id}:label`, text: label, pathRatio: along(line?.x ?? 0), offset: { ...(line?.offset ?? { x: 0, y: 0 }) }, metadata: {} }]
+      ? [{ id: `${cell.id}:label`, text: label, pathRatio: along(line?.x ?? 0), offset: besideLine(line?.y ?? 0, this.endAt(source, style, 'exit'), this.endAt(target, style, 'entry'), line?.offset ?? { x: 0, y: 0 }), metadata: {} }]
       : [];
     // A label dragged along an edge is its own vertex, parented to the edge; x runs -1 (source) to 1 (target).
     for (const child of this.childrenOf(cell.id)) {
@@ -448,12 +390,19 @@ class PageBuilder {
   }
 }
 
+/** The type and ink a label carries when its words get a box of their own: the cell's font, none of its paint. */
+function textPaint(style: DrawioStyle): JsonObject {
+  const { textColor, fontSize, fontWeight, fontStyle, textDecoration } = drawioNodeAppearance(style);
+  return Object.fromEntries(Object.entries({ textColor, fontSize, fontWeight, fontStyle, textDecoration }).filter(([, value]) => value !== undefined)) as JsonObject;
+}
+
 function summarize(losses: readonly string[]): string[] {
   return [...new Set(losses)];
 }
 
 /** Every page of a draw.io file as one OpenFlowKit document under `id`. */
 export async function drawioToDocument(text: string, id: string, now = new Date().toISOString()): Promise<DrawioImport> {
+  if (!text.trim()) return { error: 'It’s empty.' };
   const parsed = parseXml(text);
   if ('error' in parsed) return { error: `It isn’t a readable draw.io file (${parsed.error}).` };
   const { root } = parsed;
@@ -465,7 +414,8 @@ export async function drawioToDocument(text: string, id: string, now = new Date(
     const model = diagram.name === 'mxGraphModel' ? diagram : await pageModel(diagram);
     const pageName = diagram.attributes.name?.trim() || `Page ${index + 1}`;
     if ('error' in model) { losses.push(`“${pageName}”: ${model.error}, so it was left out`); continue; }
-    const builder = new PageBuilder(pageCells(model), (message) => losses.push(diagrams.length > 1 ? `${pageName}: ${message}` : message));
+    const cells = pageCells(model);
+    const builder = new PageBuilder(cells, (message) => losses.push(diagrams.length > 1 ? `${pageName}: ${message}` : message), await drawioFreehands(cells));
     builder.build();
     pages.push({
       id: `${id}:page-${index + 1}`, name: pageName, diagramKind: 'flowchart',

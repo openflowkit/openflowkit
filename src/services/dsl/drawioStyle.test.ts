@@ -1,13 +1,16 @@
 import {
   describe, expect, it } from 'vitest';
 import {
-  drawioColor, drawioDarkInk, drawioStyleLosses, drawioConnectorAppearance, drawioErRelation, drawioImageUrl, drawioLabel, drawioNodeAppearance, drawioShape, drawioShapeName, parseDrawioStyle,
+  drawioColor, drawioDarkInk, drawioStyleLosses, drawioConnectorAppearance, drawioErRelation, drawioImageUrl, drawioLabel, drawioNodeAppearance, drawioShape, drawioShapeName, resolveDrawioStyle,
 } from './drawioStyle';
+
+// A style with none of draw.io's defaults under it (a leading `;`), so each test sees only its own keys.
+const parseDrawioStyle = (style: string) => resolveDrawioStyle(`;${style}`, 'vertex');
 
 describe('draw.io styles', () => {
   it('reads a style string, a bare word being the base shape', () => {
     const style = parseDrawioStyle('ellipse;fillColor=#FFF;;whiteSpace=wrap');
-    expect(style).toEqual({ ellipse: '', fillColor: '#FFF', whiteSpace: 'wrap' });
+    expect(style).toEqual({ shape: 'ellipse', perimeter: 'ellipsePerimeter', ellipse: '', fillColor: '#FFF', whiteSpace: 'wrap' });
     expect(drawioShapeName(style)).toBe('ellipse');
     expect(drawioShapeName(parseDrawioStyle('rounded=1;shape=cylinder3'))).toBe('cylinder3');
   });
@@ -49,7 +52,7 @@ describe('draw.io styles', () => {
       fill: '#dae8fc', fontWeight: 700, fontStyle: 'italic', fontSize: 16, strokeStyle: 'dashed', opacity: 0.5, textPadding: 2,
     });
     expect(drawioNodeAppearance(parseDrawioStyle('align=left;spacingLeft=10;verticalAlign=top'))).toEqual({
-      textAlign: 'start', textVerticalAlign: 'top', textPadding: 12,
+      textAlign: 'start', textVerticalAlign: 'top', textPadding: 12, fontWeight: 400,
     });
     // A centred label's one-sided spacing doesn't squeeze it from both sides.
     expect(drawioNodeAppearance(parseDrawioStyle('spacingRight=30')).textPadding).toBe(2);
@@ -57,9 +60,10 @@ describe('draw.io styles', () => {
   });
 
   it('gives edges draw.io’s arrow unless told otherwise', () => {
-    expect(drawioConnectorAppearance({})).toEqual({ markerEnd: 'arrow' });
+    const drawn = { cornerRadius: 10, labelBorder: 'transparent', labelFontSize: 11 };
+    expect(drawioConnectorAppearance({})).toEqual({ markerEnd: 'arrow', ...drawn });
     expect(drawioConnectorAppearance(parseDrawioStyle('endArrow=none;startArrow=oval;dashed=1;strokeColor=#f00'))).toEqual({
-      markerStart: 'circle', dashPattern: 'dashed', stroke: '#f00',
+      markerStart: 'circle', dashPattern: 'dashed', stroke: '#f00', ...drawn,
     });
   });
 
@@ -122,7 +126,8 @@ describe('drawioStyleLosses', () => {
       'hatched and patterned fills are drawn solid', 'the glass shine is left off',
       'colours not written as #hex use the theme’s instead', 'the “Comic Sans MS” font is drawn in ours',
     ]);
-    expect(drawioStyleLosses(parseDrawioStyle('gradientColor=default;'), 'shape')).toEqual([]);
+    // `default` fades to the page's colour: draw.io draws it as a gradient too.
+    expect(drawioStyleLosses(parseDrawioStyle('gradientColor=default;'), 'shape')).toEqual(['gradient fills are drawn solid']);
     expect(drawioStyleLosses(parseDrawioStyle('gradientColor=none;shadow=0;fillStyle=solid;fillStyle=auto;'), 'shape')).toEqual([]);
   });
 

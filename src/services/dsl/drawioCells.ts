@@ -1,5 +1,5 @@
 import type { Point2d } from '../../opencanvas/domain/geometry/types';
-import { parseDrawioStyle, type DrawioStyle } from './drawioStyle';
+import { resolveDrawioStyle, type DrawioStyle } from './drawioStyle';
 import { parseXml, type XmlElement } from './xmlReader';
 
 // A draw.io page's XML read into plain cells: ids, parents, style, geometry. Compressed pages are inflated here.
@@ -77,7 +77,7 @@ export function readCell(element: XmlElement): Cell | null {
     id,
     parent: attributes.parent ?? null,
     value: (wrapped ? element.attributes.label : attributes.value) ?? '',
-    style: parseDrawioStyle(attributes.style),
+    style: resolveDrawioStyle(attributes.style, attributes.edge === '1' ? 'edge' : 'vertex'),
     vertex: attributes.vertex === '1',
     edge: attributes.edge === '1',
     source: attributes.source ?? null,
@@ -90,8 +90,8 @@ export function readCell(element: XmlElement): Cell | null {
   };
 }
 
-/** A compressed page: base64 of raw-deflated, URI-encoded XML. */
-async function inflatePage(text: string): Promise<string> {
+/** draw.io's compression, for pages and stencils: base64 of raw-deflated, URI-encoded XML. */
+export async function inflate(text: string): Promise<string> {
   const bytes = Uint8Array.from(atob(text.replace(/\s+/g, '')), (char) => char.charCodeAt(0));
   const stream = new Response(bytes).body!.pipeThrough(new DecompressionStream('deflate-raw'));
   return decodeURIComponent(await new Response(stream).text());
@@ -103,7 +103,7 @@ export async function pageModel(diagram: XmlElement): Promise<XmlElement | { err
   if (!diagram.text.trim()) return { error: 'a page is empty' };
   let xml: string;
   try {
-    xml = await inflatePage(diagram.text);
+    xml = await inflate(diagram.text);
   } catch {
     return { error: 'a page is compressed in a way OpenFlowKit can’t read' };
   }
