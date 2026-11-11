@@ -74,6 +74,8 @@ function parallelLateralOffsets(connectors: readonly SceneConnector[]): Readonly
     if (!connector.source.nodeId || !connector.target.nodeId) continue;
     // Sequence messages already sit on their own rows; fanning them bends each into a V.
     if (typeof connector.semantics.seqMessageKind === 'string') continue;
+    // A fixed route is drawn where it was saved: its bends are its own, not a lane to step aside in.
+    if (connector.route.ownership === 'imported-fixed') continue;
     const key = [connector.source.nodeId, connector.target.nodeId].sort().join('→');
     const group = groups.get(key);
     if (group) group.push(connector);
