@@ -338,8 +338,11 @@ export class PixiNodeRenderer {
         x: textPosition(geometry.labelBounds, geometry.labelAlignment),
         y: geometry.labelBounds.y,
       });
+      // The words turn with their shape; a pooled Text is set straight again when its shape is.
+      const turn = Math.atan2(matrix.b, matrix.a);
       label.anchor.set(textAnchor(geometry.labelAlignment), 0);
       label.position.set(labelPoint.x, labelPoint.y);
+      label.rotation = turn;
       const content = new Container();
       content.alpha = alpha;
       content.addChild(label);
@@ -351,6 +354,7 @@ export class PixiNodeRenderer {
         });
         subLabel.anchor.set(textAnchor(geometry.labelAlignment), 0);
         subLabel.position.set(subLabelPoint.x, subLabelPoint.y);
+        subLabel.rotation = turn;
         content.addChild(subLabel);
       }
       if (sizing.clipContent) {

@@ -15,7 +15,7 @@ export class PixiTextPool {
 
   styled(text: string, style: NodeStyle, fill: number, wrapWidth: number | null): Text {
     const key = ['s', currentPixiTextResolution(), style.fontSize, style.fontFamily, style.fontWeight, style.fontStyle, style.textDecoration,
-      style.lineHeight, style.letterSpacing, fill, wrapWidth ?? '', text].join('|');
+      style.lineHeight, style.letterSpacing, style.textAlign, fill, wrapWidth ?? '', text].join('|');
     return this.take(key, () => createStyledPixiText(text, style, fill, wrapWidth));
   }
 
@@ -46,6 +46,7 @@ export class PixiTextPool {
     const cached = this.free.get(key)?.pop();
     if (cached) {
       cached.anchor.set(0, 0);
+      cached.rotation = 0;
       cached.label = '';
       cached.visible = true;
       return cached;

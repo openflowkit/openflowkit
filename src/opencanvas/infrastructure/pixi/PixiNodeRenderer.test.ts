@@ -83,6 +83,39 @@ describe('Pixi node renderer', () => {
     expect(drawn([at('fits', 0, 0, 1, { content: label('Fits') }), at('next', 104, 0, 2)]).overlaps).toHaveLength(0);
   });
 
+  // A shape turned a quarter kept its words upright, hung off its turned corner: an imported draw.io lane title
+  // or a mindmap's branch name read flat across its line.
+  it('turns a shape\'s words with the shape, and sets them straight again when it is', () => {
+    const turned = (radians: number) => createTestNode('lane', {
+      transform: { translation: { x: 0, y: 0 }, rotationRadians: radians, scale: { x: 1, y: 1 } }, content: { label: 'Lane 1' },
+    });
+    const text = (nodes: SceneNode[]) => {
+      const renderer = new PixiNodeRenderer();
+      const page = { ...createPixiSpikePage(1), nodes, connectors: [] };
+      renderer.draw(page, createSceneIndex(page));
+      const label = (renderer as unknown as { labelByNodeId: Map<string, Container> }).labelByNodeId.get('lane')!;
+      return { renderer, rotation: label.children[0]!.rotation };
+    };
+    expect(text([turned(-Math.PI / 2)]).rotation).toBeCloseTo(-Math.PI / 2);
+    expect(text([turned(Math.PI / 6)]).rotation).toBeCloseTo(Math.PI / 6);
+    expect(text([turned(0)]).rotation).toBe(0);
+  });
+
+  // Two centred lines were drawn flush left inside their centred block ("Task 1" over "New"); the SVG export
+  // centres each line, and so does the canvas.
+  it('sets each line of a label to the side the label is aligned to', () => {
+    const lineAlign = (textAlign: string) => {
+      const renderer = new PixiNodeRenderer();
+      const page = { ...createPixiSpikePage(1), nodes: [createTestNode('card', { content: { label: 'Task 1\nNew' }, appearance: { textAlign } })], connectors: [] };
+      renderer.draw(page, createSceneIndex(page));
+      const label = (renderer as unknown as { labelByNodeId: Map<string, Container> }).labelByNodeId.get('card')!;
+      return (label.children[0] as unknown as { style: { align: string } }).style.align;
+    };
+    expect(lineAlign('center')).toBe('center');
+    expect(lineAlign('start')).toBe('left');
+    expect(lineAlign('end')).toBe('right');
+  });
+
   it('opens a layer for a sticky whose body runs below its box onto the shape underneath', () => {
     const sticky = at('sticky', 0, 0, 1, { kind: 'sticky', size: { width: 160, height: 60 },
       content: { label: 'Note', subLabel: 'A long note body that wraps over many lines, far past the bottom of its little box' } });
