@@ -21,16 +21,17 @@ describe('draw.io labels sit in draw.io’s label box', () => {
   it('keeps a wrapped paragraph in its box, set top-left, wrapping at the box and never spilling up', async () => {
     const page = await nodes(vertex('9', 'Lorem ipsum dolor sit amet', 'text;spacingTop=-5;whiteSpace=wrap;align=left', 20, 150, 530, 250));
     const node = page.get('9')!;
-    // spacingTop=-5 on draw.io's 2 lifts the words 3px and makes the box 1px taller; the sides keep 2px each.
-    expect(place(node)).toEqual({ x: 22, y: 147, width: 526, height: 251 });
-    expect(node.appearance).toMatchObject({ fill: 'transparent', stroke: 'transparent', textAlign: 'start', textVerticalAlign: 'top', textPadding: 0, fontWeight: 400 });
+    // draw.io sets top-aligned words 5px below their spacing, so spacingTop=-5 on its 2 leaves them 2px in from
+    // the top as from the sides: the cell's own box carries them, inset 2.
+    expect(place(node)).toEqual({ x: 20, y: 150, width: 530, height: 250 });
+    expect(node.appearance).toMatchObject({ fill: 'transparent', stroke: 'transparent', textAlign: 'start', textVerticalAlign: 'top', textPadding: 2, fontWeight: 400 });
     expect(node.content.sizingPolicy).toMatchObject({ overflow: 'wrap', maxLines: 100 });
   });
 
   it('runs unwrapped words on past a tiny box from the side they are set against', async () => {
     const node = (await nodes(vertex('16', 'Yesterday', 'text;spacingTop=-5;align=right', 760, 310, 30, 20))).get('16')!;
-    expect(place(node)).toEqual({ x: 762, y: 307, width: 26, height: 21 });
-    expect(node.appearance).toMatchObject({ textAlign: 'end', textVerticalAlign: 'top' });
+    expect(place(node)).toEqual({ x: 760, y: 310, width: 30, height: 20 });
+    expect(node.appearance).toMatchObject({ textAlign: 'end', textVerticalAlign: 'top', textPadding: 2 });
     expect(node.content.sizingPolicy).toMatchObject({ overflow: 'visible' });
   });
 
@@ -44,7 +45,9 @@ describe('draw.io labels sit in draw.io’s label box', () => {
   it('sets a picture’s words below it, as draw.io’s image style does', async () => {
     const page = await nodes(vertex('p', 'Ethernet Switch', 'image;image=https://example.com/s.png;', 165, 218, 80, 80));
     expect(page.get('p:label')!.content.label).toBe('Ethernet Switch');
-    expect(place(page.get('p:label')!)).toEqual({ x: 167, y: 300, width: 76, height: 80 });
+    // The words belong to the picture, so they are placed from its corner: 2px in, 80 down, and mxText’s 5px lower.
+    expect(page.get('p:label')!.parentId).toBe('p');
+    expect(place(page.get('p:label')!)).toEqual({ x: 2, y: 87, width: 76, height: 80 });
     expect(page.get('p:label')!.appearance).toMatchObject({ textAlign: 'center', textVerticalAlign: 'top' });
   });
 

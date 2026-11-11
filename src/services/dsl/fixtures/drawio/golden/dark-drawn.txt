@@ -5,28 +5,28 @@ page "Page 1": 1 layer(s), 61 nodes, 20 connectors
   process circle @896,1256 350x350 fill #282828 ink #dddddd
   process circle @1223,1010 350x350 fill #282828 ink #dddddd
   process circle @1223,518 350x350 fill #282828 ink #dddddd
-  process rectangle "LESS IS MORE" @951,384 186x30 fill transparent ink #dddddd
-  process rectangle "1" @875,307 106x120 fill transparent ink #f18808
-  process rectangle "2" @1196,529 70x120 fill transparent ink #f18808
-  process rectangle "3" @877,797 70x120 fill transparent ink #f18808
-  process rectangle "4" @1201,1027 70x120 fill transparent ink #f18808
-  process rectangle "5" @876,1249 70x120 fill transparent ink #f18808
-  process rectangle "Reduce it to purely the essential⏎information." @951,457 276x40 fill transparent ink #888888
+  process rectangle "LESS IS MORE" @951,389 186x30 fill transparent ink #dddddd
+  process rectangle "1" @875,312 106x120 fill transparent ink #f18808
+  process rectangle "2" @1196,534 70x120 fill transparent ink #f18808
+  process rectangle "3" @877,802 70x120 fill transparent ink #f18808
+  process rectangle "4" @1201,1032 70x120 fill transparent ink #f18808
+  process rectangle "5" @876,1254 70x120 fill transparent ink #f18808
+  process rectangle "Reduce it to purely the essential⏎information." @951,462 276x40 fill transparent ink #888888
   process rectangle "DESIGN RULES" @888,79 700x78 fill transparent ink #dddddd
-  process rectangle "for infographics" @894,161 632x96 fill transparent ink #888888
-  process rectangle "IT'S ALL ABOUT⏎VISION-TRACKING" @1277,602 236x70 fill transparent ink #dddddd
-  process rectangle "GIVE ME SPACE" @951,873 206x30 fill transparent ink #dddddd
-  process rectangle "USE A CONSISTENT⏎STYLE" @1277,1100 266x70 fill transparent ink #dddddd
-  process rectangle "DON’T MESS⏎WITH ALIGNMENT⏎AND SPACING" @951,1322 236x110 fill transparent ink #dddddd
-  process rectangle "Scribble down your content." @951,428 232x18 fill transparent ink #888888
-  process rectangle "Guide the viewer's eye through⏎the content." @1277,685 263x36 fill transparent ink #888888
-  process rectangle "Each part of the graphic should⏎be well-structured." @1277,733 258x38 fill transparent ink #888888
-  process rectangle "It groups content visually." @951,965 217x19 fill transparent ink #888888
-  process rectangle "Enough "white space" makes⏎an infographic look tidy." @951,917 240x36 fill transparent ink #888888
-  process rectangle "Each element should have⏎the same styling and the same⏎placement." @1277,1183 256x60 fill transparent ink #888888
-  process rectangle "Each section or group of⏎content should use the same⏎spacing to the next, and should⏎be strictly aligned." @951,1440 261x73 fill transparent ink #888888
+  process rectangle "for infographics" @894,166 632x96 fill transparent ink #888888
+  process rectangle "IT'S ALL ABOUT⏎VISION-TRACKING" @1277,607 236x70 fill transparent ink #dddddd
+  process rectangle "GIVE ME SPACE" @951,878 206x30 fill transparent ink #dddddd
+  process rectangle "USE A CONSISTENT⏎STYLE" @1277,1105 266x70 fill transparent ink #dddddd
+  process rectangle "DON’T MESS⏎WITH ALIGNMENT⏎AND SPACING" @951,1327 236x110 fill transparent ink #dddddd
+  process rectangle "Scribble down your content." @951,433 232x18 fill transparent ink #888888
+  process rectangle "Guide the viewer's eye through⏎the content." @1277,690 263x36 fill transparent ink #888888
+  process rectangle "Each part of the graphic should⏎be well-structured." @1277,738 258x38 fill transparent ink #888888
+  process rectangle "It groups content visually." @951,970 217x19 fill transparent ink #888888
+  process rectangle "Enough "white space" makes⏎an infographic look tidy." @951,922 240x36 fill transparent ink #888888
+  process rectangle "Each element should have⏎the same styling and the same⏎placement." @1277,1188 256x60 fill transparent ink #888888
+  process rectangle "Each section or group of⏎content should use the same⏎spacing to the next, and should⏎be strictly aligned." @951,1445 261x73 fill transparent ink #888888
   image "Image" @1375,1637 215x56
-  process rectangle "Created with draw.io" @1176,1661 176x20 fill transparent ink #888888
+  process rectangle "Created with draw.io" @1176,1666 176x20 fill transparent ink #888888
   group @1212,358 66x66 fill transparent
   process circle @0,0 66x66 fill transparent ink #dddddd in 1016
   process circle @4,4 58x58 fill #666666 ink #dddddd in 1016

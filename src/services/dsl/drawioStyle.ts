@@ -45,8 +45,12 @@ export function resolveDrawioStyle(style: string | undefined, kind: 'vertex' | '
 /** The shape a cell names: `shape=` wins over a bare word (`ellipse`, `rhombus`, `text`, `swimlane`). */
 export function drawioShapeName(style: DrawioStyle): string {
   if (style.shape) return style.shape;
-  return Object.keys(style).find((key) => style[key] === '') ?? '';
+  // Asked several times a cell, of styles a big file shares between thousands of cells: found once a style.
+  let name = BARE_NAMES.get(style);
+  if (name === undefined) BARE_NAMES.set(style, name = Object.keys(style).find((key) => style[key] === '') ?? '');
+  return name;
 }
+const BARE_NAMES = new WeakMap<DrawioStyle, string>();
 
 const SHAPES: Readonly<Record<string, ShapeKind>> = {
   '': 'rectangle', rect: 'rectangle', rectangle: 'rectangle', label: 'rectangle', process: 'rectangle', partialRectangle: 'rectangle',
@@ -278,7 +282,7 @@ export function drawioLabel(value: string | undefined, style: DrawioStyle): stri
   // Source whitespace collapses as a browser's would; `[^<>]` keeps a run of unclosed `<` linear, not quadratic.
   const text = withoutCode(value)
     .replace(/\s+/g, ' ')
-    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<br\b[^<>]*>/gi, '\n')
     .replace(/<\/?(div|p|li|ul|ol|h[1-6])\b[^<>]*>/gi, '\ue000')
     .replace(/<[^<>]*>/g, '')
     .replace(/ ?\ue000[\ue000 ]*/g, '\n');

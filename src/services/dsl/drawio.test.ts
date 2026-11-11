@@ -52,7 +52,8 @@ describe('drawioToDocument', () => {
     const connectors = new Map(document.pages[0]!.connectors.map((connector) => [connector.id, connector]));
     expect(connectors.get('e1')).toMatchObject({
       source: { nodeId: 'start' }, target: { nodeId: 'check' },
-      route: { kind: 'orthogonal', ownership: 'automatic' }, appearance: { markerEnd: 'arrow' },
+      // draw.io's own line, fixed: the two shapes are in line, so its right-angle route is one straight run.
+      route: { kind: 'direct', ownership: 'imported-fixed' }, appearance: { markerEnd: 'arrow' },
     });
     expect(connectors.get('e2')).toMatchObject({
       labels: [{ text: 'yes', pathRatio: 0.5 }], waypoints: [{ x: 380, y: 20 }],
@@ -133,8 +134,8 @@ describe('drawioToDocument', () => {
     expect(start).toMatchObject({ id: 'a', parentId: 'c', transform: { translation: { x: 36, y: 40 } } });
     expect(end).toMatchObject({ id: 'b', parentId: 'c', transform: { translation: { x: 20, y: 220 } } });
     expect(document.pages[0]!.connectors[0]!.waypoints).toEqual([{ x: 186, y: 450 }]);
-    // The title fills the container's width, so its words centre across the band and never hang past its sides.
-    expect(title).toMatchObject({ id: 'c:label', transform: { translation: { x: 100, y: 290 } }, size: { width: 270 } });
+    // The title belongs to the container and fills its band less draw.io's 2px a side, so its words centre across it.
+    expect(title).toMatchObject({ id: 'c:label', parentId: 'c', transform: { translation: { x: 2, y: 2 } }, size: { width: 266 } });
   });
 
   it('outlines a shape we draw as a stand-in box dashed, and draws table cells as cells', async () => {
@@ -171,9 +172,9 @@ describe('drawioToDocument', () => {
       + '<mxCell id="e" value="nowhere" edge="1" parent="1" source="a"><mxGeometry relative="1" as="geometry"/></mxCell>'
       + '<mxCell id="o" edge="1" style="edgeStyle=orthogonalEdgeStyle;" parent="1" source="a" target="b"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="5" y="5"/></Array></mxGeometry></mxCell>',
     ));
+    // The right-angle connector keeps draw.io's own route, so nothing is said about it.
     expect(losses).toEqual([
       'connector “nowhere”: it has a loose end, so it was left out',
-      '1 right-angle connector is re-routed, so its bends may move',
     ]);
   });
 
@@ -196,10 +197,11 @@ describe('drawioToDocument', () => {
     // A tiny text cell keeps draw.io's box, its words centred along the top and running on past it, as draw.io's do.
     const text = byId.get('t')!;
     expect(text).toMatchObject({ content: { label: 'Desired \nfunctionality', sizingPolicy: { overflow: 'visible' } } });
-    expect(text.appearance).toMatchObject({ fontSize: 12, textAlign: 'center', textVerticalAlign: 'top', textPadding: 2 });
+    // Top-set words sit draw.io's 2px spacing and mxText's 5px down.
+    expect(text.appearance).toMatchObject({ fontSize: 12, textAlign: 'center', textVerticalAlign: 'top', textPadding: 7 });
     expect({ ...text.transform.translation, ...text.size }).toEqual({ x: 100, y: 300, width: 30, height: 20 });
-    // A wrapping one wraps at that same box.
-    expect(byId.get('w')!.size).toEqual({ width: 30, height: 20 });
+    // A wrapping one wraps at draw.io's label box: the cell less 2px a side.
+    expect(byId.get('w')!.size).toEqual({ width: 26, height: 16 });
     expect(byId.get('w')!.content.sizingPolicy).toMatchObject({ overflow: 'wrap' });
     expect(losses).toEqual(['draw.io’s “mxgraph.cabinets.cb_1p” shape is drawn as a box (2 shapes)']);
   });
@@ -226,12 +228,16 @@ describe('drawioToDocument', () => {
     expect(byId.get('box')).toMatchObject({ content: { label: '' }, size: { width: 14, height: 14 } });
     const label = byId.get('box:label')!;
     expect(label).toMatchObject({ content: { label: 'Top Management' }, appearance: { textAlign: 'start' } });
-    expect(label.transform.translation.x).toBeCloseTo(70 + 14 + 7);
+    // Placed from the checkbox's own corner: past its 14px, then spacingLeft 5 and draw.io's 2.
+    expect(label.parentId).toBe('box');
+    expect(label.transform.translation.x).toBeCloseTo(14 + 7);
     // An icon's label below it: centred under the icon, its top just past the icon's bottom.
     const under = byId.get('icon:label')!;
     expect(byId.get('icon')!.content.label).toBe('');
-    expect(under.transform.translation.x + under.size.width / 2).toBeCloseTo(320);
-    expect(under.transform.translation.y).toBeCloseTo(342);
+    expect(under.parentId).toBe('icon');
+    expect(under.transform.translation.x + under.size.width / 2).toBeCloseTo(20);
+    // 40 down the icon, draw.io's 2px spacing, and mxText's 5px for top-set words.
+    expect(under.transform.translation.y).toBeCloseTo(47);
   });
 
   it('brings pictures across as images, and says which ones only draw.io has', async () => {
@@ -262,11 +268,12 @@ describe('drawioToDocument', () => {
     expect(byId.get('card')!.appearance.fill).toBe('#a0522d');
     expect(byId.get('own')!.content.label).toBe('Task 2 Ann %missing%');
     expect(byId.get('off')!.content.label).toBe('%status%');
-    // The lane draws no band over its cards; its title sits just above it.
+    // The lane draws no band over its cards; its title is centred on draw.io's 1px band along its top.
     expect(byId.get('lane')).toMatchObject({ kind: 'swimlane', content: { label: 'TO DO', showHeader: false } });
     const title = byId.get('lane:label')!;
     expect(title).toMatchObject({ content: { label: 'TO DO' } });
-    expect(title.transform.translation.y + title.size.height).toBeCloseTo(40 - 2);
+    expect(title.parentId).toBe('lane');
+    expect(title.transform.translation.y + title.size.height / 2).toBeCloseTo(1);
   });
 
   it('reads an entity table: title in its own band, rows set left, crow’s-foot ends', async () => {
@@ -279,10 +286,12 @@ describe('drawioToDocument', () => {
     expect(byId.get('a')).toMatchObject({ kind: 'swimlane', content: { showHeader: false } });
     // The title is centred in draw.io's 22px band, not under our 40px one.
     const title = byId.get('a:label')!;
-    expect(title.transform.translation.y + title.size.height / 2).toBeCloseTo(100 + 11);
-    // A row's words start where draw.io sets them: 6px in (its own 4 and draw.io's 2), wrapping at the row's width.
+    expect(title.parentId).toBe('a');
+    expect(title.transform.translation.y + title.size.height / 2).toBeCloseTo(11);
+    // A row's words start where draw.io sets them: 6px in (its own 4 and draw.io's 2) and 7 down (2 and mxText's 5),
+    // wrapping at the row's width.
     const row = byId.get('ar1')!;
-    expect({ ...row.transform.translation, ...row.size }).toEqual({ x: 6, y: 24, width: 132, height: 22 });
+    expect({ ...row.transform.translation, ...row.size }).toEqual({ x: 6, y: 29, width: 132, height: 22 });
     expect(row.appearance).toMatchObject({ textAlign: 'start', textPadding: 0 });
     expect(document.pages[0]!.connectors[0]).toMatchObject({ semantics: { erRelation: '}|--||' } });
   });
@@ -366,22 +375,32 @@ describe('draw.io connector ends and labels', () => {
   it('leaves and enters shapes where draw.io pinned it', async () => {
     const { document } = await open(model(edge('exitX=1;exitY=0.25;entryX=0.5;entryY=1;')));
     const connector = document.pages[0]!.connectors[0]!;
-    expect(connector.source.anchor).toEqual({ kind: 'side', side: 'right', ratio: 0.25 });
-    expect(connector.target.anchor).toEqual({ kind: 'side', side: 'bottom', ratio: 0.5 });
+    expect(connector.source.anchor).toEqual({ kind: 'normalized', x: 1, y: 0.25 });
+    expect(connector.target.anchor).toEqual({ kind: 'normalized', x: 0.5, y: 1 });
+    expect(connector.route).toEqual({ kind: 'direct', ownership: 'imported-fixed' });
   });
 
-  it('keeps a pin inside the shape as a point within it, and a free end on the outline when unpinned', async () => {
+  it('moves a pin inside the shape out to its outline, as draw.io does, and keeps it there with exitPerimeter=0', async () => {
     const { document } = await open(model(edge('exitX=0.3;exitY=0.6;')));
     const connector = document.pages[0]!.connectors[0]!;
-    expect(connector.source.anchor).toEqual({ kind: 'normalized', x: 0.3, y: 0.6 });
-    expect(connector.target.anchor).toBeNull();
+    // From the centre through (0.3, 0.6) the outline is met on the left side, three quarters down.
+    expect(connector.source.anchor).toMatchObject({ kind: 'normalized', x: 0 });
+    expect((connector.source.anchor as { y: number }).y).toBeCloseTo(0.75);
+    // The unpinned end aims at the other and stops on the outline.
+    expect(connector.target.anchor).toMatchObject({ kind: 'normalized', x: 0 });
+    const kept = (await open(model(edge('exitX=0.3;exitY=0.6;exitPerimeter=0;')))).document.pages[0]!.connectors[0]!;
+    expect(kept.source.anchor).toEqual({ kind: 'normalized', x: 0.3, y: 0.6 });
   });
 
-  it('ignores pins that are not numbers or fall outside the shape', async () => {
+  it('treats a pin that is not a number as no pin, and brings one outside the shape back to its outline', async () => {
     const { document } = await open(model(edge('exitX=abc;exitY=0.5;entryX=7;entryY=-2;')));
     const connector = document.pages[0]!.connectors[0]!;
-    expect(connector.source.anchor).toBeNull();
-    expect(connector.target.anchor).toEqual({ kind: 'side', side: 'right', ratio: 0 });
+    // Unpinned, the source aims at the target's end and leaves by its right side.
+    expect(connector.source.anchor).toMatchObject({ kind: 'normalized', x: 1 });
+    const target = connector.target.anchor as { x: number; y: number };
+    expect(target.x).toBe(1);
+    expect(target.y).toBeGreaterThanOrEqual(0);
+    expect(target.y).toBeLessThanOrEqual(1);
     expect(validateSceneDocumentV1(document).success).toBe(true);
   });
 
@@ -479,7 +498,8 @@ describe('big and deep draw.io files', () => {
     const started = performance.now();
     const { document } = await open(text);
     expect(performance.now() - started).toBeLessThan(2_000);
-    expect(document.pages[0]!.nodes).toHaveLength(26_000);
+    // 25,000 boxes and 1,000 groups, each group's title a node of its own.
+    expect(document.pages[0]!.nodes).toHaveLength(27_000);
     expect(document.pages[0]!.connectors).toHaveLength(24_000);
   });
 
@@ -489,7 +509,8 @@ describe('big and deep draw.io files', () => {
     const words = Array.from({ length: 100_000 }, () => 'word').join(' ');
     cells.push(`<mxCell id="t" value="${words}" style="text;whiteSpace=wrap" vertex="1" parent="1"><mxGeometry width="80" height="40" as="geometry"/></mxCell>`);
     const { document } = await open(wrap(cells));
-    expect(document.pages[0]!.nodes).toHaveLength(5_001);
+    // Each of the 4,999 groups carries its title as a node of its own.
+    expect(document.pages[0]!.nodes).toHaveLength(10_000);
   });
 });
 

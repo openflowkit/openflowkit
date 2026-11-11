@@ -1,17 +1,27 @@
-page "Page 1": 1 layer(s), 60 nodes, 29 connectors
+page "Page 1": 1 layer(s), 70 nodes, 29 connectors
   process rectangle @154,851 2030x80 fill #23445d ink #ffffff
-  process rectangle "Project" @239,853 1943x68 fill transparent ink #ffffff
-  process rectangle "Lane 1" @154,931 50x300 fill #23445d ink #ffffff
-  process rectangle "Lane 1.1" @204,931 40x100 fill #5d7f99 ink #ffffff
+  process rectangle "Project" @85,2 1943x68 fill transparent ink #ffffff in 56
+  process rectangle @154,931 50x300 fill #23445d ink #ffffff
+  process rectangle "Lane 1" @2,298 296x46 fill transparent ink #ffffff in 57
+  process rectangle @204,931 40x100 fill #5d7f99 ink #ffffff
+  process rectangle "Lane 1.1" @2,98 96x36 fill transparent ink #ffffff in 58
   process rectangle "v 1.0" @154,851 90x80 fill #5d7f99 ink #ffffff
-  process rectangle "Lane 1.2" @204,1031 40x100 fill #5d7f99 ink #ffffff
-  process rectangle "Lane 1.3" @204,1131 40x100 fill #5d7f99 ink #ffffff
-  process rectangle "Lane 2.2" @204,1331 40x100 fill #5d7f99 ink #ffffff
-  process rectangle "Lane 2.1" @204,1231 40x100 fill #5d7f99 ink #ffffff
-  process rectangle "Lane 2" @154,1231 50x200 fill #23445d ink #ffffff
-  process rectangle "Lane 3.2" @204,1531 40x100 fill #5d7f99 ink #ffffff
-  process rectangle "Lane 3.1" @204,1431 40x100 fill #5d7f99 ink #ffffff
-  process rectangle "Lane 3" @154,1431 50x200 fill #23445d ink #ffffff
+  process rectangle @204,1031 40x100 fill #5d7f99 ink #ffffff
+  process rectangle "Lane 1.2" @2,98 96x36 fill transparent ink #ffffff in 60
+  process rectangle @204,1131 40x100 fill #5d7f99 ink #ffffff
+  process rectangle "Lane 1.3" @2,98 96x36 fill transparent ink #ffffff in 61
+  process rectangle @204,1331 40x100 fill #5d7f99 ink #ffffff
+  process rectangle "Lane 2.2" @2,98 96x36 fill transparent ink #ffffff in 62
+  process rectangle @204,1231 40x100 fill #5d7f99 ink #ffffff
+  process rectangle "Lane 2.1" @2,98 96x36 fill transparent ink #ffffff in 63
+  process rectangle @154,1231 50x200 fill #23445d ink #ffffff
+  process rectangle "Lane 2" @2,198 196x46 fill transparent ink #ffffff in 64
+  process rectangle @204,1531 40x100 fill #5d7f99 ink #ffffff
+  process rectangle "Lane 3.2" @2,98 96x36 fill transparent ink #ffffff in 65
+  process rectangle @204,1431 40x100 fill #5d7f99 ink #ffffff
+  process rectangle "Lane 3.1" @2,98 96x36 fill transparent ink #ffffff in 66
+  process rectangle @154,1431 50x200 fill #23445d ink #ffffff
+  process rectangle "Lane 3" @2,198 196x46 fill transparent ink #ffffff in 67
   process rectangle @244,931 647x100 fill #bac8d3
   process rectangle @244,1031 647x100 fill #bac8d3
   process rectangle @244,1131 647x100 fill #bac8d3
@@ -59,33 +69,33 @@ page "Page 1": 1 layer(s), 60 nodes, 29 connectors
   process rectangle "Milestone 1" @0,0 647x40 fill #5d7f99 ink #ffffff in 140
   process rectangle "Milestone 2" @647,0 647x40 fill #5d7f99 ink #ffffff in 140
   process rectangle "Milestone 3" @1293,0 647x40 fill #5d7f99 ink #ffffff in 140
-  90 -> 92 orthogonal, 0 bends
-  90 -> 96 orthogonal, 0 bends
-  90 -> 95 orthogonal, 0 bends
-  92 -> 91 orthogonal, 0 bends
-  92 -> 93 orthogonal, 0 bends
-  96 -> 93 orthogonal, 0 bends
-  96 -> 94 orthogonal, 0 bends
-  95 -> 94 orthogonal, 0 bends
-  91 -> 97 orthogonal, 0 bends
-  93 -> 104 orthogonal, 0 bends
-  104 -> 100 orthogonal, 0 bends
-  91 -> 98 orthogonal, 0 bends
-  94 -> 102 orthogonal, 0 bends
-  102 -> 103 orthogonal, 0 bends
-  102 -> 101 orthogonal, 0 bends
-  101 -> 110 orthogonal, 0 bends
-  110 -> 99 orthogonal, 0 bends
-  108 -> 99 orthogonal, 0 bends
-  109 -> 110 orthogonal, 0 bends
-  103 -> 106 orthogonal, 0 bends
-  103 -> 109 orthogonal, 0 bends
-  100 -> 105 orthogonal, 0 bends
-  97 -> 108 orthogonal, 0 bends
-  98 -> 108 orthogonal, 0 bends
-  98 -> 111 orthogonal, 0 bends
-  111 -> 99 orthogonal, 0 bends
-  107 -> 99 orthogonal, 0 bends
-  106 -> 107 orthogonal, 0 bends
-  105 -> 106 orthogonal, 0 bends
-losses: 8 right-angle connectors are re-routed, so their bends may move
+  90 -> 92 polyline, 2 bends
+  90 -> 96 polyline, 2 bends
+  90 -> 95 polyline, 2 bends
+  92 -> 91 polyline, 2 bends
+  92 -> 93 polyline, 2 bends
+  96 -> 93 polyline, 2 bends
+  96 -> 94 polyline, 2 bends
+  95 -> 94 polyline, 2 bends
+  91 -> 97 polyline, 2 bends
+  93 -> 104 polyline, 2 bends
+  104 -> 100 polyline, 2 bends
+  91 -> 98 polyline, 2 bends
+  94 -> 102 polyline, 2 bends
+  102 -> 103 polyline, 2 bends
+  102 -> 101 polyline, 2 bends
+  101 -> 110 polyline, 2 bends
+  110 -> 99 polyline, 2 bends
+  108 -> 99 polyline, 2 bends
+  109 -> 110 polyline, 2 bends
+  103 -> 106 polyline, 2 bends
+  103 -> 109 polyline, 2 bends
+  100 -> 105 polyline, 2 bends
+  97 -> 108 polyline, 2 bends
+  98 -> 108 polyline, 2 bends
+  98 -> 111 polyline, 2 bends
+  111 -> 99 polyline, 2 bends
+  107 -> 99 polyline, 2 bends
+  106 -> 107 polyline, 2 bends
+  105 -> 106 polyline, 2 bends
+losses: none

@@ -67,7 +67,7 @@ function readGeometry(element: XmlElement | undefined): Geometry | null {
 }
 
 /** `<mxCell>`, or a `<UserObject>` / `<object>` wrapping one: the wrapper holds the id and the label. */
-export function readCell(element: XmlElement): Cell | null {
+export function readCell(element: XmlElement, resolve: typeof resolveDrawioStyle = resolveDrawioStyle): Cell | null {
   const wrapped = element.name === 'UserObject' || element.name === 'object';
   const cell = wrapped ? element.children.find((child) => child.name === 'mxCell') : element.name === 'mxCell' ? element : undefined;
   const id = wrapped ? element.attributes.id : cell?.attributes.id;
@@ -77,7 +77,7 @@ export function readCell(element: XmlElement): Cell | null {
     id,
     parent: attributes.parent ?? null,
     value: (wrapped ? element.attributes.label : attributes.value) ?? '',
-    style: resolveDrawioStyle(attributes.style, attributes.edge === '1' ? 'edge' : 'vertex'),
+    style: resolve(attributes.style, attributes.edge === '1' ? 'edge' : 'vertex'),
     vertex: attributes.vertex === '1',
     edge: attributes.edge === '1',
     source: attributes.source ?? null,
@@ -114,5 +114,13 @@ export async function pageModel(diagram: XmlElement): Promise<XmlElement | { err
 
 export function pageCells(model: XmlElement): Cell[] {
   const root = model.children.find((child) => child.name === 'root');
-  return (root?.children ?? []).map(readCell).filter((cell): cell is Cell => cell !== null);
+  // A big file repeats a handful of styles: each distinct one is resolved once and shared (styles are never changed).
+  const styles = new Map<string, DrawioStyle>();
+  const resolve: typeof resolveDrawioStyle = (style, kind) => {
+    const key = `${kind}:${style ?? ''}`;
+    let resolved = styles.get(key);
+    if (!resolved) styles.set(key, resolved = resolveDrawioStyle(style, kind));
+    return resolved;
+  };
+  return (root?.children ?? []).map((element) => readCell(element, resolve)).filter((cell): cell is Cell => cell !== null);
 }

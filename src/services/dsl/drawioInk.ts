@@ -74,11 +74,28 @@ const inked = (node: SceneNode, ink: string): SceneNode => node.kind === 'text'
 export function inkForEitherTheme(nodes: SceneNode[], loss: (message: string) => void): void {
   const under = covering(nodes);
   type Fill = { readonly fill: string; readonly opacity: number };
-  const fills = new Map<number, { readonly dark: Fill; readonly light: Fill }>();
+  // A node's fill follows from its kind, shape, colour word and own fill alone, and a big file repeats a few of
+  // those: each distinct one is resolved once.
+  const fills = new Map<string, { readonly dark: Fill; readonly light: Fill }>();
+  const fillAt = new Map<number, { readonly dark: Fill; readonly light: Fill }>();
   const fillOf = (at: number) => {
-    let fill = fills.get(at);
-    if (!fill) fills.set(at, fill = { dark: resolveNodeStyle(nodes[at]!, DARK_CANVAS), light: resolveNodeStyle(nodes[at]!, LIGHT_CANVAS) });
+    let known = fillAt.get(at);
+    if (!known) fillAt.set(at, known = fillFor(at));
+    return known;
+  };
+  const fillFor = (at: number) => {
+    const { kind, content, appearance } = nodes[at]!;
+    const key = `${kind}|${String(content.shape)}|${String(content.color)}|${String(appearance.fill)}|${String(appearance.opacity)}`;
+    let fill = fills.get(key);
+    if (!fill) fills.set(key, fill = { dark: resolveNodeStyle(nodes[at]!, DARK_CANVAS), light: resolveNodeStyle(nodes[at]!, LIGHT_CANVAS) });
     return fill;
+  };
+  const mixes = new Map<string, string>();
+  const over = ({ fill, opacity }: Fill, below: string) => {
+    const key = `${fill}|${below}|${opacity}`;
+    let mixed = mixes.get(key);
+    if (mixed === undefined) mixes.set(key, mixed = paintOver(fill, below, opacity));
+    return mixed;
   };
   const solid = ({ fill, opacity }: Fill) => opacity >= 1 && /^#[0-9a-f]{6}$/i.test(fill);
   /**
@@ -95,7 +112,7 @@ export function inkForEitherTheme(nodes: SceneNode[], loss: (message: string) =>
     for (const at of [...stack.reverse(), index]) {
       if (nodes[at]!.kind === 'text') continue;
       const { dark, light } = fillOf(at);
-      paint = { dark: paintOver(dark.fill, paint.dark, dark.opacity), light: paintOver(light.fill, paint.light, light.opacity) };
+      paint = { dark: over(dark, paint.dark), light: over(light, paint.light) };
     }
     return { ...paint, covered: stack.length > 0 };
   };

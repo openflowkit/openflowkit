@@ -41,7 +41,8 @@ describe('draw.io connectors keep draw.io’s numbers', () => {
     const lines = await connectors(loose('I', '', [230, 100], [300, 100]) + loose('U', '', [190, 360], [190, 280])
       + loose('moved', '', [0, 0], [100, 0], '<mxPoint x="5" y="-3" as="offset"/>'));
     expect(lines.get('I')!.labels[0]!.offset).toEqual({ x: 0, y: -20 });
-    expect(lines.get('U')!.labels[0]!.offset).toEqual({ x: -20, y: 0 });
-    expect(lines.get('moved')!.labels[0]!.offset).toEqual({ x: 5, y: -23 });
+    // draw.io rounds the distance along the line to a whole pixel (34.28 of 80 → 34), so the label sits 0.28 off our ratio.
+    expect(lines.get('U')!.labels[0]!.offset).toEqual({ x: -20, y: 0.28 });
+    expect(lines.get('moved')!.labels[0]!.offset).toEqual({ x: 5.15, y: -23 });
   });
 });
