@@ -5,7 +5,7 @@ import {
   type SceneConnector, type SceneDocumentV1, type SceneLayer, type SceneNode, type ScenePage,
 } from '../../opencanvas/domain/document/types';
 import type { Matrix2d, Point2d } from '../../opencanvas/domain/geometry/types';
-import { createImageNode } from '../../opencanvas/domain/nodes/imageNode';
+import { createImageNode, STENCIL_FILL, STENCIL_STROKE } from '../../opencanvas/domain/nodes/imageNode';
 import { createShapeNode } from '../../opencanvas/domain/nodes/shapeNode';
 import { measurePortableText } from '../../opencanvas/domain/text/measurement';
 import { validateSceneDocumentV1 } from '../../opencanvas/domain/document/validation';
@@ -22,7 +22,7 @@ import { drawioLabelFit, type DrawioLabelBox } from './drawioLabelBox';
 import { centreOf, labelLayout, labelNode, placeBox } from './drawioLabelNode';
 import { parseXml, type XmlElement } from './xmlReader';
 import { loadStencils, siteStencils, type StencilSource } from './drawioStencilLibrary';
-import { stencilSvg, svgDataUrl } from './drawioStencilSvg';
+import { stencilSvg } from './drawioStencilSvg';
 
 // A draw.io file (`.drawio`, or its `.xml` export) as an OpenFlowKit document.
 // draw.io keeps exact positions, so this builds the scene directly instead of
@@ -256,7 +256,10 @@ class PageBuilder {
       return false;
     }
     const wordsBelong = (to: string) => {
-      if (label) this.push(this.formatted(labelNode({ id: `${cell.id}:label`, box: state.label, label, paint: textPaint(style), placement: placeBox(placement.matrix, state.label, state.label.rotation, centre), base: { ...base, parentId: to } }), cell, style), placement.matrix);
+      if (!label) return;
+      const words = labelNode({ id: `${cell.id}:label`, box: state.label, label, paint: textPaint(style), placement: placeBox(placement.matrix, state.label, state.label.rotation, centre), base: { ...base, parentId: to } });
+      // The shape's words, set where draw.io has them: editing the shape or them changes both.
+      this.push(this.formatted({ ...words, content: { ...words.content, labelOf: cell.id } }, cell, style), placement.matrix);
     };
     const imageUrl = drawioImageUrl(style);
     if ((name === 'image' || style.image) && !imageUrl) this.libraryImages += 1;
@@ -266,7 +269,11 @@ class PageBuilder {
     // Anything can hold other cells in draw.io. A lane, a group or a plain box that does is our container; any other
     // shape (an ellipse, a picture) keeps its own look, and its children are placed inside it all the same.
     const boxy = !imageUrl && (shape.kind === 'rectangle' || shape.kind === 'rounded' || shape.kind === 'text');
-    if (own(CONTAINER_KIND, name) || ((style.container === '1' || hasChildren) && boxy)) {
+    // A box that paints nothing and holds shapes is an old-style group. A painted one holding shapes (an endpoint
+    // with its port drawn on it) is a shape like any other in draw.io, its children riding on it: it stays one.
+    const plain = drawioNodeAppearance(style);
+    const invisible = plain.fill === 'transparent' && plain.stroke === 'transparent';
+    if (own(CONTAINER_KIND, name) || (boxy && (style.container === '1' || (hasChildren && invisible)))) {
       // Our container draws its own title band; draw.io's words sit in its label box (a lane's `startSize` band, a
       // group's middle), so ours is hidden and the words are set where draw.io has them, inside the container.
       // draw.io paints a lane's `fillColor` on its title band alone; the body is `swimlaneFillColor`, or nothing.
@@ -299,7 +306,8 @@ class PageBuilder {
       // A library shape is drawn by draw.io's stencil for it, as a picture the size of its box and its widest line.
       const grown = { x: box.x - drawn.margin, y: box.y - drawn.margin, width: width + 2 * drawn.margin, height: height + 2 * drawn.margin };
       const pictured = placeBox(inside, grown, state.rotation, centre);
-      this.push({ ...createImageNode(page, { id: cell.id, at: pictured.transform.translation, size: { width: grown.width, height: grown.height }, label: label || name, url: drawn.url }), ...base, transform: pictured.transform }, pictured.matrix);
+      const picture = createImageNode(page, { id: cell.id, at: pictured.transform.translation, size: { width: grown.width, height: grown.height }, label: label || name, appearance: drawn.paint });
+      this.push({ ...picture, ...base, transform: pictured.transform, content: { ...picture.content, stencilSvg: drawn.svg } }, pictured.matrix);
       wordsBelong(cell.id);
       return true;
     }
@@ -335,14 +343,21 @@ class PageBuilder {
   }
 
   /** The cell drawn by its draw.io stencil, or null when its shape isn't one we have. */
-  private stencilPicture(name: string, style: DrawioStyle, width: number, height: number): { url: string; margin: number } | null {
+  /**
+   * The cell drawn by its draw.io stencil, or null when its shape isn't one we have. Its fill and line are left as
+   * stand-ins the node's own colours fill in (`stencilPictureUrl`), so it recolours as a draw.io stencil does.
+   */
+  private stencilPicture(name: string, style: DrawioStyle, width: number, height: number): { svg: string; margin: number; paint: JsonObject } | null {
     if (width <= 0 || height <= 0) return null;
     const lookup = (key: string) => this.stencils.get(key) ?? null;
     const stencil = lookup(name.toLowerCase());
     const icon = name === 'mxgraph.aws4.resourceIcon' && style.resIcon ? lookup(style.resIcon.toLowerCase()) : null;
     if (!stencil && !icon) return null;
-    const { svg, margin } = icon ? stencilSvg(icon, style, width, height, lookup, { stencil: icon, kind: 'resource' }) : stencilSvg(stencil!, style, width, height, lookup);
-    return { url: svgDataUrl(svg), margin };
+    const standIns = { ...style, ...(style.fillColor === 'none' ? {} : { fillColor: STENCIL_FILL }), ...(style.strokeColor === 'none' ? {} : { strokeColor: STENCIL_STROKE }) };
+    const { svg, margin } = icon ? stencilSvg(icon, standIns, width, height, lookup, { stencil: icon, kind: 'resource' }) : stencilSvg(stencil!, standIns, width, height, lookup);
+    // draw.io's own defaults where the cell sets none: a white fill and a black line.
+    const colour = (value: string | undefined, fallback: string) => (value === 'none' ? 'transparent' : drawioColor(value) ?? fallback);
+    return { svg, margin, paint: { fill: colour(style.fillColor, '#ffffff'), stroke: colour(style.strokeColor, '#000000') } };
   }
 
   private addConnector(cell: Cell, state: EdgeState, layerId: string): void {

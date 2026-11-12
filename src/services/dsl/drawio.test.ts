@@ -509,8 +509,9 @@ describe('big and deep draw.io files', () => {
     const words = Array.from({ length: 100_000 }, () => 'word').join(' ');
     cells.push(`<mxCell id="t" value="${words}" style="text;whiteSpace=wrap" vertex="1" parent="1"><mxGeometry width="80" height="40" as="geometry"/></mxCell>`);
     const { document } = await open(wrap(cells));
-    // Each of the 4,999 groups carries its title as a node of its own.
-    expect(document.pages[0]!.nodes).toHaveLength(10_000);
+    // Each painted box holding the next stays a shape with its own words: 5,000 boxes and the text.
+    expect(document.pages[0]!.nodes).toHaveLength(5_001);
+    expect(document.pages[0]!.nodes.find((node) => node.id === 'n1')!.parentId).toBe('n0');
   });
 });
 

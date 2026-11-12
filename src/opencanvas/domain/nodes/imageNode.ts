@@ -46,3 +46,22 @@ export function createImageNode(page: ScenePage, options: CreateImageNodeOptions
     extensions: {},
   };
 }
+
+/**
+ * A picture the node's own colours paint (draw.io's stencils): its SVG has these two stand-ins where its fill and its
+ * line go, so changing the node's Fill or Line repaints it. Stored as `content.stencilSvg`.
+ */
+export const STENCIL_FILL = '#fe0001';
+export const STENCIL_STROKE = '#fe0002';
+
+const hex = (value: unknown, fallback: string): string => (typeof value === 'string' && /^#[0-9a-f]{6}([0-9a-f]{2})?$/i.test(value) ? value.slice(0, 7) : value === 'transparent' ? 'none' : fallback);
+
+/** The node's stencil picture in its own colours, as an SVG data URL; null when it isn't one. */
+export function stencilPictureUrl(node: Pick<SceneNode, 'content' | 'appearance'>): string | null {
+  const template = node.content.stencilSvg;
+  if (typeof template !== 'string' || !template.startsWith('<svg')) return null;
+  const svg = template
+    .replaceAll(STENCIL_FILL, hex(node.appearance.fill, '#ffffff'))
+    .replaceAll(STENCIL_STROKE, hex(node.appearance.stroke, '#000000'));
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}

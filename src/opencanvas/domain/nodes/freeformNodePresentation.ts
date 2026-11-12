@@ -1,3 +1,4 @@
+import { stencilPictureUrl } from './imageNode';
 import type { SceneNode } from '../document/types';
 import {
   optionalPresentationString,
@@ -102,7 +103,7 @@ export function resolveFreeformNodePresentation(node: SceneNode): FreeformNodePr
     return {
       kind: 'image',
       label: presentationString(node.content.label, 'Image'),
-      sourceUrl: safeImageUrl(node.content.imageUrl),
+      sourceUrl: stencilPictureUrl(node) ?? safeImageUrl(node.content.imageUrl),
       assetId: optionalPresentationString(node.content.imageAssetId) ?? null,
       opacity: opacity(node.content.transparency),
     };

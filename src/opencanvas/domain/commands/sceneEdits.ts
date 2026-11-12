@@ -110,6 +110,25 @@ export function buildSetNodeLabelCommand(
   };
 }
 
+/**
+ * A label edit as the person means it: the node's words, and with them its label partner's. A shape whose words sit
+ * beside it (an imported picture's caption, words above a box) has them in a node of their own, marked
+ * `content.labelOf` with the shape's id; editing either one changes both, in one undo step.
+ */
+export function buildEditLabelCommand(page: ScenePage, nodeId: string, label: string): DocumentCommand {
+  const node = page.nodes.find((candidate) => candidate.id === nodeId);
+  if (!node) throw new RangeError(`Node "${nodeId}" was not found.`);
+  const owner = typeof node.content.labelOf === 'string' ? node.content.labelOf : node.id;
+  const partners = page.nodes.filter((candidate) => candidate.id !== nodeId
+    && (candidate.id === owner || candidate.content.labelOf === owner));
+  const own = buildSetNodeLabelCommand(page, nodeId, label);
+  if (!partners.length) return own;
+  return {
+    kind: 'batch', id: `edit-label:${nodeId}`, label: 'Edit label',
+    commands: [own, ...partners.map((partner) => buildSetNodeLabelCommand(page, partner.id, label))],
+  };
+}
+
 // Keyboard nudge, agent `move` and drag-move share one commit shape: snapshot,
 // move, command. Null when every id is locked — style, align and icon edits skip
 // locked nodes the same way, and the pointer path never picks one up at all.

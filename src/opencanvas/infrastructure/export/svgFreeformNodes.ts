@@ -132,7 +132,8 @@ export function exportImageNode(
       );
   return nodeGroup(
     `data-node-id="${xml(node.id)}" data-node-kind="image" transform="${matrixAttribute(matrix)}"`,
-    `<rect width="${number(node.size.width)}" height="${number(node.size.height)}" rx="8" fill="${background}" stroke="#e95420"/>${media}`,
+    // As on the canvas: the plate stands in for a missing picture; a picture is drawn on nothing.
+    `${presentation.sourceUrl ? '' : `<rect width="${number(node.size.width)}" height="${number(node.size.height)}" rx="8" fill="${background}" stroke="#e95420"/>`}${media}`,
     frame
   );
 }

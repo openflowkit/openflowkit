@@ -56,4 +56,19 @@ describe('draw.io labels sit in draw.io’s label box', () => {
     expect(page.get('c')!.content.label).toBe('');
     expect(place(page.get('c:label')!)).toEqual({ x: 22, y: 2, width: 20, height: 16 });
   });
+
+  it('names the shape whose words sit beside it, so editing either edits both', async () => {
+    const page = await nodes(vertex('box', 'Message Endpoint', 'rounded=0;verticalLabelPosition=bottom;verticalAlign=top;fillColor=#c0f5a9', 0, 0, 120, 60));
+    expect(page.get('box:label')!.content).toMatchObject({ label: 'Message Endpoint', labelOf: 'box' });
+  });
+
+  it('keeps a painted box holding shapes a shape, and an invisible one holding shapes a group', async () => {
+    const child = (id: string, parent: string) => `<mxCell id="${id}" value="" vertex="1" parent="${parent}" style="rounded=0"><mxGeometry x="10" y="10" width="20" height="20" as="geometry"/></mxCell>`;
+    const page = await nodes(vertex('endpoint', 'Endpoint', 'rounded=0;fillColor=#c0f5a9', 0, 0, 120, 60) + child('port', 'endpoint')
+      + vertex('group', '', 'fillColor=none;strokeColor=none', 200, 0, 120, 60) + child('inside', 'group'));
+    expect(page.get('endpoint')).toMatchObject({ kind: 'process', content: { label: 'Endpoint' } });
+    expect(page.get('port')!.parentId).toBe('endpoint');
+    expect(page.get('group')!.kind).toBe('section');
+    expect(page.get('inside')!.parentId).toBe('group');
+  });
 });

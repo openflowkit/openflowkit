@@ -1,3 +1,4 @@
+import { stencilPictureUrl } from '../../opencanvas/domain/nodes/imageNode';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { loadStencils, stencilKey, type StencilSource } from './drawioStencilLibrary';
@@ -42,7 +43,12 @@ describe('drawioToDocument with library shapes', () => {
     const kind = (id: string) => nodes.find((node) => node.id === id)?.kind;
     expect(kind('a')).toBe('image');
     expect(kind('b')).toBe('image');
-    expect(String(nodes.find((node) => node.id === 'b')!.content.imageUrl)).toMatch(/^data:image\/svg\+xml;base64,/);
+    // The picture is painted by the node's own colours, so recolouring the node recolours the stencil.
+    const icon = nodes.find((node) => node.id === 'b')!;
+    expect(icon.appearance).toMatchObject({ fill: '#ed7100', stroke: '#ffffff' });
+    expect(stencilPictureUrl(icon)).toContain(encodeURIComponent('#ed7100'));
+    expect(stencilPictureUrl({ ...icon, appearance: { ...icon.appearance, fill: '#123456' } })).toContain(encodeURIComponent('#123456'));
+    expect(stencilPictureUrl({ ...icon, appearance: { ...icon.appearance, fill: '#123456' } })).not.toContain(encodeURIComponent('#ed7100'));
     expect(kind('c')).not.toBe('image');
     expect(result.losses.join(' ')).toContain('mxgraph.nowhere.at_all');
   });

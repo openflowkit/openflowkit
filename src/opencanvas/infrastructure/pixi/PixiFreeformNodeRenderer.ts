@@ -33,6 +33,8 @@ function drawChrome(
     graphics.fill({ color: visual.fill }).stroke({ color: visual.stroke, width: 1 });
     return;
   }
+  // A picture is its own look; the plate is a stand-in for one that is missing, not a frame behind a transparent one.
+  if (visual.kind === 'image' && (visual.presentation.sourceUrl || visual.presentation.assetId)) return;
   drawPixiNodeOutline(graphics, 'rounded', size, matrix);
   graphics.fill({ color: visual.fill }).stroke({ color: visual.stroke, width: 1.5 });
   if (visual.kind !== 'annotation' && visual.kind !== 'sticky' && visual.kind !== 'callout') return;

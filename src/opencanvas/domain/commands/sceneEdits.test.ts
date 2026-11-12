@@ -12,6 +12,7 @@ import {
   buildReorderCommand,
   buildToggleLockCommand,
   buildQuickCreateCommand,
+  buildEditLabelCommand,
   buildSetNodeLabelCommand,
   buildSetShapeCommand,
 } from './sceneEdits';
@@ -126,6 +127,23 @@ describe('v2 label edit command', () => {
     expect(edited.document.pages[0].nodes[0].content).not.toHaveProperty('richLabel');
     expect(applyDocumentCommand(edited.document, edited.inverse).document.pages[0].nodes[0].content.richLabel).toEqual(richLabel);
     expect(buildSetNodeLabelCommand(page, 'node-a', 'Holiday').after.content.richLabel).toEqual(richLabel);
+  });
+
+  it('edits a shape and the words set beside it together, from either one, in one undo step', () => {
+    const shape = createTestNode('pic', { kind: 'image', content: { label: 'Translator' } });
+    const words = createTestNode('pic:label', { parentId: 'pic', content: { label: 'Translator', labelOf: 'pic', richLabel: [{ kind: 'text', runs: [{ text: 'Translator', bold: true }] }] } });
+    const other = createTestNode('other', { content: { label: 'Translator' } });
+    const page = { ...pageWithTwoNodes(), nodes: [shape, words, other] };
+    const document = { ...createEmptyV2Document('doc-1'), pages: [page] };
+    for (const id of ['pic', 'pic:label']) {
+      const edited = applyDocumentCommand(document, buildEditLabelCommand(page, id, 'Mapper'));
+      const labels = edited.document.pages[0].nodes.map((node) => node.content.label);
+      expect(labels).toEqual(['Mapper', 'Mapper', 'Translator']);
+      expect(edited.document.pages[0].nodes[1].content).not.toHaveProperty('richLabel');
+      expect(applyDocumentCommand(edited.document, edited.inverse).document.pages[0].nodes.map((node) => node.content.label)).toEqual(['Translator', 'Translator', 'Translator']);
+    }
+    // A node with no partner edits alone.
+    expect(buildEditLabelCommand(page, 'other', 'Mapper').kind).toBe('set-node');
   });
 
   it('restores the pre-edit text on undo', () => {
