@@ -83,7 +83,7 @@ describe('importFiles', () => {
     expect(report.documents[0]).toMatchObject({ id: 'new-1', name: 'checkout' });
     expect(report.documents[0]!.pages).toHaveLength(2);
     expect(report).toMatchObject({ notes: [] });
-    expect(report.losses).toEqual(['checkout.drawio: 2 things didn’t come across: Checkout: bold, colour and size set on words inside a label are drawn plain; Services: draw.io’s “mxgraph.aws4.lambda_function” shape is drawn as a box.']);
+    expect(report.losses).toEqual(['checkout.drawio: 1 thing didn’t come across: Services: draw.io’s “mxgraph.aws4.lambda_function” shape is drawn as a box.']);
   });
 
   it('opens the diagram a draw.io SVG or PNG export carries, named without .drawio', async () => {

@@ -14,8 +14,15 @@ export interface StyleClipboard {
 }
 
 export function copyNodeStyle(node: SceneNode): JsonObject {
-  const { dash: _dash, ...style } = resolveNodeStyle(node);
-  return style;
+  const { dash: _dash, shadow, gradient, ...style } = resolveNodeStyle(node);
+  // Stored as flat keys; 'transparent' clears a gradient the target had.
+  return {
+    ...style,
+    shadow: shadow !== null,
+    ...(shadow ? { shadowColor: shadow.color, shadowOpacity: shadow.opacity, shadowBlur: shadow.blur, shadowOffsetX: shadow.offsetX, shadowOffsetY: shadow.offsetY } : {}),
+    gradientColor: gradient?.color ?? 'transparent',
+    ...(gradient ? { gradientDirection: gradient.direction } : {}),
+  };
 }
 
 export function copyConnectorStyle(connector: SceneConnector): ConnectorStylePatch {

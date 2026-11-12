@@ -49,6 +49,8 @@ export function labelLayout(box: DrawioLabelBox, padding: number): { readonly ap
       textAlign: box.align === 'left' ? 'start' : box.align === 'right' ? 'end' : 'center',
       textVerticalAlign: box.verticalAlign,
       textPadding: padding,
+      // draw.io wraps with CSS `word-wrap: normal`: a word wider than the box runs past it, never split.
+      ...(box.wrap ? { keepWords: true } : {}),
     },
     sizingPolicy: box.wrap ? WRAP : SPILL,
   };

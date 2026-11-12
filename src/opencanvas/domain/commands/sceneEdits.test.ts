@@ -117,6 +117,17 @@ describe('v2 label edit command', () => {
     expect(buildSetNodeLabelCommand(page, 'tile', 'API').after.size).toEqual({ width: 148, height: 107 });
   });
 
+  it('drops a label’s formatting when its words change, keeps it when they don’t, and undo brings it back', () => {
+    const richLabel = [{ kind: 'text', runs: [{ text: 'Holiday', bold: true }] }];
+    const node = createTestNode('node-a', { content: { label: 'Holiday', richLabel } });
+    const page = { ...pageWithTwoNodes(), nodes: [node] };
+    const document = { ...createEmptyV2Document('doc-1'), pages: [page] };
+    const edited = applyDocumentCommand(document, buildSetNodeLabelCommand(page, 'node-a', 'Vacation'));
+    expect(edited.document.pages[0].nodes[0].content).not.toHaveProperty('richLabel');
+    expect(applyDocumentCommand(edited.document, edited.inverse).document.pages[0].nodes[0].content.richLabel).toEqual(richLabel);
+    expect(buildSetNodeLabelCommand(page, 'node-a', 'Holiday').after.content.richLabel).toEqual(richLabel);
+  });
+
   it('restores the pre-edit text on undo', () => {
     const page = pageWithTwoNodes();
     const labeled = applyDocumentCommand(

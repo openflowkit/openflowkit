@@ -76,6 +76,32 @@ test('typing an opacity and pressing Enter commits once, with no page error, as 
   await expect(page.getByRole('dialog', { name: 'Fill', exact: true }).getByRole('spinbutton', { name: 'Opacity', exact: true })).toHaveValue('100');
 });
 
+test('a shadow shows its own settings and a gradient its colour, each one undo step @gate', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForSelector('[data-testid="v2-canvas"]');
+  await page.mouse.click(400, 300);
+  await page.keyboard.press('r');
+  await page.mouse.click(400, 300);
+  await expect.poll(() => count(page)).toBe(1);
+  await page.locator('[data-context-bar]').getByRole('button', { name: 'Effects', exact: true }).click();
+  const panel = page.getByRole('dialog', { name: 'Effects', exact: true });
+  await expect(panel.getByRole('spinbutton', { name: 'Shadow blur' })).toHaveCount(0);
+  await panel.getByRole('radio', { name: 'Soft' }).click();
+  await expect(panel.getByRole('radio', { name: 'Soft' })).toBeChecked();
+  const opacity = panel.getByRole('spinbutton', { name: 'Shadow opacity' });
+  await opacity.fill('50');
+  await opacity.press('Enter');
+  await expect(opacity).toHaveValue('50');
+  await panel.getByRole('radio', { name: 'Left to right' }).click();
+  await expect(panel.getByRole('radio', { name: 'Left to right' })).toBeChecked();
+  await expect(panel.getByRole('radiogroup', { name: 'Gradient colour' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Meta+z');
+  await page.locator('[data-context-bar]').getByRole('button', { name: 'Effects', exact: true }).click();
+  await expect(panel.getByRole('radio', { name: 'No gradient' })).toHaveAttribute('aria-checked', 'true');
+  await expect(panel.getByRole('spinbutton', { name: 'Shadow opacity' })).toHaveValue('50');
+});
+
 test('right-click selects the shape and opens its menu; ⌘G groups two shapes', async ({ page }) => {
   await page.goto('/');
   await page.waitForSelector('[data-testid="v2-canvas"]');

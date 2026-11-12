@@ -1,4 +1,4 @@
-import { resolveNodeStyle } from '../../domain/nodes/nodeStyle';
+import { gradientAxis, resolveNodeStyle } from '../../domain/nodes/nodeStyle';
 import type { SceneDocumentV1, SceneNode, ScenePage } from '../../domain/document/types';
 import { boundsFromPoints, boundsCorners } from '../../domain/geometry/bounds';
 import type { Bounds2d, Matrix2d, Point2d } from '../../domain/geometry/types';
@@ -98,15 +98,24 @@ function exportNode(
     ? `clip-${node.id.replace(/[^A-Za-z0-9_-]/g, '-')}`
     : null;
   const shadowId = `shadow-${node.id.replace(/[^A-Za-z0-9_-]/g, '-')}`;
+  const gradientId = `gradient-${node.id.replace(/[^A-Za-z0-9_-]/g, '-')}`;
   const filter = style.shadow ? ` filter="url(#${shadowId})"` : '';
-  const defs = (style.shadow
-    ? `<filter id="${shadowId}" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="#0f172a" flood-opacity="0.18"/></filter>`
+  const { shadow, gradient } = style;
+  const axis = gradient ? gradientAxis(gradient.direction) : null;
+  const stops = gradient ? `<stop offset="0" stop-color="${style.fill}"/><stop offset="1" stop-color="${gradient.color}"/>` : '';
+  const defs = (shadow
+    ? `<filter id="${shadowId}" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="${number(shadow.offsetX)}" dy="${number(shadow.offsetY)}" stdDeviation="${number(shadow.blur)}" flood-color="${shadow.color}" flood-opacity="${number(shadow.opacity)}"/></filter>`
     : '')
+    + (gradient
+      ? axis
+        ? `<linearGradient id="${gradientId}" x1="${axis.from.x}" y1="${axis.from.y}" x2="${axis.to.x}" y2="${axis.to.y}">${stops}</linearGradient>`
+        : `<radialGradient id="${gradientId}">${stops}</radialGradient>`
+      : '')
     + (clip ? `<clipPath id="${clip}"><path d="${pathData(outline)}"/></clipPath>` : '');
   return nodeGroup(
     `data-node-id="${xml(node.id)}" transform="${matrixAttribute(matrix)}"${style.opacity < 1 ? ` opacity="${number(style.opacity)}"` : ''}`,
     (defs ? `<defs>${defs}</defs>` : '')
-      + outlineMarkup(outline, style, filter)
+      + outlineMarkup(outline, gradient ? { ...style, fill: `url(#${gradientId})` } : style, filter)
       + (basic ? decorationMarkup(basic.shape, node.size, style) : '')
       + (preset ? widgetPrimitivesMarkup(frameChromePrimitives(preset, node.size), resolveWidgetInks(node, style, background), style) : '')
       + (resolveArchitectureNodePresentation(node)?.display === 'provider-icon'

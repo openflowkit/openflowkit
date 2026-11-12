@@ -83,6 +83,11 @@ export function textNodeSize(label: string, style: NodeStyle): Size2d {
 }
 
 // I-06: completion commits exactly one set-node; empty string is a valid label.
+function withoutRichLabel(content: SceneNode['content']): SceneNode['content'] {
+  const { richLabel: _formatting, ...plain } = content;
+  return plain;
+}
+
 export function buildSetNodeLabelCommand(
   page: ScenePage,
   nodeId: string,
@@ -98,7 +103,8 @@ export function buildSetNodeLabelCommand(
     before: node,
     after: refitIconCard({
       ...node,
-      content: { ...node.content, label },
+      // New words are plain: the formatting set on the old ones (a rich label) doesn't carry over. The same words keep it.
+      content: label === node.content.label ? node.content : withoutRichLabel({ ...node.content, label }),
       size: node.kind === 'text' ? textNodeSize(label, resolveNodeStyle(node)) : node.size,
     }, node),
   };

@@ -49,10 +49,10 @@ describe('draw.io styles', () => {
 
   it('carries paint, type and label placement; unset paint is left to the theme', () => {
     expect(drawioNodeAppearance(parseDrawioStyle('fillColor=#dae8fc;fontStyle=3;fontSize=16;dashed=1;opacity=50'))).toEqual({
-      fill: '#dae8fc', fontWeight: 700, fontStyle: 'italic', fontSize: 16, strokeStyle: 'dashed', opacity: 0.5, textPadding: 2,
+      fill: '#dae8fc', fontWeight: 700, fontStyle: 'italic', fontSize: 16, strokeStyle: 'dashed', opacity: 0.5, textPadding: 2, darkColors: 'invert',
     });
     expect(drawioNodeAppearance(parseDrawioStyle('align=left;spacingLeft=10;verticalAlign=top'))).toEqual({
-      textAlign: 'start', textVerticalAlign: 'top', textPadding: 12, fontWeight: 400,
+      textAlign: 'start', textVerticalAlign: 'top', textPadding: 12, fontWeight: 400, darkColors: 'invert',
     });
     // A centred label's one-sided spacing doesn't squeeze it from both sides.
     expect(drawioNodeAppearance(parseDrawioStyle('spacingRight=30')).textPadding).toBe(2);
@@ -78,6 +78,9 @@ describe('draw.io styles', () => {
     const html = parseDrawioStyle('html=1');
     expect(drawioLabel('<b>Take</b><br>pay&amp;ment&nbsp;now', html)).toBe('Take\npay&ment now');
     expect(drawioLabel('<p>One</p><p>Two</p>', html)).toBe('One\nTwo');
+    // A break that ends a cell or paragraph starts no line; a table's rows are lines, its cells side by side (database_3).
+    expect(drawioLabel('<table><tr><td>PK</td><td>uniqueId</td></tr><tr><td>FK1<br></td><td>foreignKey<br></td></tr></table>', html)).toBe('PK uniqueId\nFK1 foreignKey');
+    expect(drawioLabel('<p>field4<br></p><p>field5</p>', html)).toBe('field4\nfield5');
     expect(drawioLabel('Central<div>Management</div><div>Service</div>', html)).toBe('Central\nManagement\nService');
     expect(drawioLabel('One<br><br>Two', html)).toBe('One\n\nTwo');
     expect(drawioLabel('  <b>as written</b> ', {})).toBe('<b>as written</b>');
@@ -117,12 +120,46 @@ describe('drawioDarkInk', () => {
   });
 });
 
+describe('fill, line and shadow', () => {
+  it('sees a fill and a line through by their own opacity, and keeps the shadow', () => {
+    expect(drawioNodeAppearance(parseDrawioStyle('fillColor=#ff0000;fillOpacity=50;strokeColor=#00f;strokeOpacity=0;shadow=1;'))).toMatchObject({
+      fill: '#ff000080', stroke: '#0000ff00', shadow: true,
+    });
+    // Fully seen, or the theme's own colour, stays as it is.
+    expect(drawioNodeAppearance(parseDrawioStyle('fillColor=#ff0000;fillOpacity=100;strokeOpacity=40;'))).not.toHaveProperty('stroke');
+    expect(drawioNodeAppearance(parseDrawioStyle('fillColor=#ff0000;fillOpacity=100;')).fill).toBe('#ff0000');
+  });
+
+  it('casts draw.io’s shadow, with its defaults where the shape sets none', () => {
+    expect(drawioNodeAppearance(parseDrawioStyle('shadow=1;'))).toMatchObject({
+      shadow: true, shadowColor: '#000000', shadowOffsetX: 2, shadowOffsetY: 3, shadowBlur: 1, shadowOpacity: 0.25,
+    });
+    expect(drawioNodeAppearance(parseDrawioStyle('shadow=1;shadowColor=#FF0000;shadowOffsetX=-4;shadowOffsetY=6;shadowBlur=8;shadowOpacity=60;'))).toMatchObject({
+      shadowColor: '#ff0000', shadowOffsetX: -4, shadowOffsetY: 6, shadowBlur: 4, shadowOpacity: 0.6,
+    });
+    expect(drawioNodeAppearance(parseDrawioStyle('shadow=0;shadowColor=#ff0000;'))).not.toHaveProperty('shadowColor');
+  });
+
+  it('runs a gradient from the fill to its colour, in draw.io’s direction', () => {
+    expect(drawioNodeAppearance(parseDrawioStyle('fillColor=#dae8fc;gradientColor=#7ea6e0;'))).toMatchObject({ gradientColor: '#7ea6e0' });
+    expect(drawioNodeAppearance(parseDrawioStyle('fillColor=#dae8fc;gradientColor=#7ea6e0;'))).not.toHaveProperty('gradientDirection');
+    expect(drawioNodeAppearance(parseDrawioStyle('gradientColor=#7ea6e0;gradientDirection=radial;')).gradientDirection).toBe('radial');
+    expect(drawioNodeAppearance(parseDrawioStyle('fillColor=none;gradientColor=#7ea6e0;'))).not.toHaveProperty('gradientColor');
+    expect(drawioStyleLosses(parseDrawioStyle('gradientColor=#7ea6e0;'), 'shape')).toEqual([]);
+  });
+
+  it('fades a line by its own opacity times the cell’s', () => {
+    expect(drawioConnectorAppearance(parseDrawioStyle('opacity=50;strokeOpacity=50;')).opacity).toBe(0.25);
+    expect(drawioConnectorAppearance(parseDrawioStyle('strokeOpacity=100;'))).not.toHaveProperty('opacity');
+  });
+});
+
 describe('drawioStyleLosses', () => {
   it('names each style a shape or line has that we don’t draw', () => {
     expect(drawioStyleLosses(parseDrawioStyle('rounded=1;fillColor=#dae8fc;strokeColor=default;fontColor=none;fillColor2=x;fontFamily=Helvetica;'), 'shape')).toEqual([]);
     expect(drawioStyleLosses(parseDrawioStyle(
-      'gradientColor=#7ea6e0;shadow=1;sketch=1;fillStyle=hatch;glass=1;fillColor=light-dark(#fff,#000);fontFamily=Comic Sans MS;'), 'shape')).toEqual([
-      'gradient fills are drawn solid', 'shadows are left off', 'the hand-drawn sketch look is drawn clean',
+      'gradientColor=default;shadow=1;sketch=1;fillStyle=hatch;glass=1;fillColor=light-dark(#fff,#000);fontFamily=Comic Sans MS;'), 'shape')).toEqual([
+      'gradient fills are drawn solid', 'the hand-drawn sketch look is drawn clean',
       'hatched and patterned fills are drawn solid', 'the glass shine is left off',
       'colours not written as #hex use the theme’s instead', 'the “Comic Sans MS” font is drawn in ours',
     ]);
@@ -147,9 +184,9 @@ describe('drawioStyleLosses', () => {
   });
 
   it('reads a hostile style in linear time', () => {
-    const style = parseDrawioStyle(Array.from({ length: 100_000 }, (_, i) => `k${i}=v`).join(';') + ';shadow=1');
+    const style = parseDrawioStyle(Array.from({ length: 100_000 }, (_, i) => `k${i}=v`).join(';') + ';glass=1');
     const started = performance.now();
-    expect(drawioStyleLosses(style, 'shape')).toEqual(['shadows are left off']);
+    expect(drawioStyleLosses(style, 'shape')).toEqual(['the glass shine is left off']);
     expect(performance.now() - started).toBeLessThan(200);
   });
 });

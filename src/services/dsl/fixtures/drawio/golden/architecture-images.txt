@@ -1,46 +1,46 @@
 page "Page 1": 1 layer(s), 94 nodes, 77 connectors
-  process rounded "Maintenance" @1480,310 150x440 fill #bac8d3
+  process rounded "Maintenance" @1480,310 150x440 fill #bac8d3 ink #ae4132
   process rounded @215,70 1215x701 fill #bac8d3 ink #f08705
-  process rounded "Section 1" @490,79 300x103 fill #bac8d3 ink #0f172a
-  process rounded "Section 3" @485,269 300x105 fill #bac8d3 ink #0f172a
-  process rounded "Section 5" @315,449 295x115 fill #bac8d3 ink #0f172a
-  process rounded "Server Farm" @630,439 270x120 fill #bac8d3 ink #0f172a
-  process rounded "Service Processing" @920,439 280x130 fill #bac8d3 ink #0f172a
-  process rounded "Section 4" @900,269 300x105 fill #bac8d3 ink #0f172a
-  process rounded "Section 2" @900,79 300x108 fill #bac8d3 ink #0f172a
-  process rounded "Branch 4 (overseas)" @1081,971 459x179 fill #bac8d3
-  process rounded "Branch 3 (overseas)" @1172,780 457x180 fill #bac8d3
-  process rounded "Contractors" @770,913 294x207 fill #bac8d3
-  process rounded "Branch 2" @337,993 420x157 fill #bac8d3
-  process rounded "Branch 1" @243,809 440x171 fill #bac8d3
-  process rounded "Consumers" @22,488 115x542 fill #bac8d3
+  process rounded "Section 1" @490,79 300x103 fill #bac8d3 ink #ae4132
+  process rounded "Section 3" @485,269 300x105 fill #bac8d3 ink #ae4132
+  process rounded "Section 5" @315,449 295x115 fill #bac8d3 ink #ae4132
+  process rounded "Server Farm" @630,439 270x120 fill #bac8d3 ink #ae4132
+  process rounded "Service Processing" @920,439 280x130 fill #bac8d3 ink #ae4132
+  process rounded "Section 4" @900,269 300x105 fill #bac8d3 ink #ae4132
+  process rounded "Section 2" @900,79 300x108 fill #bac8d3 ink #ae4132
+  process rounded "Branch 4 (overseas)" @1081,971 459x179 fill #bac8d3 ink #ae4132
+  process rounded "Branch 3 (overseas)" @1172,780 457x180 fill #bac8d3 ink #ae4132
+  process rounded "Contractors" @770,913 294x207 fill #bac8d3 ink #ae4132
+  process rounded "Branch 2" @337,993 420x157 fill #bac8d3 ink #ae4132
+  process rounded "Branch 1" @243,809 440x171 fill #bac8d3 ink #ae4132
+  process rounded "Consumers" @22,488 115x542 fill #bac8d3 ink #ae4132
   process cloud "Cloud 3" @1480,118 120x80 fill #bac8d3 ink #23445d
   process cloud "Cloud 4" @1480,220 120x80 fill #bac8d3 ink #23445d
   process cloud "Internet" @970,790 120x80 fill #bac8d3 ink #23445d
   process rectangle @360,230 440x20 fill transparent ink #f08705
   process rectangle @385,97 80x80 fill transparent ink #f08705
   process rectangle @270,97 80x80 fill transparent ink #f08705
-  process rectangle @500,97 80x80 fill transparent ink #0f172a
-  process rectangle @590,97 80x80 fill transparent ink #0f172a
-  process rectangle @690,97 80x80 fill transparent ink #0f172a
-  process rectangle @920,97 80x80 fill transparent ink #0f172a
-  process rectangle @1010,97 80x80 fill transparent ink #0f172a
-  process rectangle @1110,100 77x77 fill transparent ink #0f172a
-  process rectangle @500,289 80x80 fill transparent ink #0f172a
-  process rectangle @590,289 80x80 fill transparent ink #0f172a
-  process rectangle @690,289 80x80 fill transparent ink #0f172a
-  process rectangle @920,289 80x80 fill transparent ink #0f172a
-  process rectangle @1010,289 80x80 fill transparent ink #0f172a
-  process rectangle @1110,289 80x80 fill transparent ink #0f172a
-  process rectangle @330,474 80x80 fill transparent ink #0f172a
-  process rectangle @420,474 80x80 fill transparent ink #0f172a
-  process rectangle @520,474 80x80 fill transparent ink #0f172a
-  process rectangle @630,474 80x80 fill transparent ink #0f172a
-  process rectangle @720,474 80x80 fill transparent ink #0f172a
-  process rectangle @810,474 80x80 fill transparent ink #0f172a
-  process rectangle @925,484 80x80 fill transparent ink #0f172a
-  process rectangle @1025,484 80x80 fill transparent ink #0f172a
-  process rectangle @1115,484 80x80 fill transparent ink #0f172a
+  process rectangle @500,97 80x80 fill transparent ink #f08705
+  process rectangle @590,97 80x80 fill transparent ink #f08705
+  process rectangle @690,97 80x80 fill transparent ink #f08705
+  process rectangle @920,97 80x80 fill transparent ink #f08705
+  process rectangle @1010,97 80x80 fill transparent ink #f08705
+  process rectangle @1110,100 77x77 fill transparent ink #f08705
+  process rectangle @500,289 80x80 fill transparent ink #f08705
+  process rectangle @590,289 80x80 fill transparent ink #f08705
+  process rectangle @690,289 80x80 fill transparent ink #ae4132
+  process rectangle @920,289 80x80 fill transparent ink #f08705
+  process rectangle @1010,289 80x80 fill transparent ink #f08705
+  process rectangle @1110,289 80x80 fill transparent ink #f08705
+  process rectangle @330,474 80x80 fill transparent ink #f08705
+  process rectangle @420,474 80x80 fill transparent ink #f08705
+  process rectangle @520,474 80x80 fill transparent ink #f08705
+  process rectangle @630,474 80x80 fill transparent ink #f08705
+  process rectangle @720,474 80x80 fill transparent ink #f08705
+  process rectangle @810,474 80x80 fill transparent ink #f08705
+  process rectangle @925,484 80x80 fill transparent ink #f08705
+  process rectangle @1025,484 80x80 fill transparent ink #f08705
+  process rectangle @1115,484 80x80 fill transparent ink #f08705
   process rectangle @918,229 422x20 fill transparent ink #f08705
   process rectangle @350,399 440x20 fill transparent ink #f08705
   process rectangle @918,399 412x20 fill transparent ink #f08705
@@ -90,8 +90,8 @@ page "Page 1": 1 layer(s), 94 nodes, 77 connectors
   process rectangle @50,901 80x80 fill transparent ink #f08705
   process rectangle @1220,659 80x80 fill transparent ink #f08705
   process rectangle @810,289 80x80 fill transparent ink #f08705
-  process rectangle "HEAD⏎OFFICE" @750,649 240x110 fill transparent
-  process rectangle "ENTERPRISE NETWORK" @137,15 1380x45 fill transparent
+  process rectangle "HEAD⏎OFFICE" @750,649 240x110 fill transparent ink #ae4132
+  process rectangle "ENTERPRISE NETWORK" @137,15 1380x45 fill transparent ink #ae4132
   process rectangle @1520,321 80x80 fill transparent ink #f08705
   24 -> 20 polyline, 1 bends
   53 -> 57 bezier, 2 bends
@@ -170,4 +170,4 @@ page "Page 1": 1 layer(s), 94 nodes, 77 connectors
   169 -> 56 polyline, 15 bends
   168 -> 168 direct, 0 bends
   27 -> 27 direct, 0 bends
-losses: 63 pictures come from draw.io’s own image library, so they are drawn as a box; draw.io’s “mxgraph.eip.messageChannel” shape is drawn as a box (9 shapes); bold, colour and size set on words inside a label are drawn plain (6 places); 37 label colours are changed so they read on a dark canvas
+losses: 63 pictures come from draw.io’s own image library, so they are drawn as a box; draw.io’s “mxgraph.eip.messageChannel” shape is drawn as a box (9 shapes)

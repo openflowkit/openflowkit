@@ -91,7 +91,7 @@ export function pixiTextStyle(style: NodeStyle, fill: number, wrapWidth: number 
     letterSpacing: style.fontSize * style.letterSpacing,
     // Each line sits on the side the label is aligned to, as the SVG export sets it; one line is unchanged by this.
     align: style.textAlign === 'center' ? 'center' : style.textAlign === 'end' ? 'right' : 'left',
-    ...(wrapWidth ? { wordWrap: true, wordWrapWidth: wrapWidth, breakWords: true } : {}),
+    ...(wrapWidth ? { wordWrap: true, wordWrapWidth: wrapWidth, breakWords: !style.keepWords } : {}),
   };
 }
 

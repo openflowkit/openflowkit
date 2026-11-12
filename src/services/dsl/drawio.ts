@@ -1,5 +1,5 @@
 import { DEFAULT_SCENE_LAYER_ID, UNTITLED_DOCUMENT_NAME } from '../../opencanvas/domain/document/defaults';
-import type { JsonObject } from '../../opencanvas/domain/document/json';
+import type { JsonObject, JsonValue } from '../../opencanvas/domain/document/json';
 import {
   SCENE_DOCUMENT_FORMAT, SCENE_DOCUMENT_VERSION,
   type SceneConnector, type SceneDocumentV1, type SceneLayer, type SceneNode, type ScenePage,
@@ -14,12 +14,15 @@ import { pageCells, pageModel, type Cell } from './drawioCells';
 import { drawioConnector, type EndNode, type LabelAt } from './drawioConnectors';
 import { drawioRoutes } from './drawioEdgeView';
 import { DrawioView, type EdgeState } from './drawioView';
-import { inkForEitherTheme } from './drawioInk';
 import { drawioFreehands, freehandContent } from './drawioStencil';
-import { richText, standInLosses } from './drawioLosses';
+import { keepDarkDrawnPage } from './drawioDarkMode';
+import { standInLosses } from './drawioLosses';
+import { drawioRichLabel } from './drawioRichText';
 import { drawioLabelFit, type DrawioLabelBox } from './drawioLabelBox';
 import { centreOf, labelLayout, labelNode, placeBox } from './drawioLabelNode';
-import { parseXml } from './xmlReader';
+import { parseXml, type XmlElement } from './xmlReader';
+import { loadStencils, siteStencils, type StencilSource } from './drawioStencilLibrary';
+import { stencilSvg, svgDataUrl } from './drawioStencilSvg';
 
 // A draw.io file (`.drawio`, or its `.xml` export) as an OpenFlowKit document.
 // draw.io keeps exact positions, so this builds the scene directly instead of
@@ -62,7 +65,12 @@ class PageBuilder {
   private readonly view: DrawioView;
 
   /** `freehand`: each freehand line's points as fractions of its cell's box (`drawioFreehands`). */
-  constructor(cells: readonly Cell[], private readonly loss: (message: string) => void, private readonly freehand: ReadonlyMap<string, readonly (readonly Point2d[])[]> = new Map()) {
+  /** `stencils`: the draw.io library shapes this file names, by full name in lower case (`loadStencils`). */
+  constructor(
+    cells: readonly Cell[], private readonly loss: (message: string) => void,
+    private readonly freehand: ReadonlyMap<string, readonly (readonly Point2d[])[]> = new Map(),
+    private readonly stencils: ReadonlyMap<string, XmlElement> = new Map(),
+  ) {
     for (const cell of cells) {
       if (this.cells.has(cell.id)) { loss(`two cells share the id “${cell.id}”, so the later one was left out`); continue; }
       this.cells.set(cell.id, cell);
@@ -128,7 +136,7 @@ class PageBuilder {
     }
     for (const message of standInLosses(this.unknownShapes)) this.loss(message);
     for (const [message, count] of this.styleLosses) this.loss(count > 1 ? `${message} (${count} places)` : message);
-    inkForEitherTheme(this.nodes, this.loss);
+    keepDarkDrawnPage(this.nodes);
   }
 
   /** The layer a cell sits in: the layer cell at the top of its parent chain. */
@@ -148,8 +156,22 @@ class PageBuilder {
   }
 
   private noteStyle(style: DrawioStyle, of: 'shape' | 'connector', value: string): void {
-    const rich = style.html === '1' && richText(value) ? ['bold, colour and size set on words inside a label are drawn plain'] : [];
+    const formatted = style.html === '1' ? drawioRichLabel(value, this.fontSize(style)) : null;
+    const rich = !formatted ? [] : of === 'connector' ? ['bold, colour and size set on words in a connector’s label are drawn plain']
+      : formatted.tables ? ['tables inside a label are set as plain lines'] : [];
     for (const message of [...drawioStyleLosses(style, of), ...rich]) this.styleLosses.set(message, (this.styleLosses.get(message) ?? 0) + 1);
+  }
+
+  private fontSize(style: DrawioStyle): number {
+    const size = Number(style.fontSize);
+    return Number.isFinite(size) && size > 0 ? size : 12;
+  }
+
+  /** The node with draw.io's formatting of its words (an `html=1` label's paragraphs, dividers and styled words), if any. */
+  private formatted(node: SceneNode, cell: Cell, style: DrawioStyle): SceneNode {
+    if (style.html !== '1' || typeof node.content.label !== 'string' || !node.content.label) return node;
+    const rich = drawioRichLabel(this.valueOf(cell), this.fontSize(style));
+    return rich ? { ...node, content: { ...node.content, richLabel: rich.blocks as unknown as JsonValue } } : node;
   }
 
   private childrenOf(id: string): readonly Cell[] {
@@ -234,7 +256,7 @@ class PageBuilder {
       return false;
     }
     const wordsBelong = (to: string) => {
-      if (label) this.push(labelNode({ id: `${cell.id}:label`, box: state.label, label, paint: textPaint(style), placement: placeBox(placement.matrix, state.label, state.label.rotation, centre), base: { ...base, parentId: to } }), placement.matrix);
+      if (label) this.push(this.formatted(labelNode({ id: `${cell.id}:label`, box: state.label, label, paint: textPaint(style), placement: placeBox(placement.matrix, state.label, state.label.rotation, centre), base: { ...base, parentId: to } }), cell, style), placement.matrix);
     };
     const imageUrl = drawioImageUrl(style);
     if ((name === 'image' || style.image) && !imageUrl) this.libraryImages += 1;
@@ -272,6 +294,15 @@ class PageBuilder {
       wordsBelong(cell.id);
       return true;
     }
+    const drawn = shape.unknown && !imageUrl ? this.stencilPicture(name, style, width, height) : null;
+    if (drawn) {
+      // A library shape is drawn by draw.io's stencil for it, as a picture the size of its box and its widest line.
+      const grown = { x: box.x - drawn.margin, y: box.y - drawn.margin, width: width + 2 * drawn.margin, height: height + 2 * drawn.margin };
+      const pictured = placeBox(inside, grown, state.rotation, centre);
+      this.push({ ...createImageNode(page, { id: cell.id, at: pictured.transform.translation, size: { width: grown.width, height: grown.height }, label: label || name, url: drawn.url }), ...base, transform: pictured.transform }, pictured.matrix);
+      wordsBelong(cell.id);
+      return true;
+    }
     if (shape.unknown && name !== 'image' && !imageUrl) {
       // AWS's resource icons are one shape; the icon is named in `resIcon`.
       const unknown = style.resIcon?.startsWith('mxgraph.') ? style.resIcon : shape.unknown;
@@ -289,7 +320,7 @@ class PageBuilder {
     if (unpainted && label && !fit.inside) {
       // A cell with no fill or line is only its words: one box, where draw.io lays them out.
       const words = placeBox(inside, state.label, state.label.rotation, centre);
-      this.push(labelNode({ id: cell.id, box: state.label, label, paint: appearance, placement: words, base }), words.matrix);
+      this.push(this.formatted(labelNode({ id: cell.id, box: state.label, label, paint: appearance, placement: words, base }), cell, style), words.matrix);
       return true;
     }
     // Words the shape's own label can hold are its label; the rest get a box of their own inside it.
@@ -298,9 +329,20 @@ class PageBuilder {
       kind: shape.kind === 'text' ? 'rectangle' : shape.kind, id: cell.id, at: transform.translation, size, label: fit.inside ? label : '',
       appearance: { ...appearance, ...(fit.inside ? layout.appearance : {}), ...flat },
     });
-    this.push({ ...node, ...base, transform, content: { ...node.content, sizingPolicy: layout.sizingPolicy } }, placement.matrix);
+    this.push(this.formatted({ ...node, ...base, transform, content: { ...node.content, sizingPolicy: layout.sizingPolicy } }, cell, style), placement.matrix);
     if (!fit.inside) wordsBelong(cell.id);
     return true;
+  }
+
+  /** The cell drawn by its draw.io stencil, or null when its shape isn't one we have. */
+  private stencilPicture(name: string, style: DrawioStyle, width: number, height: number): { url: string; margin: number } | null {
+    if (width <= 0 || height <= 0) return null;
+    const lookup = (key: string) => this.stencils.get(key) ?? null;
+    const stencil = lookup(name.toLowerCase());
+    const icon = name === 'mxgraph.aws4.resourceIcon' && style.resIcon ? lookup(style.resIcon.toLowerCase()) : null;
+    if (!stencil && !icon) return null;
+    const { svg, margin } = icon ? stencilSvg(icon, style, width, height, lookup, { stencil: icon, kind: 'resource' }) : stencilSvg(stencil!, style, width, height, lookup);
+    return { url: svgDataUrl(svg), margin };
   }
 
   private addConnector(cell: Cell, state: EdgeState, layerId: string): void {
@@ -360,16 +402,28 @@ function ridesLine(cell: Cell): boolean {
 
 /** The type and ink a label carries when its words get a box of their own: the cell's font, none of its paint. */
 function textPaint(style: DrawioStyle): JsonObject {
-  const { textColor, fontSize, fontWeight, fontStyle, textDecoration } = drawioNodeAppearance(style);
-  return Object.fromEntries(Object.entries({ textColor, fontSize, fontWeight, fontStyle, textDecoration }).filter(([, value]) => value !== undefined)) as JsonObject;
+  const { textColor, fontSize, fontWeight, fontStyle, textDecoration, darkColors } = drawioNodeAppearance(style);
+  return Object.fromEntries(Object.entries({ textColor, fontSize, fontWeight, fontStyle, textDecoration, darkColors }).filter(([, value]) => value !== undefined)) as JsonObject;
 }
 
 function summarize(losses: readonly string[]): string[] {
   return [...new Set(losses)];
 }
 
-/** Every page of a draw.io file as one OpenFlowKit document under `id`. */
-export async function drawioToDocument(text: string, id: string, now = new Date().toISOString()): Promise<DrawioImport> {
+/** Every stencil a page's cells name: their shapes, and the icons AWS's resource icons carry. */
+function stencilNames(cells: readonly Cell[]): string[] {
+  const names: string[] = [];
+  for (const cell of cells) {
+    if (!cell.vertex) continue;
+    const shape = cell.style.shape;
+    if (shape?.startsWith('mxgraph.')) names.push(shape);
+    if (cell.style.resIcon?.startsWith('mxgraph.')) names.push(cell.style.resIcon);
+  }
+  return names;
+}
+
+/** Every page of a draw.io file as one OpenFlowKit document under `id`; library shapes come from `stencils`. */
+export async function drawioToDocument(text: string, id: string, now = new Date().toISOString(), stencils: StencilSource = siteStencils()): Promise<DrawioImport> {
   if (!text.trim()) return { error: 'It’s empty.' };
   const parsed = parseXml(text);
   if ('error' in parsed) return { error: `It isn’t a readable draw.io file (${parsed.error}).` };
@@ -383,7 +437,7 @@ export async function drawioToDocument(text: string, id: string, now = new Date(
     const pageName = diagram.attributes.name?.trim() || `Page ${index + 1}`;
     if ('error' in model) { losses.push(`“${pageName}”: ${model.error}, so it was left out`); continue; }
     const cells = pageCells(model);
-    const builder = new PageBuilder(cells, (message) => losses.push(diagrams.length > 1 ? `${pageName}: ${message}` : message), await drawioFreehands(cells));
+    const builder = new PageBuilder(cells, (message) => losses.push(diagrams.length > 1 ? `${pageName}: ${message}` : message), await drawioFreehands(cells), await loadStencils(stencilNames(cells), stencils));
     builder.build();
     pages.push({
       id: `${id}:page-${index + 1}`, name: pageName, diagramKind: 'flowchart',

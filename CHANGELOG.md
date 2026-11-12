@@ -12,6 +12,7 @@ separately; its changes are listed under *For developers* in each release.
 ### Added
 
 - **Import draw.io files.** `.drawio`, `.xml`, `.drawio.svg` and `.drawio.png` open with every page, shapes where they were, and anything that can't come across named in a toast.
+- **draw.io imports look as drawn.** Library shapes come from draw.io's own stencils, labels keep their bold, colour, size, paragraphs and dividers, gradients and shadows come across (with an Effects button to edit them), and in the dark theme colours flip as draw.io's dark mode flips them.
 
 ## [2.2.0] — 2026-11-07
 

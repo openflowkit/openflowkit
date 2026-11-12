@@ -12,6 +12,32 @@ import { createWidgetNode } from '../../domain/nodes/widgetNode';
 const DSL_FIXTURES = import.meta.glob('../../../dsl/fixtures/**/*.dsl', { eager: true, query: '?raw', import: 'default' }) as Record<string, string>;
 
 describe('canonical SVG export', () => {
+  it('fills a node with its gradient and casts its own shadow', () => {
+    const node = createTestNode('a', { kind: 'process', appearance: {
+      fill: '#dae8fc', gradientColor: '#7ea6e0', gradientDirection: 'east',
+      shadow: true, shadowColor: '#ff0000', shadowOpacity: 0.25, shadowBlur: 1, shadowOffsetX: 2, shadowOffsetY: 3,
+    } });
+    const svg = exportCanonicalSvg(createTestDocument({ nodes: [node] }));
+    expect(svg).toContain('<linearGradient id="gradient-a" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#dae8fc"/><stop offset="1" stop-color="#7ea6e0"/></linearGradient>');
+    expect(svg).toContain('fill="url(#gradient-a)"');
+    expect(svg).toContain('<feDropShadow dx="2" dy="3" stdDeviation="1" flood-color="#ff0000" flood-opacity="0.25"/>');
+  });
+
+  it('sets a rich label line by line: styled runs, its own alignment, a divider across the box', () => {
+    const node = createTestNode('t', { kind: 'process', size: { width: 160, height: 80 }, appearance: { textVerticalAlign: 'top', textAlign: 'start', textPadding: 0 }, content: {
+      label: 'Holiday\nIdHoliday',
+      richLabel: [
+        { kind: 'text', align: 'center', runs: [{ text: 'Holiday', bold: true, underline: true }] },
+        { kind: 'rule', spaceBefore: 6, spaceAfter: 6 },
+        { kind: 'text', indent: 8, runs: [{ text: 'Id', color: '#ff0000' }, { text: 'Holiday' }] },
+      ],
+    } });
+    const svg = exportCanonicalSvg(createTestDocument({ nodes: [node] }));
+    expect(svg).toMatch(/<text x="80" y="[\d.]+" text-anchor="middle"[^>]*><tspan [^>]*font-weight="700" text-decoration="underline">Holiday<\/tspan><\/text>/);
+    expect(svg).toMatch(/<text x="8" [^>]*text-anchor="start"[^>]*><tspan fill="#ff0000"[^>]*>Id<\/tspan><tspan [^>]*>Holiday<\/tspan><\/text>/);
+    expect(svg).toMatch(/<line x1="0" x2="160" y1="[\d.]+" y2="[\d.]+"/);
+  });
+
   it('a C4 element with a long description wraps it inside its box', async () => {
     const compiled = await compile('architecture\nmodel {\n system Shop {\n  container API [tech: Go, desc: "Handles every order, payment, refund and shipping request from the web and mobile clients"]\n }\n}\nviews { view container of Shop }\n');
     const api = compiled.nodes.find((node) => node.id === 'shop.api')!;

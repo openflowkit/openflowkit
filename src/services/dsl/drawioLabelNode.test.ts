@@ -50,6 +50,11 @@ describe('labelLayout and labelNode', () => {
     });
   });
 
+  it('keeps words whole in a wrapping label, and says nothing for one that does not wrap', () => {
+    expect(labelLayout(label({ wrap: true }), 0).appearance.keepWords).toBe(true);
+    expect(labelLayout(label({ wrap: false }), 0).appearance).not.toHaveProperty('keepWords');
+  });
+
   it('makes a bare box of words at the label box, in the cell’s type, with no fill or line', () => {
     const node = labelNode({
       id: 'a:label', box: label(), label: 'Hello', paint: { fontSize: 14, textColor: '#ff0000' },

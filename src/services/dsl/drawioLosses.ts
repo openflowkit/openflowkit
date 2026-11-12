@@ -37,6 +37,3 @@ export function standInLosses(shapes: ReadonlyMap<string, number>): string[] {
   }
   return lines;
 }
-
-/** draw.io's rich text: words made bold, coloured or resized inside an `html=1` label. Line breaks aren't formatting. */
-export const richText = (value: string): boolean => /<(b|strong|i|em|u|s|strike|font|span|sup|sub)\b/i.test(value);

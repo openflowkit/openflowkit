@@ -42,8 +42,8 @@ describe('drawioToDocument', () => {
     });
     expect(byId.get('check')!.content.shape).toBe('diamond');
     expect(byId.get('pay')).toMatchObject({ content: { shape: 'rounded', label: 'Take\npayment' }, appearance: { fontWeight: 700 } });
-    // Its #333333 was meant for a light page: on an unset fill it follows the theme.
-    expect(byId.get('pay')!.appearance.textColor).toBeUndefined();
+    // Its #333333 is kept, and flips light in the dark theme as draw.io's does.
+    expect(byId.get('pay')!.appearance).toMatchObject({ textColor: '#333333', darkColors: 'invert' });
     expect(byId.get('db')!.content.shape).toBe('cylinder');
   });
 
@@ -560,31 +560,27 @@ describe('draw.io colours in either theme', () => {
     expect(nodes.get('black-on-deep')!.appearance.textColor).toBe('#000000');
   });
 
-  it('gives a coloured ink drawn for a white page to the theme where the dark canvas would hide it, and says so', async () => {
+  it('keeps every colour as drawn and flips it in the dark theme as draw.io does, keeping the words readable', async () => {
     const { document, losses } = await open(model([
       box('navy-words', 'text;html=1;fontColor=#232F3E;', 0, 0),
       box('red-on-washed-blue', 'fillColor=#BAC8D3;opacity=40;fontColor=#AE4132;', 140, 0),
       box('red-on-solid-blue', 'fillColor=#BAC8D3;fontColor=#AE4132;', 280, 0),
-      box('orange-on-dark', 'fillColor=#282828;fontColor=#F18808;', 420, 0),
+      box('red-on-misty-blue', 'fillColor=#BAC8D3;opacity=70;fontColor=#AE4132;', 420, 0),
+      box('short-hex', 'fillColor=#BCD;opacity=70;fontColor=#A43;', 560, 0),
+      box('grey-box', 'fillColor=#f5f5f5;strokeColor=#666666;', 700, 0),
     ].join('')));
     const nodes = new Map(document.pages[0]!.nodes.map((node) => [node.id, node]));
-    expect(nodes.get('navy-words')!.content.customColor).toBeUndefined();
-    expect(nodes.get('red-on-washed-blue')!.appearance.textColor).toBeUndefined();
-    // Where the colour reads in both themes, it stays as drawn.
-    expect(nodes.get('red-on-solid-blue')!.appearance.textColor).toBe('#ae4132');
-    expect(nodes.get('orange-on-dark')!.appearance.textColor).toBe('#f18808');
-    expect(losses).toContain('2 label colours are changed so they read on a dark canvas');
-  });
-
-  it('gives dark ink to a coloured label whose see-through light fill turns mid-grey on the dark canvas', async () => {
-    const { document, losses } = await open(model([
-      box('red-on-misty-blue', 'fillColor=#BAC8D3;opacity=70;fontColor=#AE4132;', 0, 0),
-      box('short-hex', 'fillColor=#BCD;opacity=70;fontColor=#A43;', 140, 0),
-    ].join('')));
-    const nodes = new Map(document.pages[0]!.nodes.map((node) => [node.id, node]));
-    expect(nodes.get('red-on-misty-blue')!.appearance.textColor).toBe('#0f172a');
-    expect(nodes.get('short-hex')!.appearance.textColor).toBe('#0f172a');
-    expect(losses).toContain('2 label colours are changed so they read on a dark canvas');
+    expect(nodes.get('navy-words')!.appearance.textColor).toBe('#232f3e');
+    expect(nodes.get('red-on-solid-blue')!.appearance).toMatchObject({ textColor: '#ae4132', darkColors: 'invert' });
+    // coc.xml's light grey boxes turn near-black on the dark canvas, their grey lines light: draw.io's own colours.
+    const grey = resolveNodeStyle(nodes.get('grey-box')!, '#191b19');
+    expect([grey.fill, grey.stroke]).toEqual(['#1a1a1a', '#959595']);
+    expect(resolveNodeStyle(nodes.get('grey-box')!, '#f7f7f5').fill).toBe('#f5f5f5');
+    for (const id of ['navy-words', 'red-on-washed-blue', 'red-on-solid-blue', 'red-on-misty-blue', 'short-hex']) {
+      const style = resolveNodeStyle(nodes.get(id)!, '#191b19');
+      expect(contrastRatio(style.textColor, paintOver(style.fill, '#191b19', style.opacity)), id).toBeGreaterThanOrEqual(3);
+    }
+    expect(losses.some((loss) => loss.includes('label colour'))).toBe(false);
   });
 
   it('leaves draw.io’s default black lines to the theme, so they show on a dark canvas', async () => {
@@ -608,11 +604,11 @@ describe('what a draw.io file loses, named', () => {
 
   it('says once, with a count, each style it couldn’t keep', async () => {
     const { losses } = await open(model([
-      box('a', 'shadow=1;gradientColor=#fff;', 0), box('b', 'shadow=1;', 200), box('c', 'rounded=1;', 400),
+      box('a', 'glass=1;gradientColor=default;', 0), box('b', 'glass=1;', 200), box('c', 'rounded=1;', 400),
       '<mxCell id="e" edge="1" source="a" target="b" parent="1" style="endArrow=box;"><mxGeometry relative="1" as="geometry"/></mxCell>',
     ].join('')));
     expect(losses).toEqual(expect.arrayContaining([
-      'shadows are left off (2 places)', 'gradient fills are drawn solid', 'draw.io’s “box” arrow head is drawn as an arrow',
+      'the glass shine is left off (2 places)', 'gradient fills are drawn solid', 'draw.io’s “box” arrow head is drawn as an arrow',
     ]));
     expect(losses.some((loss) => loss.includes('rounded'))).toBe(false);
   });

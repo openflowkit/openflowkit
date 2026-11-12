@@ -13,8 +13,10 @@ import { basicNodeDecorations } from '../nodes/basicNodeDecorations';
 import { nodeLabelBounds, nodeOutline } from '../nodes/nodeLabelBounds';
 import { isBackdropNode, isContainerNodeKind } from '../nodes/containerNodePresentation';
 import { measurePortableText } from '../text/measurement';
+import { layoutRichLabel, richLabelOf, type RichBlock } from '../text/richLabel';
+import { richBaseOf, richInk, richOrigin } from '../text/richLabelStyle';
 import { resolveLabelSizing } from '../node-sizing/labelWrap';
-import { FONT_STACKS, resolveNodeStyle, type NodeStyle } from '../nodes/nodeStyle';
+import { FONT_STACKS, resolveNodeStyle, type GradientDirection, type NodeStyle } from '../nodes/nodeStyle';
 import { cameraFitMatrix } from './camera';
 import { PULSE_DASH, PULSE_TRAVEL } from './frame';
 import type { ElementFrameState, FrameState } from './types';
@@ -45,7 +47,7 @@ export interface DrawPaint {
 interface DrawShadow {
   readonly color: string;
   readonly alpha: number;
-  /** Canvas blur radius: `feDropShadow` stdDeviation 2.5 × 2. */
+  /** Canvas blur radius: twice the SVG `stdDeviation`. */
   readonly blur: number;
   readonly offsetX: number;
   readonly offsetY: number;
@@ -82,6 +84,15 @@ export interface DrawPathOp extends DrawOpBase {
   readonly dashOffset: number;
   readonly lineJoin: 'miter' | 'round';
   readonly shadow: DrawShadow | null;
+  /** A fill that runs from `fill` to this colour across the node's own box (local units). */
+  readonly gradient?: DrawGradient;
+}
+
+export interface DrawGradient {
+  readonly color: string;
+  readonly direction: GradientDirection;
+  readonly width: number;
+  readonly height: number;
 }
 
 export interface DrawTextOp extends DrawOpBase {
@@ -118,7 +129,6 @@ const BACKGROUNDS: Readonly<Record<DrawTheme, string>> = {
 const CONNECTOR_STROKES: Readonly<Record<DrawTheme, string>> = {
   light: '#475569', dark: '#cbd5e1', print: '#475569',
 };
-const SHADOW: DrawShadow = { color: '#0f172a', alpha: 0.18, blur: 5, offsetX: 0, offsetY: 2 };
 
 /** Mirrors `canonicalSvg.safeColor`: user JSON can hold any string, and a bad
  *  one silently poisons a canvas style for every later op. */
@@ -154,6 +164,41 @@ function decorationOf(style: NodeStyle, baselineY: number): DrawTextOp['decorati
       : baselineY - style.fontSize * 0.28,
     thickness: Math.max(1, style.fontSize / 14),
   };
+}
+
+/**
+ * A rich label as text ops, one a run, at the shared layout's places, and dividers as rects.
+ * ponytail: each run sits at the estimated width of the runs before it, so a line of runs in another font can gap or
+ * touch — upgrade by measuring with the painter's own context before placing.
+ */
+function richLabelOps(
+  transform: Matrix2d, style: NodeStyle, box: Bounds2d, blocks: readonly RichBlock[], wraps: boolean,
+  opacity: number, clip: readonly Point2d[] | null,
+): DrawOp[] {
+  const layout = layoutRichLabel(blocks, richBaseOf(style), wraps ? Math.max(1, box.width - style.textPadding * 2) : null, { keepWords: style.keepWords, box: Math.max(0, box.width - style.textPadding * 2) });
+  const origin = richOrigin(style, box, layout, wraps);
+  const [left, top] = [box.x + origin.x, box.y + origin.y];
+  const ops: DrawOp[] = [];
+  for (const line of layout.lines) {
+    const baseline = top + line.y + line.baseline;
+    for (const piece of line.pieces) {
+      if (!piece.text.trim()) continue;
+      ops.push({
+        kind: 'text', transform, opacity, clip, text: piece.text, x: left + piece.x, y: baseline, baseline: 'alphabetic',
+        fontSize: piece.size, fontFamily: FONT_STACKS[style.fontFamily], fontWeight: piece.weight, fontStyle: piece.italic ? 'italic' : 'normal',
+        letterSpacing: 0, align: 'start', color: richInk(piece, style),
+        decoration: piece.underline ? { y: baseline + piece.size * 0.1, thickness: Math.max(1, piece.size / 14) }
+          : piece.strike ? { y: baseline - piece.size * 0.28, thickness: Math.max(1, piece.size / 14) } : null,
+      });
+    }
+  }
+  for (const rule of layout.rules) {
+    ops.push({
+      kind: 'rect', transform, opacity, clip, x: box.x + style.textPadding, y: top + rule.y - 0.5,
+      width: Math.max(0, box.width - style.textPadding * 2), height: 1, radius: 0, fill: paint(style.textColor), stroke: null, strokeWidth: 0,
+    });
+  }
+  return ops;
 }
 
 /** One label line, placed exactly as `labelElement` places it. */
@@ -205,7 +250,11 @@ function shapeNodeOps(
     stroke: style.strokeWidth > 0 ? paint(style.stroke) : null,
     strokeWidth: style.strokeWidth,
     dash: style.dash, dashOffset: 0, lineJoin: 'miter',
-    shadow: style.shadow ? SHADOW : null,
+    shadow: style.shadow ? {
+      color: style.shadow.color, alpha: style.shadow.opacity, blur: style.shadow.blur * 2,
+      offsetX: style.shadow.offsetX, offsetY: style.shadow.offsetY,
+    } : null,
+    ...(style.gradient ? { gradient: { ...style.gradient, width: node.size.width, height: node.size.height } } : {}),
   }];
   if (basic && style.strokeWidth > 0 && style.stroke !== 'transparent') {
     for (const decoration of basicNodeDecorations(basic.shape, node.size)) {
@@ -221,10 +270,13 @@ function shapeNodeOps(
   const sizing = resolveLabelSizing(node, style);
   const clip = sizing.clipContent ? outline : null;
   const labelBox = nodeLabelBounds(node);
+  const rich = label ? richLabelOf(node.content) : null;
+  if (rich) return [...ops, ...richLabelOps(transform, style, labelBox, rich, sizing.overflow !== 'visible', opacity, clip)];
   // A wrapping node (sizing policy) draws its label in the lines the canvas wraps it to, centred as a block.
   const lines = sizing.overflow === 'visible' ? [label] : measurePortableText(label, {
     fontSize: style.fontSize, fontWeight: style.fontWeight, lineHeight: style.fontSize * style.lineHeight,
     maxWidth: Math.max(1, node.size.width - style.textPadding * 2), maxLines: sizing.maxLines, overflow: sizing.overflow,
+    keepWords: style.keepWords,
   }).lines;
   const lineHeight = style.fontSize * style.lineHeight;
   lines.forEach((line, index) => {

@@ -9,6 +9,8 @@ export interface PortableTextStyle {
   readonly maxWidth?: number;
   readonly maxLines?: number;
   readonly overflow?: TextOverflowPolicy;
+  /** Never split a word wider than the line (draw.io's labels); by default it breaks. */
+  readonly keepWords?: boolean;
 }
 
 /** The node title and the kind/description line under it: one definition for sizing, canvas and export. */
@@ -35,7 +37,8 @@ function unitsWidth(units: number, fontSize: number, weight: number): number {
   return units * fontSize * weightFactor;
 }
 
-function lineWidth(text: string, fontSize: number, weight: number): number {
+/** Estimated width of one line of text: the measure every renderer and the exports agree on. */
+export function lineWidth(text: string, fontSize: number, weight: number): number {
   return unitsWidth([...text].reduce((sum, character) => sum + glyphUnits(character), 0), fontSize, weight);
 }
 
@@ -62,7 +65,7 @@ function fitPrefix(text: string, maximum: number, fontSize: number, weight: numb
 }
 
 /** Wraps one paragraph in one pass; stops once `limit` lines exist, since the caller drops the rest. */
-function wrapParagraph(text: string, maximum: number, fontSize: number, weight: number, limit: number): string[] {
+function wrapParagraph(text: string, maximum: number, fontSize: number, weight: number, limit: number, keepWords = false): string[] {
   if (!text) return [''];
   const lines: string[] = [];
   let start = 0;
@@ -78,6 +81,11 @@ function wrapParagraph(text: string, maximum: number, fontSize: number, weight: 
     // A name with no space to break at breaks after a `-` or `/` rather than mid-word.
     const cut = fit.lastSpace > start ? fit.lastSpace : fit.lastSoft;
     if (text[end] !== ' ' && cut > start) end = cut;
+    // Whole words (CSS `word-wrap: normal`, as draw.io wraps): a word wider than the line takes its own line and runs past the edge.
+    else if (keepWords && text[end] !== ' ') {
+      end = start;
+      while (end < text.length && !/\s/u.test(text[end]!)) end += 1;
+    }
     lines.push(text.slice(start, end).trimEnd());
     start = end;
     while (start < text.length && /\s/u.test(text[start]!)) start += 1;
@@ -105,7 +113,7 @@ export function measurePortableText(
   let lines = maximum && overflow === 'wrap'
     ? sourceLines.flatMap((line) => {
       if (budget <= 0) return [];
-      const wrapped = wrapParagraph(line, maximum, style.fontSize, weight, budget);
+      const wrapped = wrapParagraph(line, maximum, style.fontSize, weight, budget, style.keepWords);
       budget -= wrapped.length;
       return wrapped;
     })

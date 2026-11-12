@@ -80,4 +80,4 @@ page "Page 1": 1 layer(s), 61 nodes, 20 connectors
   (1209,1219) -> (1209,1227) direct, 0 bends
   (1231,1214) -> (1237,1218) direct, 0 bends
   (1195,1202) -> (1201,1206) direct, 0 bends
-losses: draw.io’s “mxgraph.ios7.icons.eye” shape is drawn as a box; bold, colour and size set on words inside a label are drawn plain (9 places)
+losses: draw.io’s “mxgraph.ios7.icons.eye” shape is drawn as a box

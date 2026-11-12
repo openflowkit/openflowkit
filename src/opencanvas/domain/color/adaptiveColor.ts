@@ -25,6 +25,7 @@ export function numericColorToHex(color: number): string {
 export function paintOver(fill: string, below: string, opacity: number): string {
   const rgba = /^rgba\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*([\d.]+)\s*\)$/.exec(fill);
   if (rgba) return mixHex(rgbToHex(Number(rgba[1]), Number(rgba[2]), Number(rgba[3])), below, 1 - Number(rgba[4]) * opacity);
+  if (/^#[0-9a-f]{8}$/i.test(fill)) return mixHex(fill.slice(0, 7), below, 1 - (Number.parseInt(fill.slice(7), 16) / 255) * opacity);
   if (!fill.startsWith('#')) return below;
   return opacity < 1 ? mixHex(fill, below, 1 - opacity) : fill;
 }
@@ -65,4 +66,25 @@ export function washOnDark<T extends WashInk>(ink: T, canvas: string): T {
     subText: WASH_SUB_INK,
     accentFill: mixHex(canvas, ink.stroke, 0.3),
   };
+}
+
+/**
+ * A colour as draw.io's dark mode draws it (`mxUtils.getInverseColor`): inverted 93% of the way, then turned 180°
+ * round the hue wheel, so its lightness flips and its hue stays. A see-through `#rrggbbaa` keeps its alpha; anything
+ * not a hex colour is returned as it is.
+ */
+export function invertForDark(color: string): string {
+  const hex = normalizeHex(color.length === 9 ? color.slice(0, 7) : color);
+  if (!hex) return color;
+  const n = Number.parseInt(hex.slice(1), 16);
+  const [r, g, b] = [n >> 16, (n >> 8) & 255, n & 255].map((m) => Math.round(0.93 * (255 - m) + m * 0.07));
+  const [cos, sin] = [Math.cos(Math.PI), Math.sin(Math.PI)];
+  const m = [
+    0.2126 + 0.7874 * cos - 0.2126 * sin, 0.7152 - 0.7152 * cos - 0.7152 * sin, 0.0722 - 0.0722 * cos + 0.9278 * sin,
+    0.2126 - 0.2126 * cos + 0.143 * sin, 0.7152 + (1 - 0.7152) * cos + 0.14 * sin, 0.0722 - 0.0722 * cos - 0.283 * sin,
+    0.2126 - 0.2126 * cos - 0.7874 * sin, 0.7152 - 0.7152 * cos + 0.7152 * sin, 0.0722 + 0.9278 * cos + 0.0722 * sin,
+  ];
+  const clamp = (value: number) => Math.round(Math.max(0, Math.min(255, value)));
+  const out = rgbToHex(clamp(m[0]! * r! + m[1]! * g! + m[2]! * b!), clamp(m[3]! * r! + m[4]! * g! + m[5]! * b!), clamp(m[6]! * r! + m[7]! * g! + m[8]! * b!));
+  return color.length === 9 ? `${out}${color.slice(7).toLowerCase()}` : out;
 }

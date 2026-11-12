@@ -133,11 +133,12 @@ const finite = (value: string | undefined): number | undefined => {
 
 /** Paint and type a vertex carries, in our appearance keys; unset keys are left out so the app's defaults apply. */
 export function drawioNodeAppearance(style: DrawioStyle): JsonObject {
-  const appearance: Record<string, string | number> = {};
+  // draw.io's dark mode draws every colour a cell sets with its lightness flipped (`invertForDark`).
+  const appearance: Record<string, string | number | boolean> = { darkColors: 'invert' };
   // Paint the cell doesn't set is left to the theme, which pairs fill and ink in light and dark alike.
   const bare = BARE.has(drawioShapeName(style));
-  const fill = bare ? 'transparent' : drawioColor(style.fillColor);
-  const stroke = bare ? 'transparent' : drawioLine(style.strokeColor);
+  const fill = bare ? 'transparent' : drawioFaded(drawioColor(style.fillColor), style.fillOpacity);
+  const stroke = bare ? 'transparent' : drawioFaded(drawioLine(style.strokeColor), style.strokeOpacity);
   const text = drawioColor(style.fontColor);
   if (fill) appearance.fill = fill;
   if (stroke) appearance.stroke = stroke;
@@ -163,7 +164,30 @@ export function drawioNodeAppearance(style: DrawioStyle): JsonObject {
   if (style.dashed === '1') appearance.strokeStyle = 'dashed';
   const opacity = finite(style.opacity);
   if (opacity !== undefined && opacity < 100) appearance.opacity = Math.max(0, opacity) / 100;
+  const gradient = drawioColor(style.gradientColor);
+  if (gradient && gradient !== 'transparent' && fill !== 'transparent') {
+    appearance.gradientColor = gradient;
+    const direction = style.gradientDirection;
+    if (direction === 'north' || direction === 'east' || direction === 'west' || direction === 'radial') appearance.gradientDirection = direction;
+  }
+  if (style.shadow === '1') {
+    // draw.io's per-shape shadow, with its defaults: offset 2, 3; a CSS blur of 2 (an SVG blur of half that); black at 25%.
+    appearance.shadow = true;
+    appearance.shadowColor = drawioColor(style.shadowColor) ?? '#000000';
+    appearance.shadowOffsetX = finite(style.shadowOffsetX) ?? 2;
+    appearance.shadowOffsetY = finite(style.shadowOffsetY) ?? 3;
+    appearance.shadowBlur = Math.max(0, finite(style.shadowBlur) ?? 2) / 2;
+    appearance.shadowOpacity = Math.min(100, Math.max(0, finite(style.shadowOpacity) ?? 25)) / 100;
+  }
   return appearance;
+}
+
+/** `color` seen through at draw.io's `percent` (0–100), as #rrggbbaa; a full one, or a theme colour, stays as it is. */
+export function drawioFaded(color: string | undefined, percent: string | undefined): string | undefined {
+  const value = finite(percent);
+  if (color === undefined || value === undefined || value >= 100 || !/^#[0-9a-f]{3}([0-9a-f]{3})?$/.test(color)) return color;
+  const hex = color.length === 4 ? color.replace(/[0-9a-f]/g, (digit) => digit + digit) : color;
+  return `${hex}${Math.round(Math.max(0, value) * 255 / 100).toString(16).padStart(2, '0')}`;
 }
 
 /** Heads `marker` draws as themselves: an arrow, a circle, a diamond or a cross. */
@@ -179,8 +203,7 @@ const OUR_FONTS = new Set(['helvetica', 'arial', 'verdana', 'inter', 'sans-serif
  */
 export function drawioStyleLosses(style: DrawioStyle, of: 'shape' | 'connector'): string[] {
   const losses: string[] = [];
-  if (style.gradientColor && style.gradientColor !== 'none') losses.push('gradient fills are drawn solid');
-  if (style.shadow === '1') losses.push('shadows are left off');
+  if (style.gradientColor && style.gradientColor !== 'none' && !drawioColor(style.gradientColor)) losses.push('gradient fills are drawn solid');
   if (style.sketch === '1' || style.comic === '1') losses.push('the hand-drawn sketch look is drawn clean');
   if (style.fillStyle && style.fillStyle !== 'solid' && style.fillStyle !== 'auto') losses.push('hatched and patterned fills are drawn solid');
   if (style.glass === '1') losses.push('the glass shine is left off');
@@ -239,8 +262,9 @@ export function drawioConnectorAppearance(style: DrawioStyle): JsonObject {
   const strokeWidth = finite(style.strokeWidth);
   if (strokeWidth !== undefined) appearance.strokeWidth = strokeWidth;
   if (style.dashed === '1') appearance.dashPattern = 'dashed';
-  const opacity = finite(style.opacity);
-  if (opacity !== undefined && opacity < 100) appearance.opacity = Math.max(0, opacity) / 100;
+  // A line is one paint: its own opacity and the whole cell's multiply.
+  const opacity = (finite(style.opacity) ?? 100) * (finite(style.strokeOpacity) ?? 100) / 100;
+  if (opacity < 100) appearance.opacity = Math.max(0, opacity) / 100;
   // draw.io's connector is rounded unless `rounded=0`, by half its `arcSize` (default 20).
   appearance.cornerRadius = style.rounded === '0' ? 0 : Math.min(24, Math.max(0, (finite(style.arcSize) ?? 20) / 2));
   // Its label sits on the page's colour (ours: the canvas's, the unset plate) with no border unless one is set;
@@ -257,7 +281,7 @@ export function drawioConnectorAppearance(style: DrawioStyle): JsonObject {
 }
 
 /** `<script>` and `<style>` bodies are code, not words: cut in one forward scan (a regex here goes quadratic on unclosed tags). */
-function withoutCode(value: string): string {
+export function withoutCode(value: string): string {
   const lower = value.toLowerCase();
   const opening = /<(script|style)\b/g;
   let kept = '';
@@ -273,6 +297,14 @@ function withoutCode(value: string): string {
   return kept + value.slice(at);
 }
 
+/**
+ * A `<br>` that ends a paragraph, a table cell or the label starts no line of its own in a browser: it is dropped.
+ * ponytail: one break before the closing tag; a run of them keeps all but the last, as a browser does.
+ */
+export function withoutClosingBreaks(value: string): string {
+  return value.replace(/<br\b[^<>]*>(\s*(?:<\/(?:p|div|td|th|li|h[1-6]|tr|span|font|b|i|u|strong)>\s*)*(?:<\/(?:p|div|td|th|li|h[1-6]|tr)>|$))/gi, '$1');
+}
+
 /** A label as plain text: draw.io's `html=1` labels lose their markup, keeping line breaks. */
 export function drawioLabel(value: string | undefined, style: DrawioStyle): string {
   if (!value) return '';
@@ -280,10 +312,12 @@ export function drawioLabel(value: string | undefined, style: DrawioStyle): stri
   // A block (`Global<div>Partnerships</div>`) starts and ends a line: its edges mark a break, and the run of
   // marks between two blocks is one break. `<br>` is a break of its own, so `<br><br>` keeps its blank line.
   // Source whitespace collapses as a browser's would; `[^<>]` keeps a run of unclosed `<` linear, not quadratic.
-  const text = withoutCode(value)
+  const text = withoutClosingBreaks(withoutCode(value))
     .replace(/\s+/g, ' ')
+    // A table's cells sit side by side on their row's line.
+    .replace(/<\/t[dh]>\s*<t[dh]\b[^<>]*>/gi, ' ')
     .replace(/<br\b[^<>]*>/gi, '\n')
-    .replace(/<\/?(div|p|li|ul|ol|h[1-6])\b[^<>]*>/gi, '\ue000')
+    .replace(/<\/?(div|p|li|ul|ol|h[1-6]|tr|table)\b[^<>]*>/gi, '\ue000')
     .replace(/<[^<>]*>/g, '')
     .replace(/ ?\ue000[\ue000 ]*/g, '\n');
   return decodeEntities(text).replace(/\u00a0/g, ' ').replace(/ *\n */g, '\n').replace(/\n{3,}/g, '\n\n').trim();

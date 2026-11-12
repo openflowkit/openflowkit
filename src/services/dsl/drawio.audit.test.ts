@@ -103,10 +103,13 @@ describe('draw.io templates as the audit found them', () => {
     ]);
   });
 
-  it('says rich text inside a label is drawn plain', async () => {
-    const { losses } = await open(model('<mxCell id="a" value="&lt;b&gt;Bold&lt;/b&gt; &lt;font color=&quot;#f00&quot;&gt;red&lt;/font&gt;" style="html=1;" vertex="1" parent="1"><mxGeometry width="80" height="40" as="geometry"/></mxCell>'
+  it('keeps words made bold or coloured inside a label, and leaves a label of only line breaks plain', async () => {
+    const { document, losses } = await open(model('<mxCell id="a" value="&lt;b&gt;Bold&lt;/b&gt; &lt;font color=&quot;#f00&quot;&gt;red&lt;/font&gt;" style="html=1;" vertex="1" parent="1"><mxGeometry width="80" height="40" as="geometry"/></mxCell>'
       + '<mxCell id="b" value="line&lt;br&gt;break" style="html=1;" vertex="1" parent="1"><mxGeometry x="100" width="80" height="40" as="geometry"/></mxCell>'));
-    expect(losses).toEqual(['bold, colour and size set on words inside a label are drawn plain']);
+    const [a, b] = document.pages[0]!.nodes;
+    expect(a!.content).toMatchObject({ label: 'Bold red', richLabel: [{ kind: 'text', runs: [{ bold: true, text: 'Bold' }, { text: ' ' }, { color: '#ff0000', text: 'red' }] }] });
+    expect(b!.content.richLabel).toBeUndefined();
+    expect(losses).toEqual([]);
   });
 
   it('says an empty file is empty', async () => {
