@@ -66,4 +66,31 @@ describe('rich labels', () => {
     expect(layoutRichLabel(blocks, BASE, null, { measure, box: 100 }).lines[0]!.pieces[0]!.x).toBe(40);
     expect(layoutRichLabel(blocks, BASE, null, { measure, box: 10 }).lines[0]!.pieces[0]!.x).toBe(10);
   });
+
+  it('sets a table’s rows in shared columns, each its widest cell, a full table stretched to the label', () => {
+    const blocks: RichBlock[] = [
+      { kind: 'text', background: '#e4e4e4', padding: 2, runs: [{ text: 'T' }] },
+      { kind: 'row', table: 0, padding: 2, full: true, cells: [{ runs: [{ text: 'PK' }] }, { runs: [{ text: 'id' }] }] },
+      { kind: 'row', table: 0, padding: 2, full: true, cells: [{ runs: [] }, { runs: [{ text: 'name' }], align: 'end' }] },
+    ];
+    const layout = layoutRichLabel(blocks, BASE, 100, { measure });
+    // The band: the paragraph's 12px line inside 2px of padding each side, the label's width; its words 2px in.
+    expect(layout.bands).toEqual([{ x: 0, y: 0, width: 100, height: 16, color: '#e4e4e4' }]);
+    expect(layout.lines[0]!.pieces[0]!.x).toBe(2);
+    // Columns 24 and 44 wide by nature share the 32px left over 24:44, so the second starts at 24 + 32·24/68.
+    const [first, second] = layout.lines.slice(1);
+    expect(first).toMatchObject({ y: 16, height: 16, columns: true });
+    expect(first!.pieces.map((piece) => piece.x)).toEqual([2, 24 + (32 * 24) / 68 + 2]);
+    // An end-aligned cell sits against its column's right padding.
+    expect(second!.pieces[0]!.x).toBeCloseTo(100 - 2 - 40);
+    expect(layout.height).toBe(48);
+    expect(richLabelText(blocks)).toBe('T\nPK id\n name');
+  });
+
+  it('keeps a table that isn’t full width as wide as its cells', () => {
+    const row: RichBlock = { kind: 'row', table: 0, cells: [{ runs: [{ text: 'ab' }] }, { runs: [{ text: 'c' }] }] };
+    const layout = layoutRichLabel([row], BASE, null, { measure, box: 200 });
+    expect(layout.lines[0]!.pieces.map((piece) => piece.x)).toEqual([0, 20]);
+    expect(layout.width).toBe(200);
+  });
 });

@@ -157,8 +157,7 @@ class PageBuilder {
 
   private noteStyle(style: DrawioStyle, of: 'shape' | 'connector', value: string): void {
     const formatted = style.html === '1' ? drawioRichLabel(value, this.fontSize(style)) : null;
-    const rich = !formatted ? [] : of === 'connector' ? ['bold, colour and size set on words in a connector’s label are drawn plain']
-      : formatted.tables ? ['tables inside a label are set as plain lines'] : [];
+    const rich = formatted && of === 'connector' ? ['bold, colour and size set on words in a connector’s label are drawn plain'] : [];
     for (const message of [...drawioStyleLosses(style, of), ...rich]) this.styleLosses.set(message, (this.styleLosses.get(message) ?? 0) + 1);
   }
 

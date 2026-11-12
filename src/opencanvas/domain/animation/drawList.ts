@@ -14,7 +14,7 @@ import { nodeLabelBounds, nodeOutline } from '../nodes/nodeLabelBounds';
 import { isBackdropNode, isContainerNodeKind } from '../nodes/containerNodePresentation';
 import { measurePortableText } from '../text/measurement';
 import { layoutRichLabel, richLabelOf, type RichBlock } from '../text/richLabel';
-import { richBaseOf, richInk, richOrigin } from '../text/richLabelStyle';
+import { richBand, richBaseOf, richInk, richOrigin } from '../text/richLabelStyle';
 import { resolveLabelSizing } from '../node-sizing/labelWrap';
 import { FONT_STACKS, resolveNodeStyle, type GradientDirection, type NodeStyle } from '../nodes/nodeStyle';
 import { cameraFitMatrix } from './camera';
@@ -178,7 +178,10 @@ function richLabelOps(
   const layout = layoutRichLabel(blocks, richBaseOf(style), wraps ? Math.max(1, box.width - style.textPadding * 2) : null, { keepWords: style.keepWords, box: Math.max(0, box.width - style.textPadding * 2) });
   const origin = richOrigin(style, box, layout, wraps);
   const [left, top] = [box.x + origin.x, box.y + origin.y];
-  const ops: DrawOp[] = [];
+  const ops: DrawOp[] = layout.bands.map((band) => ({
+    kind: 'rect', transform, opacity, clip, x: left + band.x, y: top + band.y, width: band.width, height: band.height,
+    radius: 0, fill: paint(richBand(band.color, style)), stroke: null, strokeWidth: 0,
+  }));
   for (const line of layout.lines) {
     const baseline = top + line.y + line.baseline;
     for (const piece of line.pieces) {

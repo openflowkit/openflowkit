@@ -38,6 +38,19 @@ describe('canonical SVG export', () => {
     expect(svg).toMatch(/<line x1="0" x2="160" y1="[\d.]+" y2="[\d.]+"/);
   });
 
+  it('draws a paragraph’s background band and sets each table cell at its own column', () => {
+    const node = createTestNode('t', { kind: 'process', size: { width: 160, height: 80 }, appearance: { textVerticalAlign: 'top', textAlign: 'start', textPadding: 0 }, content: {
+      label: 'Table\nPK id',
+      richLabel: [
+        { kind: 'text', background: '#e4e4e4', padding: 2, runs: [{ text: 'Table' }] },
+        { kind: 'row', table: 0, padding: 2, full: true, cells: [{ runs: [{ text: 'PK' }] }, { runs: [{ text: 'id' }] }] },
+      ],
+    } });
+    const svg = exportCanonicalSvg(createTestDocument({ nodes: [node] }));
+    expect(svg).toMatch(/<rect x="0" y="0" width="160" height="[\d.]+" fill="#e4e4e4"\/>/);
+    expect(svg).toMatch(/<text x="2" [^>]*><tspan [^>]*>PK<\/tspan><\/text><text x="[\d.]+" [^>]*><tspan [^>]*>id<\/tspan><\/text>/);
+  });
+
   it('a C4 element with a long description wraps it inside its box', async () => {
     const compiled = await compile('architecture\nmodel {\n system Shop {\n  container API [tech: Go, desc: "Handles every order, payment, refund and shipping request from the web and mobile clients"]\n }\n}\nviews { view container of Shop }\n');
     const api = compiled.nodes.find((node) => node.id === 'shop.api')!;

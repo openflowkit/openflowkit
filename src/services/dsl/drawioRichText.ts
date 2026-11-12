@@ -1,9 +1,9 @@
-import type { RichAlign, RichBlock, RichRun } from '../../opencanvas/domain/text/richLabel';
+import type { RichAlign, RichBlock, RichCell, RichRun } from '../../opencanvas/domain/text/richLabel';
 import { withoutClosingBreaks, withoutCode } from './drawioStyle';
 import { decodeEntities } from './xmlReader';
 
-// draw.io's `html=1` labels as our rich labels: paragraphs (`p`, `div`, headings) with their alignment, indent and
-// margins, `hr` dividers, `br` breaks, and words made bold, italic, underlined, struck, coloured or resized by tags
+// draw.io's `html=1` labels as our rich labels: paragraphs (`p`, `div`, headings) with their alignment, indent,
+// margins, padding and background, tables as rows of cells in columns, `hr` dividers, `br` breaks, and words made bold, italic, underlined, struck, coloured or resized by tags
 // (`b`, `i`, `u`, `font`, …) or inline CSS. Margins follow a browser's defaults, as draw.io's labels are set by one.
 // No DOM: the importer runs off the main thread.
 
@@ -16,7 +16,7 @@ const HEADINGS: Readonly<Record<string, readonly [number, number]>> = { h1: [2, 
 const VOID = new Set(['br', 'hr', 'img', 'input', 'meta', 'link', 'wbr', 'col', 'area', 'source']);
 
 type Inline = Omit<RichRun, 'text'>;
-interface Settings { readonly align?: RichAlign; readonly indent: number; readonly before: number; readonly after: number }
+interface Settings { readonly align?: RichAlign; readonly indent: number; readonly before: number; readonly after: number; readonly background?: string; readonly padding: number }
 interface Frame { readonly tag: string; readonly inline: Inline; readonly block: boolean; readonly settings?: Settings }
 
 function css(style: string | undefined): Map<string, string> {
@@ -63,7 +63,8 @@ function inlineOf(tag: string, attrs: Map<string, string>, outer: Inline, base: 
   }
   const style = css(attrs.get('style'));
   const size = px(style.get('font-size'), em);
-  if (size > 0) next.size = size;
+  // A size the words already have (`font-size: 1em`) sets nothing.
+  if (size > 0 && size !== em) next.size = size;
   const color = hex(style.get('color'));
   if (color) next.color = color;
   const weight = style.get('font-weight');
@@ -95,25 +96,34 @@ function blockOf(tag: string, attrs: Map<string, string>, size: number): Setting
   const listIndent = tag === 'ul' || tag === 'ol' ? 40 : tag === 'blockquote' ? 40 : 0;
   const pad = px(style.get('padding-left'), size);
   const indent = Math.max(0, pick('margin-left', left, listIndent) + (Number.isFinite(pad) ? pad : 0));
+  // `padding: 2px` pads the paragraph inside its background; a side's own padding moves only its words in.
+  const padding = Math.max(0, px((style.get('padding') ?? '').split(/\s+/)[0], size) || 0);
+  const background = hex(style.get('background-color') ?? style.get('background'));
   const textAlign = style.get('text-align') ?? (tag === 'center' ? 'center' : undefined);
   const align = textAlign === 'center' ? 'center' : textAlign === 'right' || textAlign === 'end' ? 'end' : textAlign === 'left' || textAlign === 'start' || textAlign === 'justify' ? 'start' : undefined;
-  return { ...(align ? { align } : {}), indent, before: Math.max(0, pick('margin-top', top, fallback)), after: Math.max(0, pick('margin-bottom', bottom, fallback)) };
+  return { ...(align ? { align } : {}), ...(background ? { background } : {}), padding, indent, before: Math.max(0, pick('margin-top', top, fallback)), after: Math.max(0, pick('margin-bottom', bottom, fallback)) };
 }
 
 const ATTRIBUTE = /([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*(?:=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+)))?/g;
 
+const TABLE_PARTS = new Set(['table', 'thead', 'tbody', 'tfoot', 'tr', 'td', 'th']);
+
 /**
  * draw.io's HTML label as rich blocks, `base` its cell's font size; null when nothing in it is formatted (plain
- * words and line breaks), so the plain label says it all. `tables` counts the tables set as plain lines.
+ * words and line breaks), so the plain label says it all.
  */
-export function drawioRichLabel(value: string, base: number): { readonly blocks: readonly RichBlock[]; readonly tables: number } | null {
+export function drawioRichLabel(value: string, base: number): { readonly blocks: readonly RichBlock[] } | null {
   const html = withoutClosingBreaks(withoutCode(value));
   const blocks: RichBlock[] = [];
   const stack: Frame[] = [];
+  /** The open table (`cellpadding` its cells' padding, a browser's 1 when unset), its row's cells, and the cell filling. */
+  let table: { readonly id: number; readonly padding: number; readonly full: boolean } | null = null;
   let tables = 0;
+  let row: RichCell[] | null = null;
+  let cell: { readonly align?: RichAlign } | null = null;
   /** The paragraph being filled: its runs, and the block settings it opened with. */
   let runs: RichRun[] = [];
-  let open: { align?: RichAlign; indent: number; before: number } = { indent: 0, before: 0 };
+  let open: { align?: RichAlign; indent: number; before: number; background?: string; padding: number } = { indent: 0, before: 0, padding: 0 };
   let pendingAfter = 0;
   let pendingBefore = 0;
   const inline = (): Inline => stack.at(-1)?.inline ?? {};
@@ -127,7 +137,9 @@ export function drawioRichLabel(value: string, base: number): { readonly blocks:
       if (own.align) align = own.align;
       indent += own.indent;
     }
-    return { ...(align ? { align } : {}), indent };
+    // Only the innermost paragraph's own background and padding are its; ponytail: an outer one's band is not drawn.
+    const inner = stack.findLast((frame) => frame.settings)?.settings;
+    return { ...(align ? { align } : {}), indent, padding: inner?.padding ?? 0, ...(inner?.background ? { background: inner.background } : {}) };
   };
   const flush = () => {
     const words = runs.some((run) => run.text.trim() !== '' || run.text.includes('\n'));
@@ -141,16 +153,32 @@ export function drawioRichLabel(value: string, base: number): { readonly blocks:
         kind: 'text', runs: runs.filter((run) => run.text !== ''),
         ...(open.align ? { align: open.align } : {}), ...(open.indent > 0 ? { indent: open.indent } : {}),
         ...(pendingBefore > 0 ? { spaceBefore: pendingBefore } : {}),
+        ...(open.background ? { background: open.background } : {}), ...(open.padding > 0 ? { padding: open.padding } : {}),
       });
       pendingBefore = 0;
     }
     runs = [];
     open = { ...blockSettings(), before: 0 };
   };
+  /** A cell's words, trimmed and on one line, as its row sets them. */
+  const endCell = () => {
+    if (!cell || !row) return;
+    const words = runs.map((run) => ({ ...run, text: run.text.replace(/\n/g, ' ') }));
+    if (words[0]) words[0] = { ...words[0], text: words[0].text.replace(/^ +/, '') };
+    if (words.at(-1)) words[words.length - 1] = { ...words.at(-1)!, text: words.at(-1)!.text.replace(/ +$/, '') };
+    row.push({ runs: words.filter((run) => run.text !== ''), ...(cell.align ? { align: cell.align } : {}) });
+    runs = [];
+    cell = null;
+  };
+  const endRow = () => {
+    endCell();
+    if (row && table) blocks.push({ kind: 'row', table: table.id, cells: row, ...(table.padding > 0 ? { padding: table.padding } : {}), ...(table.full ? { full: true } : {}) });
+    row = null;
+  };
   const closeBlock = (after: number) => {
     flush();
     const last = blocks.at(-1);
-    if (last && after > 0) blocks[blocks.length - 1] = { ...last, spaceAfter: Math.max(last.spaceAfter ?? 0, after) };
+    if (last && last.kind !== 'row' && after > 0) blocks[blocks.length - 1] = { ...last, spaceAfter: Math.max(last.spaceAfter ?? 0, after) };
     else if (!last) pendingAfter = Math.max(pendingAfter, after);
   };
   const write = (text: string) => {
@@ -177,6 +205,10 @@ export function drawioRichLabel(value: string, base: number): { readonly blocks:
       const at = stack.map((frame) => frame.tag).lastIndexOf(name);
       if (at === -1) continue;
       const closed = stack.splice(at);
+      if (closed.some((frame) => frame.tag === 'td' || frame.tag === 'th')) endCell();
+      if (closed.some((frame) => frame.tag === 'tr')) endRow();
+      if (closed.some((frame) => frame.tag === 'table')) { endRow(); table = null; open = { ...blockSettings(), before: 0 }; continue; }
+      if (table) continue;
       const block = closed.find((frame) => frame.block);
       if (block) closeBlock(block.settings?.after ?? 0);
       continue;
@@ -184,6 +216,29 @@ export function drawioRichLabel(value: string, base: number): { readonly blocks:
     const attrs = new Map<string, string>();
     for (const attr of match[3]!.matchAll(ATTRIBUTE)) attrs.set(attr[1]!.toLowerCase(), attr[2] ?? attr[3] ?? attr[4] ?? '');
     if (name === 'br') { write('\n'); continue; }
+    if (TABLE_PARTS.has(name) && (name === 'table' || table)) {
+      const own = inlineOf(name, attrs, inline(), base);
+      if (name === 'table') {
+        // ponytail: a table inside a table's cell is set as its words — upgrade by laying tables out as nested boxes.
+        if (table) { stack.push({ tag: name, inline: own, block: false }); continue; }
+        closeBlock(0);
+        const padding = Number(attrs.get('cellpadding'));
+        const width = css(attrs.get('style')).get('width') ?? attrs.get('width');
+        table = { id: tables++, padding: Number.isFinite(padding) && padding >= 0 ? padding : 1, full: width === '100%' };
+      }
+      if (name === 'tr') endRow();
+      if (name === 'tr' || ((name === 'td' || name === 'th') && !row)) row = [];
+      if (name === 'td' || name === 'th') {
+        endCell();
+        const align = blockOf(name, attrs, base).align ?? (attrs.get('align') === 'center' ? 'center' : attrs.get('align') === 'right' ? 'end' : name === 'th' ? 'center' : undefined);
+        cell = align ? { align } : {};
+        runs = [];
+      }
+      stack.push({ tag: name, inline: own, block: false });
+      continue;
+    }
+    // Inside a table, a paragraph is part of its cell: its words join the cell's line.
+    if (table && BLOCKS.has(name)) { if (runs.length) write(' '); stack.push({ tag: name, inline: inlineOf(name, attrs, inline(), base), block: false }); continue; }
     if (name === 'hr') {
       const em = inline().size ?? base;
       closeBlock(0);
@@ -191,13 +246,6 @@ export function drawioRichLabel(value: string, base: number): { readonly blocks:
       pendingAfter = 0;
       continue;
     }
-    if (name === 'td' || name === 'th') {
-      // A table's cells are set one after another on its row's line.
-      if (runs.length) write(' ');
-      if (!VOID.has(name)) stack.push({ tag: name, inline: inlineOf(name, attrs, inline(), base), block: false });
-      continue;
-    }
-    if (name === 'table') tables += 1;
     if (VOID.has(name) || match[0].endsWith('/>')) continue;
     if (BLOCKS.has(name)) {
       const em = inline().size ?? base;
@@ -212,8 +260,9 @@ export function drawioRichLabel(value: string, base: number): { readonly blocks:
     }
     stack.push({ tag: name, inline: inlineOf(name, attrs, inline(), base), block: false });
   }
-  flush();
-  const formatted = blocks.some((block) => block.kind === 'rule' || block.align !== undefined || (block.indent ?? 0) > 0
-    || block.runs.some((run) => Object.keys(run).length > 1));
-  return formatted ? { blocks, tables } : null;
+  if (table) endRow();
+  else flush();
+  const formatted = blocks.some((block) => block.kind !== 'text' || block.align !== undefined || (block.indent ?? 0) > 0
+    || block.background !== undefined || block.runs.some((run) => Object.keys(run).length > 1));
+  return formatted ? { blocks } : null;
 }

@@ -16,6 +16,11 @@ export function richInk(piece: RichPiece, style: NodeStyle): string {
   return style.invertColors && piece.color !== style.textColor ? invertForDark(piece.color) : piece.color;
 }
 
+/** A paragraph's background, flipped with the node's own colours in draw.io's dark mode. */
+export function richBand(color: string, style: NodeStyle): string {
+  return style.invertColors ? invertForDark(color) : color;
+}
+
 /** Where a rich label's block sits in its node: the padded box, its top moved for the vertical alignment. */
 export function richOrigin(style: NodeStyle, size: { readonly width: number; readonly height: number }, layout: { readonly width: number; readonly height: number }, wraps: boolean): { readonly x: number; readonly y: number } {
   const pad = style.textPadding;

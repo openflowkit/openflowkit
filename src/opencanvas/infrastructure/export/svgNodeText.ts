@@ -6,8 +6,8 @@ import type { BasicNodeShape } from '../../domain/nodes/basicNodePresentation';
 import type { IconCardText } from '../../domain/nodes/iconCardLayout';
 import { resolveLabelSizing } from '../../domain/node-sizing/labelWrap';
 import { measurePortableText, SUBLABEL_FONT } from '../../domain/text/measurement';
-import { layoutRichLabel, richLabelOf, type RichBlock } from '../../domain/text/richLabel';
-import { richBaseOf, richInk, richOrigin } from '../../domain/text/richLabelStyle';
+import { layoutRichLabel, richLabelOf, type RichBlock, type RichPiece } from '../../domain/text/richLabel';
+import { richBand, richBaseOf, richInk, richOrigin } from '../../domain/text/richLabelStyle';
 import { number, pathData, xml } from './svgMarkup';
 
 const SUB_LABEL_SIZE = SUBLABEL_FONT.fontSize;
@@ -84,17 +84,22 @@ function richLabelElement(style: NodeStyle, box: Bounds2d, blocks: readonly Rich
   const origin = richOrigin(style, box, layout, wraps);
   const [left, top] = [box.x + origin.x, box.y + origin.y];
   const family = xml(FONT_STACKS[style.fontFamily]);
+  const span = (piece: RichPiece) => {
+    const decoration = [piece.underline ? 'underline' : '', piece.strike ? 'line-through' : ''].filter(Boolean).join(' ');
+    return `<tspan fill="${richInk(piece, style)}" font-size="${number(piece.size)}" font-weight="${piece.weight}"${piece.italic ? ' font-style="italic"' : ''}${decoration ? ` text-decoration="${decoration}"` : ''}>${xml(piece.text)}</tspan>`;
+  };
+  const bands = layout.bands.map((band) => `<rect x="${number(left + band.x)}" y="${number(top + band.y)}" width="${number(band.width)}" height="${number(band.height)}" fill="${richBand(band.color, style)}"/>`).join('');
   const lines = layout.lines.filter((line) => line.pieces.length).map((line) => {
+    const y = number(top + line.y + line.baseline);
+    // A table row's cells each start at their own column.
+    if (line.columns) return line.pieces.map((piece) => `<text x="${number(left + piece.x)}" y="${y}" font-family="${family}" xml:space="preserve">${span(piece)}</text>`).join('');
     const anchor = line.align === 'center' ? 'middle' : line.align === 'end' ? 'end' : 'start';
     const x = left + (line.align === 'center' ? (line.left + line.right) / 2 : line.align === 'end' ? line.right : line.left);
-    const spans = line.pieces.map((piece) => {
-      const decoration = [piece.underline ? 'underline' : '', piece.strike ? 'line-through' : ''].filter(Boolean).join(' ');
-      return `<tspan fill="${richInk(piece, style)}" font-size="${number(piece.size)}" font-weight="${piece.weight}"${piece.italic ? ' font-style="italic"' : ''}${decoration ? ` text-decoration="${decoration}"` : ''}>${xml(piece.text)}</tspan>`;
-    }).join('');
-    return `<text x="${number(x)}" y="${number(top + line.y + line.baseline)}" text-anchor="${anchor}" font-family="${family}" xml:space="preserve">${spans}</text>`;
+    const spans = line.pieces.map(span).join('');
+    return `<text x="${number(x)}" y="${y}" text-anchor="${anchor}" font-family="${family}" xml:space="preserve">${spans}</text>`;
   }).join('');
   const rules = layout.rules.map((rule) => `<line x1="${number(box.x + style.textPadding)}" x2="${number(box.x + box.width - style.textPadding)}" y1="${number(top + rule.y)}" y2="${number(top + rule.y)}" stroke="${style.textColor}" stroke-width="1"/>`).join('');
-  return `<g${clipId ? ` clip-path="url(#${clipId})"` : ''}>${lines}${rules}</g>`;
+  return `<g${clipId ? ` clip-path="url(#${clipId})"` : ''}>${bands}${lines}${rules}</g>`;
 }
 
 export function outlineMarkup(

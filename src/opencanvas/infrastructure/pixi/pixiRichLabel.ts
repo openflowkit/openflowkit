@@ -3,7 +3,7 @@ import { applyMatrixToPoint } from '../../domain/geometry/matrix';
 import type { Matrix2d } from '../../domain/geometry/types';
 import { FONT_STACKS, type NodeStyle } from '../../domain/nodes/nodeStyle';
 import { layoutRichLabel, type MeasureText, type RichBlock } from '../../domain/text/richLabel';
-import { richBaseOf, richInk, richOrigin } from '../../domain/text/richLabelStyle';
+import { richBand, richBaseOf, richInk, richOrigin } from '../../domain/text/richLabelStyle';
 import { pixiPaintColor } from './pixiColor';
 import { markTitle } from './pixiText';
 import type { PixiTextPool } from './pixiTextPool';
@@ -33,6 +33,10 @@ export function drawPixiRichLabel(
   const placed = applyMatrixToPoint(matrix, origin);
   block.position.set(placed.x, placed.y);
   block.rotation = Math.atan2(matrix.b, matrix.a);
+  // Paragraph backgrounds sit under the words.
+  const bands = new Graphics();
+  for (const band of layout.bands) bands.rect(band.x, band.y, band.width, band.height).fill({ color: pixiPaintColor(richBand(band.color, style), 0xe4e4e4).color });
+  block.addChild(bands);
   const rules = new Graphics();
   for (const line of layout.lines) {
     for (const piece of line.pieces) {
