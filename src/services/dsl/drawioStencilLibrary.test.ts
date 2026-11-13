@@ -53,3 +53,12 @@ describe('drawioToDocument with library shapes', () => {
     expect(result.losses.join(' ')).toContain('mxgraph.nowhere.at_all');
   });
 });
+
+describe('a library shape on a dark canvas', () => {
+  it('is painted in its colours flipped, as draw.io’s dark mode paints it', async () => {
+    const { invertForDark } = await import('../../opencanvas/domain/color/adaptiveColor');
+    const node = { content: { stencilSvg: '<svg>#fe0001 #fe0002</svg>' }, appearance: { fill: '#ed7100', stroke: '#ffffff', darkColors: 'invert' } };
+    expect(stencilPictureUrl(node, '#0f172a')).toContain(encodeURIComponent(invertForDark('#ed7100')));
+    expect(stencilPictureUrl(node, '#ffffff')).not.toContain(encodeURIComponent(invertForDark('#ed7100')));
+  });
+});

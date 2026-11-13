@@ -72,7 +72,7 @@ export function annotationColors(
 }
 
 export function projectFreeformNodeVisual(node: SceneNode, canvasColor?: unknown): PixiFreeformNodeVisual | null {
-  const presentation = resolveFreeformNodePresentation(node);
+  const presentation = resolveFreeformNodePresentation(node, canvasColor);
   if (!presentation) return null;
   if (presentation.kind === 'text') {
     const colors = resolveTextVisualStyle(

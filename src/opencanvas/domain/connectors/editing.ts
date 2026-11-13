@@ -1,5 +1,6 @@
 import type {
   ConnectorEndpoint,
+  ConnectorLabel,
   ConnectorRouteOwnership,
   SceneConnector,
   ScenePage,
@@ -10,6 +11,9 @@ import { closestPointOnPolyline, dedupePolyline } from '../geometry/polyline';
 import { distanceBetweenPoints } from '../geometry/point';
 import type { Point2d } from '../geometry/types';
 import { projectConnector } from './routeProjection';
+import { connectorRichPlate } from './labelStyle';
+import type { NodeStyle } from '../nodes/nodeStyle';
+import type { RichBlock } from '../text/richLabel';
 import type { ConnectorPathCommand } from './types';
 
 export type ConnectorEndpointRole = 'source' | 'target';
@@ -81,16 +85,22 @@ export function pickConnectorAtPoint(
     const projected = projectConnector(page, connector);
     const closest = projected && closestPointOnPolyline(projected.samples, point);
     if (closest && closest.distance <= tolerance) return connector.id;
-    if (projected?.labels.some((label) => isPointOnConnectorLabel(label, point))) return connector.id;
+    if (projected?.labels.some((label) => isPointOnConnectorLabel(label, point, projected.presentation.label))) return connector.id;
   }
   return null;
 }
 
 /** The label plate is part of the connector: clicking it selects, double-clicking edits. */
 function isPointOnConnectorLabel(
-  label: { readonly text: string; readonly point: Point2d },
-  point: Point2d
+  label: { readonly text: string; readonly point: Point2d; readonly rich?: readonly RichBlock[] | null },
+  point: Point2d,
+  style: NodeStyle
 ): boolean {
+  // Formatted words are picked by the plate they are drawn on.
+  if (label.rich) {
+    const plate = connectorRichPlate(label.rich, style, label.point);
+    return point.x >= plate.x && point.x <= plate.x + plate.width && point.y >= plate.y && point.y <= plate.y + plate.height;
+  }
   // ponytail: 7px per glyph approximates Inter 500 12px; measure in the renderer if it misses.
   const halfWidth = label.text.length * 7 / 2 + 5;
   return Math.abs(point.x - label.point.x) <= halfWidth && Math.abs(point.y - label.point.y) <= 10;
@@ -219,6 +229,12 @@ export function resetConnectorRoute(connector: SceneConnector): SceneConnector {
   };
 }
 
+/** New words drop the old ones' formatting, as a node's label does. */
+function withoutFormatting(label: ConnectorLabel): ConnectorLabel {
+  const { richLabel: _formatting, ...plain } = label;
+  return plain;
+}
+
 export function setPrimaryConnectorLabel(
   connector: SceneConnector,
   text: string
@@ -227,7 +243,7 @@ export function setPrimaryConnectorLabel(
   if (!normalized) return { ...connector, labels: connector.labels.slice(1) };
   const current = connector.labels[0];
   const label = current
-    ? { ...current, text: normalized }
+    ? { ...withoutFormatting(current), text: normalized }
     : {
         id: `${connector.id}:label`, text: normalized, pathRatio: 0.5,
         offset: { x: 0, y: -14 }, metadata: {},

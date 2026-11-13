@@ -1,5 +1,6 @@
 import type { Point2d } from '../geometry/types';
 import type { NodeStyle } from '../nodes/nodeStyle';
+import type { RichBlock } from '../text/richLabel';
 
 export type ConnectorPathCommand =
   | { readonly kind: 'move'; readonly point: Point2d }
@@ -26,6 +27,8 @@ interface ConnectorLabelGeometry {
   readonly id: string;
   readonly text: string;
   readonly point: Point2d;
+  /** The words' formatting, when the label has any. */
+  readonly rich?: readonly RichBlock[] | null;
 }
 
 export interface ConnectorStrokePresentation {
@@ -33,6 +36,8 @@ export interface ConnectorStrokePresentation {
   readonly width: number;
   readonly opacity: number;
   readonly dash: readonly number[];
+  /** A draw.io line (`darkColors: 'invert'`): the colour it sets is flipped on a dark canvas, as draw.io does. */
+  readonly invertOnDark?: boolean;
 }
 
 export interface ConnectorPresentation {

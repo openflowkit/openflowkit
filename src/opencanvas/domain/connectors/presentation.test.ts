@@ -31,3 +31,15 @@ describe('connector presentation', () => {
     expect(styled.stroke).toMatchObject({ color: '#e95420', width: 3, dash: [10, 6] });
   });
 });
+
+describe('a draw.io line on a dark canvas', () => {
+  it('flips the colour it sets, as draw.io’s dark mode does; other lines keep theirs', async () => {
+    const { connectorStrokeOnCanvas } = await import('./presentation');
+    const { invertForDark } = await import('../color/adaptiveColor');
+    const drawn = edge({ stroke: '#000000', darkColors: 'invert' }).stroke;
+    expect(connectorStrokeOnCanvas(drawn, '#0f172a').color).toBe(invertForDark('#000000'));
+    expect(connectorStrokeOnCanvas(drawn, '#ffffff').color).toBe('#000000');
+    const ours = edge({ stroke: '#000000' }).stroke;
+    expect(connectorStrokeOnCanvas(ours, '#0f172a').color).toBe('#000000');
+  });
+});

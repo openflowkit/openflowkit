@@ -3,6 +3,7 @@ import { applyMatrixToPoint } from '../geometry/matrix';
 import { pointAtPolylineRatio } from '../geometry/polyline';
 import type { Bounds2d, Matrix2d, Point2d } from '../geometry/types';
 import { connectorLabelPlate } from './labelStyle';
+import { richLabelOf } from '../text/richLabel';
 import { transformBounds } from '../geometry/matrix';
 import { containerTextBounds } from '../nodes/nodeLabelBounds';
 import { buildNodeWorldMatrices, nodeWorldBounds, nodeWorldCenter } from '../scene/worldGeometry';
@@ -300,7 +301,7 @@ function finishConnector(draft: ConnectorDraft, points: ReadonlyMap<string, Poin
     id: connector.id,
     commands: draft.commands,
     samples: draft.samples,
-    labels: connector.labels.map((label) => ({ id: label.id, text: label.text, point: points.get(`${connector.id}:${label.id}`) ?? draft.start })),
+    labels: connector.labels.map((label) => ({ id: label.id, text: label.text, point: points.get(`${connector.id}:${label.id}`) ?? draft.start, rich: richLabelOf({ richLabel: label.richLabel }) })),
     presentation: draft.presentation,
   };
 }

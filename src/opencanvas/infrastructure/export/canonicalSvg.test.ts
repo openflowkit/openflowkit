@@ -51,6 +51,15 @@ describe('canonical SVG export', () => {
     expect(svg).toMatch(/<text x="2" [^>]*><tspan [^>]*>PK<\/tspan><\/text><text x="[\d.]+" [^>]*><tspan [^>]*>id<\/tspan><\/text>/);
   });
 
+  it('sets a connector label’s formatted words on its plate, centred on its point', () => {
+    const a = createTestNode('a', { kind: 'process', transform: { translation: { x: 0, y: 0 }, rotationRadians: 0, scale: { x: 1, y: 1 } } });
+    const b = createTestNode('b', { kind: 'process', transform: { translation: { x: 400, y: 0 }, rotationRadians: 0, scale: { x: 1, y: 1 } } });
+    const connector = { ...createTestConnector('e', 'a', 'b'), labels: [{ id: 'e:label', text: 'calls API', pathRatio: 0.5, offset: { x: 0, y: 0 }, metadata: {},
+      richLabel: [{ kind: 'text', runs: [{ text: 'calls ', bold: true }, { text: 'API', color: '#ff0000' }] }] }] };
+    const svg = exportCanonicalSvg(createTestDocument({ nodes: [a, b], connectors: [connector] }));
+    expect(svg).toMatch(/<text x="250" [^>]*><tspan [^>]*font-weight="700">calls<\/tspan>.*?<tspan fill="#ff0000"[^>]*>API<\/tspan><\/text>/);
+  });
+
   it('a C4 element with a long description wraps it inside its box', async () => {
     const compiled = await compile('architecture\nmodel {\n system Shop {\n  container API [tech: Go, desc: "Handles every order, payment, refund and shipping request from the web and mobile clients"]\n }\n}\nviews { view container of Shop }\n');
     const api = compiled.nodes.find((node) => node.id === 'shop.api')!;

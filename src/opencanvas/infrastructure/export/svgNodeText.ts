@@ -34,7 +34,7 @@ export function iconCaptionMarkup(text: IconCardText | null, style: NodeStyle): 
 // editor use: a frame's title band, the canvas below an icon plate, a shape's inset.
 export function labelElement(style: NodeStyle, box: Bounds2d, label: string, subLabel: string, clipId: string | null, node: SceneNode): string {
   const rich = label ? richLabelOf(node.content) : null;
-  if (rich) return richLabelElement(style, box, rich, clipId, node);
+  if (rich) return richLabelElement(style, box, rich, clipId, resolveLabelSizing(node, style).overflow !== 'visible');
   const padding = style.textPadding;
   const x = style.textAlign === 'start' ? box.x + padding
     : style.textAlign === 'end' ? box.x + box.width - padding : box.x + box.width / 2;
@@ -78,8 +78,7 @@ export function labelElement(style: NodeStyle, box: Bounds2d, label: string, sub
  * A rich label: one `<text>` a line, its runs as `<tspan>`s flowing in the viewer's own font from the side the line is
  * aligned to, so they meet as the canvas sets them; where lines break is the shared layout's. Dividers are lines.
  */
-function richLabelElement(style: NodeStyle, box: Bounds2d, blocks: readonly RichBlock[], clipId: string | null, node: SceneNode): string {
-  const wraps = resolveLabelSizing(node, style).overflow !== 'visible';
+export function richLabelElement(style: NodeStyle, box: Bounds2d, blocks: readonly RichBlock[], clipId: string | null, wraps: boolean): string {
   const layout = layoutRichLabel(blocks, richBaseOf(style), wraps ? Math.max(1, box.width - style.textPadding * 2) : null, { keepWords: style.keepWords, box: Math.max(0, box.width - style.textPadding * 2) });
   const origin = richOrigin(style, box, layout, wraps);
   const [left, top] = [box.x + origin.x, box.y + origin.y];

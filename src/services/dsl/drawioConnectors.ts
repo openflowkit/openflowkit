@@ -1,3 +1,4 @@
+import type { JsonValue } from '../../opencanvas/domain/document/json';
 import type { ConnectorEndpoint, ConnectorLabel, SceneConnector } from '../../opencanvas/domain/document/types';
 import { bezierPath } from '../../opencanvas/domain/connectors/routePaths';
 import { applyMatrixToPoint, invertMatrix } from '../../opencanvas/domain/geometry/matrix';
@@ -40,7 +41,7 @@ function curveThrough(points: readonly Point2d[]): Point2d[] {
   return out;
 }
 
-export interface LabelAt { readonly id: string; readonly text: string; readonly at: Point2d; readonly along: number }
+export interface LabelAt { readonly id: string; readonly text: string; readonly at: Point2d; readonly along: number; readonly rich?: JsonValue }
 
 /**
  * `endNode` finds the node an end is drawn to (null: the end is a free point). `labels` are the connector's own
@@ -67,11 +68,11 @@ export function drawioConnector(state: EdgeState, style: DrawioStyle, endNode: (
     target: end(state.targetId, line.at(-1)!),
     route: { kind: bezier ? 'bezier' : waypoints.length ? 'polyline' : 'direct', ownership: 'imported-fixed' },
     waypoints,
-    labels: labels.map(({ id, text, at, along }): ConnectorLabel => {
+    labels: labels.map(({ id, text, at, along, rich }): ConnectorLabel => {
       const pathRatio = Math.min(1, Math.max(0, (along + 1) / 2));
       const on = pointAtPolylineRatio(samples, pathRatio) ?? line[0]!;
       const round = (value: number) => Math.round(value * 100) / 100 + 0;
-      return { id, text, pathRatio, offset: { x: round(at.x - on.x), y: round(at.y - on.y) }, metadata: {} };
+      return { id, text, pathRatio, offset: { x: round(at.x - on.x), y: round(at.y - on.y) }, metadata: {}, ...(rich ? { richLabel: rich } : {}) };
     }),
     appearance: curved && line.length > 3 ? { ...appearance, cornerRadius: 0 } : appearance,
     semantics: drawioErRelation(style) ? { erRelation: drawioErRelation(style)! } : {}, metadata: {}, extensions: {},

@@ -136,7 +136,7 @@ class PageBuilder {
     }
     for (const message of standInLosses(this.unknownShapes)) this.loss(message);
     for (const [message, count] of this.styleLosses) this.loss(count > 1 ? `${message} (${count} places)` : message);
-    keepDarkDrawnPage(this.nodes);
+    keepDarkDrawnPage(this.nodes, this.connectors);
   }
 
   /** The layer a cell sits in: the layer cell at the top of its parent chain. */
@@ -155,10 +155,8 @@ class PageBuilder {
     return label ? `connector “${label}”` : `connector ${[...this.cells.values()].filter((each) => each.edge).indexOf(cell) + 1}`;
   }
 
-  private noteStyle(style: DrawioStyle, of: 'shape' | 'connector', value: string): void {
-    const formatted = style.html === '1' ? drawioRichLabel(value, this.fontSize(style)) : null;
-    const rich = formatted && of === 'connector' ? ['bold, colour and size set on words in a connector’s label are drawn plain'] : [];
-    for (const message of [...drawioStyleLosses(style, of), ...rich]) this.styleLosses.set(message, (this.styleLosses.get(message) ?? 0) + 1);
+  private noteStyle(style: DrawioStyle, of: 'shape' | 'connector'): void {
+    for (const message of drawioStyleLosses(style, of)) this.styleLosses.set(message, (this.styleLosses.get(message) ?? 0) + 1);
   }
 
   private fontSize(style: DrawioStyle): number {
@@ -171,6 +169,12 @@ class PageBuilder {
     if (style.html !== '1' || typeof node.content.label !== 'string' || !node.content.label) return node;
     const rich = drawioRichLabel(this.valueOf(cell), this.fontSize(style));
     return rich ? { ...node, content: { ...node.content, richLabel: rich.blocks as unknown as JsonValue } } : node;
+  }
+
+  /** A label's formatting, as the blocks a node's `richLabel` holds. */
+  private richOf(cell: Cell, style: DrawioStyle): JsonValue | undefined {
+    if (style.html !== '1') return undefined;
+    return drawioRichLabel(this.valueOf(cell), this.fontSize(style))?.blocks as unknown as JsonValue | undefined;
   }
 
   private childrenOf(id: string): readonly Cell[] {
@@ -228,7 +232,7 @@ class PageBuilder {
     const label = drawioLabel(this.valueOf(cell), style);
     if (!state) { this.loss(`“${label || cell.id}”: a shape without a position was left out`); return false; }
     const name = state.shape;
-    this.noteStyle(style, 'shape', cell.value);
+    this.noteStyle(style, 'shape');
     if (cell.collapsed && cell.geometry?.unfolded) this.loss(`${label ? `“${label}”` : 'A container'} was folded in draw.io, so it opens unfolded`);
     const hasChildren = this.childrenOf(cell.id).some((child) => child.vertex);
     const inside = parentId ? this.placed.get(parentId)?.matrix ?? null : null;
@@ -361,17 +365,17 @@ class PageBuilder {
 
   private addConnector(cell: Cell, state: EdgeState, layerId: string): void {
     const style = cell.style;
-    this.noteStyle(style, 'connector', cell.value);
+    this.noteStyle(style, 'connector');
     const router = style.edgeStyle;
     if (router && router !== 'none' && !drawioRoutes(router)) this.styleLosses.set(`draw.io’s “${router}” routing is drawn straight through its saved bends`, (this.styleLosses.get(`draw.io’s “${router}” routing is drawn straight through its saved bends`) ?? 0) + 1);
     const labels: LabelAt[] = [];
     const label = drawioLabel(this.valueOf(cell), style);
-    if (label) labels.push({ id: `${cell.id}:label`, text: label, at: centred(state.labelAt, label, style), along: cell.geometry?.relative ? cell.geometry.x : 0 });
+    if (label) labels.push({ id: `${cell.id}:label`, text: label, at: centred(state.labelAt, label, style), along: cell.geometry?.relative ? cell.geometry.x : 0, rich: this.richOf(cell, style) });
     // A label dragged along a line is a cell of its own on it; draw.io centres its words on its point.
     for (const child of this.childrenOf(cell.id)) {
       const text = drawioLabel(this.valueOf(child), child.style);
       const at = ridesLine(child) && child.visible ? this.view.vertex(child.id) : null;
-      if (at && text) labels.push({ id: `${child.id}:label`, text, at: centred(at.label.anchor, text, child.style), along: child.geometry?.relative ? child.geometry.x : 0 });
+      if (at && text) labels.push({ id: `${child.id}:label`, text, at: centred(at.label.anchor, text, child.style), along: child.geometry?.relative ? child.geometry.x : 0, rich: this.richOf(child, child.style) });
     }
     // A block arrow (`arrow`, `flexArrow`) is painted by its fill: with no line colour, ours is drawn in that.
     const filled = ['arrow', 'flexArrow'].includes(drawioShapeName(style)) ? drawioColor(style.fillColor) : undefined;

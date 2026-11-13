@@ -8,6 +8,7 @@ import { frameChromePrimitives, framePresetOf } from '../../domain/nodes/framePr
 import { isBackdropNode, isContainerNodeKind } from '../../domain/nodes/containerNodePresentation';
 import { nodeLabelBounds, nodeOutline } from '../../domain/nodes/nodeLabelBounds';
 import { connectorLabelOnCanvas } from '../../domain/connectors/labelStyle';
+import { connectorStrokeOnCanvas } from '../../domain/connectors/presentation';
 import { resolveArchitectureNodePresentation } from '../../domain/nodes/architectureNodePresentation';
 import { iconCardLayout } from '../../domain/nodes/iconCardLayout';
 import { FONT_STACKS } from '../../domain/nodes/nodeStyle';
@@ -74,7 +75,7 @@ function exportNode(
   const chart = exportChartNode(node, matrix, theme, wrapper) ?? exportWidgetNode(node, matrix, theme, wrapper, parentOf)
     ?? exportSequenceNode(node, matrix, theme, wrapper) ?? exportClassEntityNode(node, matrix, wrapper);
   if (chart) return chart;
-  const freeform = resolveFreeformNodePresentation(node);
+  const freeform = resolveFreeformNodePresentation(node, theme === 'dark' ? SVG_BACKGROUND.dark : undefined);
   if (freeform && (freeform.kind === 'pen' || freeform.kind === 'highlighter'
     || freeform.kind === 'line' || freeform.kind === 'arrow')) {
     return exportStrokeNode(node, matrix, freeform, wrapper, theme);
@@ -199,7 +200,7 @@ export function exportCanonicalSvg(
   const background = theme === 'dark' ? SVG_BACKGROUND.dark : SVG_BACKGROUND.light;
   const icons: IconSheet = { art: options.iconArt, ids: new Map() };
   const connectorMarkup = connectors.map((connector) => {
-    const stroke = safeColor(connector.presentation.stroke.color, theme === 'dark' ? '#cbd5e1' : '#475569');
+    const stroke = safeColor(connectorStrokeOnCanvas(connector.presentation.stroke, theme === 'dark' ? background : undefined).color, theme === 'dark' ? '#cbd5e1' : '#475569');
     const state = options.frame?.connectors[connector.id];
     const animation = options.animations?.('connector', connector.id);
     const pathAnimation = animation?.path ? ` class="${ANIMATED_CLASS}" style="${cssAnimation(animation.path)}"` : '';
@@ -208,7 +209,7 @@ export function exportCanonicalSvg(
       : connectorPathDash(state);
     const group = elementFrameStyle('connector', connector.id, state, undefined, options.animations);
     return `<g data-connector-id="${xml(connector.id)}"${group?.className ?? ''}${group?.style ?? ''}><path d="${connectorPathData(connector.commands)}"${pathAnimation} fill="none" stroke="${stroke}" stroke-width="${number(connector.presentation.stroke.width)}" opacity="${number(connector.presentation.stroke.opacity)}"${dash}${connector.presentation.stroke.dash.length && !dash ? ` stroke-dasharray="${connector.presentation.stroke.dash.map(number).join(' ')}"` : ''}/>`
-      + connector.labels.map((label) => connectorLabelMarkup(label.text, label.point, connectorLabelOnCanvas(connector.presentation.label, theme === 'dark' ? background : undefined))).join('')
+      + connector.labels.map((label) => connectorLabelMarkup(label.text, label.point, connectorLabelOnCanvas(connector.presentation.label, theme === 'dark' ? background : undefined), label.rich ?? null)).join('')
       + markerMarkup(connector, stroke, background)
       + '</g>';
   }).join('');

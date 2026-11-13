@@ -60,7 +60,7 @@ describe('draw.io styles', () => {
   });
 
   it('gives edges draw.io’s arrow unless told otherwise', () => {
-    const drawn = { cornerRadius: 10, labelBorder: 'transparent', labelFontSize: 11 };
+    const drawn = { darkColors: 'invert', cornerRadius: 10, labelBorder: 'transparent', labelFontSize: 11 };
     expect(drawioConnectorAppearance({})).toEqual({ markerEnd: 'arrow', ...drawn });
     expect(drawioConnectorAppearance(parseDrawioStyle('endArrow=none;startArrow=oval;dashed=1;strokeColor=#f00'))).toEqual({
       markerStart: 'circle', dashPattern: 'dashed', stroke: '#f00', ...drawn,

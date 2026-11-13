@@ -7,7 +7,8 @@ import { buildNodeStateMap } from '../scene/nodeState';
 import { buildNodeWorldMatrices } from '../scene/worldGeometry';
 import { projectPageConnectors } from '../connectors/routeProjection';
 import { connectorMarkerShapes, markerOutward, type MarkerShape } from '../connectors/markers';
-import { connectorLabelLineHeight, connectorLabelLines, connectorLabelPlate } from '../connectors/labelStyle';
+import { connectorLabelLineHeight, connectorLabelLines, connectorLabelPlate, connectorRichPlate } from '../connectors/labelStyle';
+import { connectorStrokeOnCanvas } from '../connectors/presentation';
 import { resolveBasicNodePresentation } from '../nodes/basicNodePresentation';
 import { basicNodeDecorations } from '../nodes/basicNodeDecorations';
 import { nodeLabelBounds, nodeOutline } from '../nodes/nodeLabelBounds';
@@ -345,7 +346,7 @@ function connectorOps(
   const { presentation } = connector;
   const opacity = state?.opacity ?? 1;
   const { dash, dashOffset } = connectorDash(connector, state);
-  const color = safeColor(presentation.stroke.color, CONNECTOR_STROKES[theme]);
+  const color = safeColor(connectorStrokeOnCanvas(presentation.stroke, BACKGROUNDS[theme]).color, CONNECTOR_STROKES[theme]);
   const ops: DrawOp[] = [{
     kind: 'path', transform: IDENTITY, opacity, clip: null,
     commands: connector.commands, closed: false,
@@ -358,19 +359,20 @@ function connectorOps(
   const style = connector.presentation.label;
   for (const label of connector.labels) {
     if (!label.text) continue;
-    const plate = connectorLabelPlate(label.text, style, label.point);
+    const plate = label.rich ? connectorRichPlate(label.rich, style, label.point) : connectorLabelPlate(label.text, style, label.point);
     ops.push({
       kind: 'rect', transform: IDENTITY, opacity, clip: null, ...plate, radius: style.cornerRadius,
       fill: style.fill === 'transparent' ? null : paint(style.fill),
       stroke: style.stroke === 'transparent' || style.strokeWidth <= 0 ? null : paint(style.stroke),
       strokeWidth: style.strokeWidth,
-    }, ...connectorLabelLines(label.text, style).map((line, index, lines): DrawOp => ({
+    }, ...(label.rich ? richLabelOps(IDENTITY, { ...style, textAlign: 'center', textVerticalAlign: 'middle' }, plate, label.rich, false, opacity, null) : []),
+    ...(label.rich ? [] : connectorLabelLines(label.text, style).map((line, index, lines): DrawOp => ({
       kind: 'text', transform: IDENTITY, opacity, clip: null,
       text: line, x: label.point.x, y: label.point.y + (index - (lines.length - 1) / 2) * connectorLabelLineHeight(style),
       fontSize: style.fontSize, fontFamily: FONT_STACKS[style.fontFamily], fontWeight: String(style.fontWeight),
       fontStyle: style.fontStyle, letterSpacing: 0, align: 'center', baseline: 'middle',
       color: style.textColor, decoration: null,
-    })));
+    }))));
   }
   return ops;
 }

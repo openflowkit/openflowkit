@@ -1,4 +1,4 @@
-import type { SceneNode } from '../../opencanvas/domain/document/types';
+import type { SceneConnector, SceneNode } from '../../opencanvas/domain/document/types';
 import { darkInkReadsOn } from '../../opencanvas/domain/color/adaptiveColor';
 
 // draw.io's dark mode flips every colour a cell sets (`darkColors: 'invert'`, set by drawioNodeAppearance). A page
@@ -16,12 +16,16 @@ export function drawnDark(nodes: readonly SceneNode[]): boolean {
   return balance > 0;
 }
 
-/** Keeps a page drawn dark as it is in the dark theme: its nodes lose `darkColors`. */
-export function keepDarkDrawnPage(nodes: SceneNode[]): void {
+/** Keeps a page drawn dark as it is in the dark theme: its nodes and lines lose `darkColors`. */
+export function keepDarkDrawnPage(nodes: SceneNode[], connectors: SceneConnector[] = []): void {
   if (!drawnDark(nodes)) return;
-  for (const [index, node] of nodes.entries()) {
-    if (node.appearance.darkColors === undefined) continue;
-    const { darkColors: _flip, ...appearance } = node.appearance;
-    nodes[index] = { ...node, appearance };
-  }
+  const unflip = <T extends SceneNode | SceneConnector>(items: T[]) => {
+    for (const [index, item] of items.entries()) {
+      if (item.appearance.darkColors === undefined) continue;
+      const { darkColors: _flip, ...appearance } = item.appearance;
+      items[index] = { ...item, appearance };
+    }
+  };
+  unflip(nodes);
+  unflip(connectors);
 }

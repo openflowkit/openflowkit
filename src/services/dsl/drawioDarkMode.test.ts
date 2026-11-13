@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { SceneNode } from '../../opencanvas/domain/document/types';
+import type { SceneConnector, SceneNode } from '../../opencanvas/domain/document/types';
 import { drawnDark, keepDarkDrawnPage } from './drawioDarkMode';
 
 const box = (fill: string | undefined, width: number): SceneNode => ({
@@ -21,6 +21,10 @@ describe('draw.io pages in the dark theme', () => {
     const dark = [box('#333333', 100), box('#ffffff', 50)];
     keepDarkDrawnPage(dark);
     expect(dark.every((node) => node.appearance.darkColors === undefined)).toBe(true);
+    const line = { id: 'l', appearance: { darkColors: 'invert', stroke: '#ffffff' } } as unknown as SceneConnector;
+    const lines = [line];
+    keepDarkDrawnPage([box('#333333', 100)], lines);
+    expect(lines[0]!.appearance).toEqual({ stroke: '#ffffff' });
     const light = [box('#f5f5f5', 100)];
     keepDarkDrawnPage(light);
     expect(light[0]!.appearance.darkColors).toBe('invert');

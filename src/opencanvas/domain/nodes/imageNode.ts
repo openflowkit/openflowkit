@@ -2,6 +2,7 @@ import type { SceneNode, ScenePage } from '../document/types';
 import type { Point2d, Size2d } from '../geometry/types';
 import type { JsonObject } from '../document/json';
 import { nextNodeZIndex } from './shapeNode';
+import { invertForDark, isDarkCanvas } from '../color/adaptiveColor';
 
 // Placed images fit inside 480 px on their long side, like a dropped photo in
 // Figma; the bytes live in the assets store and the node keeps only the id.
@@ -57,11 +58,13 @@ export const STENCIL_STROKE = '#fe0002';
 const hex = (value: unknown, fallback: string): string => (typeof value === 'string' && /^#[0-9a-f]{6}([0-9a-f]{2})?$/i.test(value) ? value.slice(0, 7) : value === 'transparent' ? 'none' : fallback);
 
 /** The node's stencil picture in its own colours, as an SVG data URL; null when it isn't one. */
-export function stencilPictureUrl(node: Pick<SceneNode, 'content' | 'appearance'>): string | null {
+export function stencilPictureUrl(node: Pick<SceneNode, 'content' | 'appearance'>, canvasColor?: unknown): string | null {
   const template = node.content.stencilSvg;
   if (typeof template !== 'string' || !template.startsWith('<svg')) return null;
+  // A draw.io stencil (`darkColors: 'invert'`) is painted in its colours flipped on a dark canvas, as draw.io does.
+  const paint = node.appearance.darkColors === 'invert' && isDarkCanvas(canvasColor) ? invertForDark : (color: string) => color;
   const svg = template
-    .replaceAll(STENCIL_FILL, hex(node.appearance.fill, '#ffffff'))
-    .replaceAll(STENCIL_STROKE, hex(node.appearance.stroke, '#000000'));
+    .replaceAll(STENCIL_FILL, paint(hex(node.appearance.fill, '#ffffff')))
+    .replaceAll(STENCIL_STROKE, paint(hex(node.appearance.stroke, '#000000')));
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }

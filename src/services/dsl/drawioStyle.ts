@@ -252,7 +252,8 @@ export function drawioErRelation(style: DrawioStyle): string | null {
 
 /** An edge's paint and heads. draw.io ends an edge with an arrow unless `endArrow=none`. */
 export function drawioConnectorAppearance(style: DrawioStyle): JsonObject {
-  const appearance: Record<string, string | number> = {};
+  // Its colours flip in the dark theme as draw.io's dark mode flips them, as a shape's do.
+  const appearance: Record<string, string | number> = { darkColors: 'invert' };
   const end = marker(style.endArrow, 'classic');
   const start = marker(style.startArrow, null);
   if (end) appearance.markerEnd = end;

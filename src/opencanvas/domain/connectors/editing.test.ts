@@ -186,4 +186,19 @@ describe('connector editing', () => {
     expect(renamed.labels[0].text).toBe('returns');
     expect(setPrimaryConnectorLabel(renamed, '   ').labels).toEqual([]);
   });
+
+  it('picks a formatted label anywhere on the plate its larger words are drawn on', () => {
+    const rich = [{ kind: 'text', runs: [{ text: 'calls', size: 40 }] }];
+    const connector = { ...createTestConnector('edge', 'a', 'b'), labels: [{ id: 'edge:label', text: 'calls', pathRatio: 0.5, offset: { x: 0, y: 0 }, metadata: {}, richLabel: rich }] };
+    const page = pageWith(connector);
+    const label = projectConnector(page, connector)!.labels[0]!;
+    // Plain 'calls' is about 40px wide; at 40px type the plate reaches well past that.
+    expect(pickConnectorAtPoint(page, { x: label.point.x + 45, y: label.point.y + 15 }, 1)).toBe('edge');
+    expect(pickConnectorAtPoint(page, { x: label.point.x + 200, y: label.point.y + 15 }, 1)).toBeNull();
+  });
+
+  it('drops the old words’ formatting when a label is renamed', () => {
+    const connector = { ...createTestConnector('edge', 'a', 'b'), labels: [{ id: 'edge:label', text: 'calls', pathRatio: 0.5, offset: { x: 0, y: 0 }, metadata: {}, richLabel: [{ kind: 'text', runs: [{ text: 'calls', bold: true }] }] }] };
+    expect(setPrimaryConnectorLabel(connector, 'returns').labels[0]).not.toHaveProperty('richLabel');
+  });
 });

@@ -613,4 +613,18 @@ describe('what a draw.io file loses, named', () => {
     ]));
     expect(losses.some((loss) => loss.includes('rounded'))).toBe(false);
   });
+
+  it('keeps the bold, colour and size set on words in a connector’s label', async () => {
+    const { document, losses } = await open(`<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>
+      <mxCell id="a" vertex="1" parent="1"><mxGeometry x="0" y="0" width="40" height="40" as="geometry"/></mxCell>
+      <mxCell id="b" vertex="1" parent="1"><mxGeometry x="200" y="0" width="40" height="40" as="geometry"/></mxCell>
+      <mxCell id="e" value="&lt;b&gt;calls&lt;/b&gt; &lt;font color=&quot;#ff0000&quot;&gt;API&lt;/font&gt;" style="html=1;" edge="1" parent="1" source="a" target="b"><mxGeometry relative="1" as="geometry"/></mxCell>
+      <mxCell id="p" value="plain" style="html=1;" edge="1" parent="1" source="b" target="a"><mxGeometry relative="1" as="geometry"/></mxCell>
+    </root></mxGraphModel>`);
+    const connectors = new Map(document.pages[0]!.connectors.map((connector) => [connector.id, connector]));
+    const runs = (connectors.get('e')!.labels[0]!.richLabel as { runs: { text: string; bold?: boolean; color?: string }[] }[])[0]!.runs;
+    expect(runs.find((run) => run.text.includes('calls'))).toMatchObject({ bold: true });
+    expect(runs.find((run) => run.text.includes('API'))).toMatchObject({ color: '#ff0000' });
+    expect(losses.join(' ')).not.toContain('drawn plain');
+  });
 });
