@@ -191,7 +191,7 @@ export function drawioFaded(color: string | undefined, percent: string | undefin
 }
 
 /** Heads `marker` draws as themselves: an arrow, a circle, a diamond or a cross. */
-const DRAWN_HEADS = new Set(['', 'none', 'classic', 'classicThin', 'block', 'blockThin', 'open', 'openThin', 'openAsync', 'async', 'oval', 'circle', 'circlePlus', 'cross']);
+const DRAWN_HEADS = new Set(['', 'none', 'classic', 'classicThin', 'block', 'blockThin', 'open', 'openThin', 'openAsync', 'async', 'oval', 'circle', 'circlePlus', 'cross', 'ERmandOne', 'ERone', 'ERmany', 'ERoneToMany', 'ERzeroToMany', 'ERzeroToOne']);
 /** Colour words draw.io writes that mean "the default" or "none", which we keep as the theme or as no paint. */
 const COLOUR_WORDS = new Set(['', 'default', 'none', 'swimlane', 'inherit']);
 /** Fonts close enough to ours that swapping them is no loss. */
@@ -212,25 +212,38 @@ export function drawioStyleLosses(style: DrawioStyle, of: 'shape' | 'connector')
   const font = style.fontFamily?.trim();
   if (font && !OUR_FONTS.has(font.toLowerCase())) losses.push(`the “${font}” font is drawn in ours`);
   if (of === 'connector') {
-    // Entity-relation ends are drawn only as a pair; one on its own is drawn as an arrow.
+    // Entity-relation ends on a line with a pair are drawn as its relation; on their own, as their glyphs.
     const relation = drawioErRelation(style) !== null;
     for (const head of [style.endArrow, style.startArrow]) {
-      if (head !== undefined && !DRAWN_HEADS.has(head) && !head.startsWith('diamond') && !(relation && head.startsWith('ER'))) {
-        losses.push(`draw.io’s “${head}” arrow head is drawn as an arrow`);
+      if (head !== undefined && !relation && !DRAWN_HEADS.has(head) && !head.startsWith('diamond')) {
+        losses.push(`draw.io’s “${head}” arrow head is drawn as a filled triangle`);
       }
     }
   }
   return losses;
 }
 
-/** Arrow head names draw.io writes, as the marker words our connectors draw; `none` is no marker. */
-function marker(value: string | undefined, fallback: string | null): string | null {
+/** draw.io's entity-relation ends on their own, as glyphs from the line's end inward. */
+const ER_GLYPHS: Readonly<Record<string, string>> = {
+  ERmandOne: 'bar bar', ERone: 'bar', ERzeroToOne: 'bar circle',
+  ERmany: 'crow-foot', ERoneToMany: 'crow-foot bar', ERzeroToMany: 'crow-foot circle',
+};
+
+/**
+ * An arrow head draw.io writes, as the glyph our connectors draw; `none` is no marker. `filled` is draw.io's
+ * `startFill`/`endFill`: `0` draws a triangle or diamond hollow. Heads we have no glyph for are drawn filled triangles.
+ */
+function marker(value: string | undefined, fallback: string | null, filled: string | undefined): string | null {
   const name = value ?? fallback;
   if (name === null || name === 'none' || name === '') return null;
+  const hollow = filled === '0';
   if (name === 'oval' || name === 'circle' || name === 'circlePlus') return 'circle';
-  if (name.startsWith('diamond')) return 'diamond';
+  if (name.startsWith('diamond')) return hollow ? 'diamond-open' : 'diamond-filled';
   if (name === 'cross') return 'cross';
-  return 'arrow';
+  if (name === 'open' || name === 'openThin' || name === 'openAsync' || name === 'async') return 'arrow';
+  const er = own(ER_GLYPHS, name);
+  if (er) return er;
+  return hollow ? 'triangle-open' : 'triangle-filled';
 }
 
 /** draw.io's entity-relation ends, as the cardinality symbols Mermaid writes on each side of `--`. */
@@ -254,8 +267,8 @@ export function drawioErRelation(style: DrawioStyle): string | null {
 export function drawioConnectorAppearance(style: DrawioStyle): JsonObject {
   // Its colours flip in the dark theme as draw.io's dark mode flips them, as a shape's do.
   const appearance: Record<string, string | number> = { darkColors: 'invert' };
-  const end = marker(style.endArrow, 'classic');
-  const start = marker(style.startArrow, null);
+  const end = marker(style.endArrow, 'classic', style.endFill);
+  const start = marker(style.startArrow, null, style.startFill);
   if (end) appearance.markerEnd = end;
   if (start) appearance.markerStart = start;
   const stroke = drawioLine(style.strokeColor);

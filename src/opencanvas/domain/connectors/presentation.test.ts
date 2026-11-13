@@ -21,6 +21,10 @@ describe('connector presentation', () => {
     expect(edge({ markerEnd: 'arrow' }).targetMarkers).toEqual(['arrow']);
     expect(edge({ markerStart: 'dot' }).sourceMarkers).toEqual(['circle']);
     expect(edge({ markerEnd: 'dot' }).targetMarkers).toEqual(['circle']);
+    // Glyph names are drawn as named, several from the line's end inward.
+    expect(edge({ markerEnd: 'triangle-filled' }).targetMarkers).toEqual(['triangle-filled']);
+    expect(edge({ markerEnd: 'diamond-filled' }).targetMarkers).toEqual(['diamond-filled']);
+    expect(edge({ markerStart: 'crow-foot circle' }).sourceMarkers).toEqual(['crow-foot', 'circle']);
   });
 
   it('resolves stroke color, width, and dash', () => {

@@ -61,7 +61,7 @@ describe('draw.io styles', () => {
 
   it('gives edges draw.io’s arrow unless told otherwise', () => {
     const drawn = { darkColors: 'invert', cornerRadius: 10, labelBorder: 'transparent', labelFontSize: 11 };
-    expect(drawioConnectorAppearance({})).toEqual({ markerEnd: 'arrow', ...drawn });
+    expect(drawioConnectorAppearance({})).toEqual({ markerEnd: 'triangle-filled', ...drawn });
     expect(drawioConnectorAppearance(parseDrawioStyle('endArrow=none;startArrow=oval;dashed=1;strokeColor=#f00'))).toEqual({
       markerStart: 'circle', dashPattern: 'dashed', stroke: '#f00', ...drawn,
     });
@@ -168,6 +168,18 @@ describe('drawioStyleLosses', () => {
     expect(drawioStyleLosses(parseDrawioStyle('gradientColor=none;shadow=0;fillStyle=solid;fillStyle=auto;'), 'shape')).toEqual([]);
   });
 
+  it('draws each arrow head as the glyph closest to draw.io’s, hollow when its fill is off', () => {
+    const ends = (style: string) => {
+      const appearance = drawioConnectorAppearance(parseDrawioStyle(style));
+      return [appearance.markerStart, appearance.markerEnd];
+    };
+    expect(ends('startArrow=block;endArrow=classic;')).toEqual(['triangle-filled', 'triangle-filled']);
+    expect(ends('startArrow=block;startFill=0;endArrow=blockThin;endFill=0;')).toEqual(['triangle-open', 'triangle-open']);
+    expect(ends('startArrow=open;endArrow=openThin;')).toEqual(['arrow', 'arrow']);
+    expect(ends('startArrow=diamondThin;endArrow=diamond;endFill=0;')).toEqual(['diamond-filled', 'diamond-open']);
+    expect(ends('startArrow=ERmandOne;endArrow=ERzeroToMany;')).toEqual(['bar bar', 'crow-foot circle']);
+  });
+
   it('names arrow heads we don’t draw, and only those', () => {
     const heads = (style: string) => drawioStyleLosses(parseDrawioStyle(style), 'connector');
     expect(heads('endArrow=classic;startArrow=block;')).toEqual([]);
@@ -175,11 +187,11 @@ describe('drawioStyleLosses', () => {
     expect(heads('endArrow=diamondThin;startArrow=cross;')).toEqual([]);
     expect(heads('endArrow=circle;startArrow=circlePlus;')).toEqual([]);
     expect(drawioConnectorAppearance(parseDrawioStyle('endArrow=circle;startArrow=circlePlus;'))).toMatchObject({ markerEnd: 'circle', markerStart: 'circle' });
-    // Entity-relation ends are drawn as a pair; one on its own is drawn as an arrow, and says so.
+    // Entity-relation ends are drawn as a pair, or on their own as their glyphs.
     expect(heads('endArrow=ERmany;startArrow=ERmandOne;')).toEqual([]);
-    expect(heads('endArrow=ERmany;')).toEqual(['draw.io’s “ERmany” arrow head is drawn as an arrow']);
+    expect(heads('endArrow=ERmany;')).toEqual([]);
     expect(heads('endArrow=dash;startArrow=halfCircle;')).toEqual([
-      'draw.io’s “dash” arrow head is drawn as an arrow', 'draw.io’s “halfCircle” arrow head is drawn as an arrow',
+      'draw.io’s “dash” arrow head is drawn as a filled triangle', 'draw.io’s “halfCircle” arrow head is drawn as a filled triangle',
     ]);
   });
 

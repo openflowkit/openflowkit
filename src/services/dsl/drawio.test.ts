@@ -53,12 +53,12 @@ describe('drawioToDocument', () => {
     expect(connectors.get('e1')).toMatchObject({
       source: { nodeId: 'start' }, target: { nodeId: 'check' },
       // draw.io's own line, fixed: the two shapes are in line, so its right-angle route is one straight run.
-      route: { kind: 'direct', ownership: 'imported-fixed' }, appearance: { markerEnd: 'arrow' },
+      route: { kind: 'direct', ownership: 'imported-fixed' }, appearance: { markerEnd: 'triangle-filled' },
     });
     expect(connectors.get('e2')).toMatchObject({
       labels: [{ text: 'yes', pathRatio: 0.5 }], waypoints: [{ x: 380, y: 20 }],
       route: { kind: 'polyline', ownership: 'imported-fixed' },
-      appearance: { markerEnd: 'arrow', dashPattern: 'dashed', stroke: '#ff0000' },
+      appearance: { markerEnd: 'triangle-filled', dashPattern: 'dashed', stroke: '#ff0000' },
     });
     expect(connectors.get('e3')).toMatchObject({ labels: [{ text: 'writes', pathRatio: 0.25 }], appearance: { markerStart: 'circle' } });
     expect(connectors.get('e3')!.appearance.markerEnd).toBeUndefined();
@@ -609,7 +609,7 @@ describe('what a draw.io file loses, named', () => {
       '<mxCell id="e" edge="1" source="a" target="b" parent="1" style="endArrow=box;"><mxGeometry relative="1" as="geometry"/></mxCell>',
     ].join('')));
     expect(losses).toEqual(expect.arrayContaining([
-      'the glass shine is left off (2 places)', 'gradient fills are drawn solid', 'draw.io’s “box” arrow head is drawn as an arrow',
+      'the glass shine is left off (2 places)', 'gradient fills are drawn solid', 'draw.io’s “box” arrow head is drawn as a filled triangle',
     ]));
     expect(losses.some((loss) => loss.includes('rounded'))).toBe(false);
   });

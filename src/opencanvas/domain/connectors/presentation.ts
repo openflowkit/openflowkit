@@ -25,8 +25,15 @@ function boundedNumber(
     : fallback;
 }
 
+const GLYPHS: ReadonlySet<string> = new Set<ConnectorMarkerGlyph>([
+  'arrow', 'triangle-open', 'triangle-filled', 'diamond-open', 'diamond-filled', 'circle', 'bar', 'cross', 'crow-foot',
+]);
+
 function markerFromAppearance(value: JsonValue | undefined): ConnectorMarkerGlyph[] {
   if (typeof value === 'string') {
+    // Glyph names, one or several from the line's end inward (`crow-foot bar`), are drawn as named.
+    const words = value.trim().split(/\s+/);
+    if (words.every((word) => GLYPHS.has(word))) return words as ConnectorMarkerGlyph[];
     const text = value.toLowerCase();
     if (text.includes('arrow')) return ['arrow'];
     if (text.includes('dot') || text.includes('circle')) return ['circle'];
