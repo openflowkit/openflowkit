@@ -51,7 +51,7 @@ export function markerMarkup(connector: ProjectedConnector, stroke: string, surf
 function markerShapeMarkup(shape: MarkerShape, stroke: string, width: number, opacity: number, surface: string): string {
   const paint = (fill: string) => `fill="${fill}" stroke="${stroke}" stroke-width="${number(width)}" opacity="${number(opacity)}"`;
   if (shape.kind === 'circle') {
-    return `<circle cx="${number(shape.center.x)}" cy="${number(shape.center.y)}" r="${number(shape.radius)}" ${paint(surface)}/>`;
+    return `<circle cx="${number(shape.center.x)}" cy="${number(shape.center.y)}" r="${number(shape.radius)}" ${paint(shape.filled ? stroke : surface)}/>`;
   }
   const data = shape.subpaths
     .map((points) => points.map((point, index) => `${index ? 'L' : 'M'}${number(point.x)} ${number(point.y)}`).join(' '))

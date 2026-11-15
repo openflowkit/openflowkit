@@ -1,7 +1,6 @@
+import { describe, expect, it } from 'vitest';
 import {
-  describe, expect, it } from 'vitest';
-import {
-  drawioColor, drawioDarkInk, drawioStyleLosses, drawioConnectorAppearance, drawioErRelation, drawioImageUrl, drawioLabel, drawioNodeAppearance, drawioShape, drawioShapeName, resolveDrawioStyle,
+  drawioCodeName, drawioColor, drawioCornerRadius, drawioLabelPlate, drawioStyleLosses, drawioConnectorAppearance, drawioErRelation, drawioImageUrl, drawioLabel, drawioNodeAppearance, drawioShape, drawioShapeName, resolveDrawioStyle,
 } from './drawioStyle';
 
 // A style with none of draw.io's defaults under it (a leading `;`), so each test sees only its own keys.
@@ -20,12 +19,19 @@ describe('draw.io styles', () => {
     expect(shape('rounded=1;')).toEqual({ kind: 'rounded' });
     expect(shape('shape=rect;')).toEqual({ kind: 'rectangle' });
     expect(shape('rhombus;')).toEqual({ kind: 'diamond' });
-    expect(shape('ellipse;', 40, 40)).toEqual({ kind: 'circle' });
-    expect(shape('shape=mxgraph.bootstrap.rrect;')).toEqual({ kind: 'rounded' });
-    expect(shape('shape=mxgraph.bootstrap.checkbox;')).toEqual({ kind: 'rectangle' });
+    // Ellipses are draw.io's ellipse code's to draw, on true curves, a dot in the middle (a final state) and all.
+    expect(shape('ellipse;', 40, 40)).toEqual({ kind: 'circle', unknown: 'ellipse' });
+    expect(shape('ellipse;centerRadius=6;')).toEqual({ kind: 'ellipse', unknown: 'ellipse' });
+    // Any sketched shape is drawn by draw.io's own code, by hand; its kind stays for editing.
+    expect(shape('rounded=1;sketch=1;')).toEqual({ kind: 'rectangle', unknown: 'rectangle' });
+    expect(drawioCodeName('rect')).toBe('rectangle');
+    expect(drawioCodeName('cloud')).toBe('cloud');
+    expect(shape('rhombus;sketch=1;')).toEqual({ kind: 'diamond', unknown: 'rhombus' });
     expect(shape('text;')).toEqual({ kind: 'text' });
-    expect(shape('shape=mxgraph.flowchart.decision;')).toEqual({ kind: 'diamond' });
-    expect(shape('shape=mxgraph.flowchart.on-page_reference;')).toEqual({ kind: 'circle' });
+    // Shapes we'd only approximate are left to draw.io's own drawing (drawioShapes.ts), named here as not ours.
+    expect(shape('shape=mxgraph.bootstrap.rrect;')).toEqual({ kind: 'rectangle', unknown: 'mxgraph.bootstrap.rrect' });
+    expect(shape('shape=mxgraph.flowchart.decision;')).toEqual({ kind: 'rectangle', unknown: 'mxgraph.flowchart.decision' });
+    expect(shape('shape=cylinder3;')).toEqual({ kind: 'rectangle', unknown: 'cylinder3' });
     expect(shape('shape=mxgraph.aws4.lambda_function;')).toEqual({ kind: 'rectangle', unknown: 'mxgraph.aws4.lambda_function' });
   });
 
@@ -47,12 +53,12 @@ describe('draw.io styles', () => {
     expect(drawioColor(undefined)).toBeUndefined();
   });
 
-  it('carries paint, type and label placement; unset paint is left to the theme', () => {
+  it('carries paint, type and label placement; paint the style leaves out is left to the theme', () => {
     expect(drawioNodeAppearance(parseDrawioStyle('fillColor=#dae8fc;fontStyle=3;fontSize=16;dashed=1;opacity=50'))).toEqual({
-      fill: '#dae8fc', fontWeight: 700, fontStyle: 'italic', fontSize: 16, strokeStyle: 'dashed', opacity: 0.5, textPadding: 2, darkColors: 'invert',
+      fill: '#dae8fc', fontWeight: 700, fontStyle: 'italic', fontSize: 16, strokeStyle: 'dashed', strokeDasharray: '3 3', opacity: 0.5, textPadding: 2, darkColors: 'invert', strokeWidth: 1,
     });
     expect(drawioNodeAppearance(parseDrawioStyle('align=left;spacingLeft=10;verticalAlign=top'))).toEqual({
-      textAlign: 'start', textVerticalAlign: 'top', textPadding: 12, fontWeight: 400, darkColors: 'invert',
+      textAlign: 'start', textVerticalAlign: 'top', textPadding: 12, fontWeight: 400, darkColors: 'invert', strokeWidth: 1,
     });
     // A centred label's one-sided spacing doesn't squeeze it from both sides.
     expect(drawioNodeAppearance(parseDrawioStyle('spacingRight=30')).textPadding).toBe(2);
@@ -60,10 +66,10 @@ describe('draw.io styles', () => {
   });
 
   it('gives edges draw.io’s arrow unless told otherwise', () => {
-    const drawn = { darkColors: 'invert', cornerRadius: 10, labelBorder: 'transparent', labelFontSize: 11 };
+    const drawn = { darkColors: 'invert', cornerRadius: 10, labelBorder: 'transparent', labelFontSize: 11, labelPadding: 0, labelCornerRadius: 0, strokeWidth: 1 };
     expect(drawioConnectorAppearance({})).toEqual({ markerEnd: 'triangle-filled', ...drawn });
     expect(drawioConnectorAppearance(parseDrawioStyle('endArrow=none;startArrow=oval;dashed=1;strokeColor=#f00'))).toEqual({
-      markerStart: 'circle', dashPattern: 'dashed', stroke: '#f00', ...drawn,
+      markerStart: 'circle-filled', dashPattern: 'dashed', strokeDasharray: '3 3', stroke: '#f00', ...drawn,
     });
   });
 
@@ -71,6 +77,9 @@ describe('draw.io styles', () => {
     expect(drawioErRelation(parseDrawioStyle('startArrow=ERoneToMany;endArrow=ERmandOne'))).toBe('}|--||');
     expect(drawioErRelation(parseDrawioStyle('startArrow=ERzeroToOne;endArrow=ERzeroToMany;dashed=1'))).toBe('|o..o{');
     expect(drawioErRelation(parseDrawioStyle('startArrow=ERmandOne'))).toBeNull();
+    // A single bar or a bare crow's foot has no symbol: the line keeps draw.io's own heads.
+    expect(drawioErRelation(parseDrawioStyle('startArrow=ERone;endArrow=ERzeroToMany'))).toBeNull();
+    expect(drawioConnectorAppearance(parseDrawioStyle('startArrow=ERone;endArrow=ERmany'))).toMatchObject({ markerStart: 'bar', markerEnd: 'crow-foot' });
     expect(drawioErRelation({})).toBeNull();
   });
 
@@ -88,7 +97,8 @@ describe('draw.io styles', () => {
 
   it('reads an html label the way a browser lays it out', () => {
     const html = { html: '1' };
-    expect(drawioLabel('one\n  two   three', html)).toBe('one two three');
+    // A line break in the text breaks the line, as draw.io's mxText.replaceLinefeeds does; spaces collapse.
+    expect(drawioLabel('one\n  two   three', html)).toBe('one\ntwo three');
     expect(drawioLabel('<ul><li>Apples</li><li>Pears</li></ul>', html)).toBe('Apples\nPears');
     expect(drawioLabel('<style>b{color:red}</style><script>alert(1)</script>Kept', html)).toBe('Kept');
     expect(drawioLabel('&lt;b&gt; stays text', html)).toBe('<b> stays text');
@@ -105,21 +115,6 @@ describe('draw.io styles', () => {
   });
 });
 
-describe('drawioDarkInk', () => {
-  it('knows the near-black greys draw.io writes for a light page, in any case', () => {
-    for (const ink of ['#000', '#000000', '#333333', '#555555', '#2B2B2B']) expect(drawioDarkInk(ink), ink).toBe(true);
-    for (const ink of ['#666666', '#1c2b55', '#ff0000', 'default', 'none', undefined, 7]) expect(drawioDarkInk(ink), String(ink)).toBe(false);
-  });
-
-  it('leaves draw.io’s default black lines unset and keeps picked ones', () => {
-    expect(drawioNodeAppearance({ strokeColor: '#000000' }).stroke).toBeUndefined();
-    expect(drawioNodeAppearance({ strokeColor: '#B85450' }).stroke).toBe('#b85450');
-    expect(drawioConnectorAppearance({ strokeColor: '#000' }).stroke).toBeUndefined();
-    expect(drawioConnectorAppearance({ strokeColor: '#333333' }).stroke).toBeUndefined();
-    expect(drawioConnectorAppearance({ strokeColor: '#666666' }).stroke).toBe('#666666');
-  });
-});
-
 describe('fill, line and shadow', () => {
   it('sees a fill and a line through by their own opacity, and keeps the shadow', () => {
     expect(drawioNodeAppearance(parseDrawioStyle('fillColor=#ff0000;fillOpacity=50;strokeColor=#00f;strokeOpacity=0;shadow=1;'))).toMatchObject({
@@ -128,6 +123,10 @@ describe('fill, line and shadow', () => {
     // Fully seen, or the theme's own colour, stays as it is.
     expect(drawioNodeAppearance(parseDrawioStyle('fillColor=#ff0000;fillOpacity=100;strokeOpacity=40;'))).not.toHaveProperty('stroke');
     expect(drawioNodeAppearance(parseDrawioStyle('fillColor=#ff0000;fillOpacity=100;')).fill).toBe('#ff0000');
+  });
+
+  it('fades the words alone by textOpacity', () => {
+    expect(drawioNodeAppearance(parseDrawioStyle('fontColor=#336699;textOpacity=50;fillColor=#ff0000;'))).toMatchObject({ textColor: '#33669980', fill: '#ff0000' });
   });
 
   it('casts draw.io’s shadow, with its defaults where the shape sets none', () => {
@@ -158,14 +157,21 @@ describe('drawioStyleLosses', () => {
   it('names each style a shape or line has that we don’t draw', () => {
     expect(drawioStyleLosses(parseDrawioStyle('rounded=1;fillColor=#dae8fc;strokeColor=default;fontColor=none;fillColor2=x;fontFamily=Helvetica;'), 'shape')).toEqual([]);
     expect(drawioStyleLosses(parseDrawioStyle(
-      'gradientColor=default;shadow=1;sketch=1;fillStyle=hatch;glass=1;fillColor=light-dark(#fff,#000);fontFamily=Comic Sans MS;'), 'shape')).toEqual([
-      'gradient fills are drawn solid', 'the hand-drawn sketch look is drawn clean',
+      'gradientColor=default;shadow=1;comic=1;fillStyle=hatch;glass=1;fillColor=light-dark(#fff,#000);fontFamily=Comic Sans MS;'), 'shape')).toEqual([
+      'gradient fills are drawn solid', 'the hand-drawn comic look is drawn clean',
       'hatched and patterned fills are drawn solid', 'the glass shine is left off',
       'colours not written as #hex use the theme’s instead', 'the “Comic Sans MS” font is drawn in ours',
     ]);
+    // A sketched shape, its hatching included, is drawn by draw.io's sketch code; only its comic variant isn't.
+    expect(drawioStyleLosses(parseDrawioStyle('sketch=1;fillStyle=zigzag;'), 'shape')).toEqual([]);
+    expect(drawioStyleLosses(parseDrawioStyle('sketch=1;sketchStyle=comic;'), 'shape')).toEqual(['the hand-drawn comic look is drawn clean']);
     // `default` fades to the page's colour: draw.io draws it as a gradient too.
     expect(drawioStyleLosses(parseDrawioStyle('gradientColor=default;'), 'shape')).toEqual(['gradient fills are drawn solid']);
     expect(drawioStyleLosses(parseDrawioStyle('gradientColor=none;shadow=0;fillStyle=solid;fillStyle=auto;'), 'shape')).toEqual([]);
+    expect(drawioStyleLosses(parseDrawioStyle('textShadow=1;textDirection=rtl;'), 'shape'))
+      .toEqual(['shadows under words are left off', 'right-to-left and vertical words are set left to right']);
+    expect(drawioStyleLosses(parseDrawioStyle('textShadow=0;textDirection=auto;'), 'shape')).toEqual([]);
+    expect(drawioStyleLosses(parseDrawioStyle('clipPath=inset(10% 0 0 0);'), 'shape')).toEqual(['cropped pictures are shown whole']);
   });
 
   it('draws each arrow head as the glyph closest to draw.io’s, hollow when its fill is off', () => {
@@ -186,7 +192,7 @@ describe('drawioStyleLosses', () => {
     expect(heads('endArrow=open;startArrow=oval;')).toEqual([]);
     expect(heads('endArrow=diamondThin;startArrow=cross;')).toEqual([]);
     expect(heads('endArrow=circle;startArrow=circlePlus;')).toEqual([]);
-    expect(drawioConnectorAppearance(parseDrawioStyle('endArrow=circle;startArrow=circlePlus;'))).toMatchObject({ markerEnd: 'circle', markerStart: 'circle' });
+    expect(drawioConnectorAppearance(parseDrawioStyle('endArrow=circle;startArrow=circlePlus;'))).toMatchObject({ markerEnd: 'circle-filled', markerStart: 'circle' });
     // Entity-relation ends are drawn as a pair, or on their own as their glyphs.
     expect(heads('endArrow=ERmany;startArrow=ERmandOne;')).toEqual([]);
     expect(heads('endArrow=ERmany;')).toEqual([]);
@@ -200,5 +206,64 @@ describe('drawioStyleLosses', () => {
     const started = performance.now();
     expect(drawioStyleLosses(style, 'shape')).toEqual(['the glass shine is left off']);
     expect(performance.now() - started).toBeLessThan(200);
+  });
+});
+
+describe('line breaks in an html label', () => {
+  it('breaks the line where the text does, as draw.io renders it, unless nl2Br is off', () => {
+    const html = resolveDrawioStyle(';html=1;', 'vertex');
+    expect(drawioLabel('Hello\n\nworld\nagain', html)).toBe('Hello\n\nworld\nagain');
+    expect(drawioLabel('Hello\nworld', resolveDrawioStyle(';html=1;nl2Br=0;', 'vertex'))).toBe('Hello world');
+  });
+});
+
+describe('draw.io’s defaults, as draw.io paints them', () => {
+  it('paints an unset shape white with a black line and black words, and a line black, flipped together on a dark canvas', () => {
+    const box = drawioNodeAppearance(resolveDrawioStyle('', 'vertex'));
+    expect(box).toMatchObject({ fill: '#ffffff', stroke: '#000000', textColor: '#000000', darkColors: 'invert' });
+    expect(drawioConnectorAppearance(resolveDrawioStyle('', 'edge'))).toMatchObject({ stroke: '#000000', labelColor: '#000000', darkColors: 'invert' });
+    // `none` stays see-through; a set colour is kept.
+    expect(drawioNodeAppearance(resolveDrawioStyle('fillColor=none;strokeColor=#336699;', 'vertex'))).toMatchObject({ fill: 'transparent', stroke: '#336699' });
+  });
+
+  it('dashes as draw.io does: its pattern in line widths', () => {
+    expect(drawioNodeAppearance(resolveDrawioStyle('dashed=1;', 'vertex')).strokeDasharray).toBe('3 3');
+    expect(drawioConnectorAppearance(resolveDrawioStyle('dashed=1;strokeWidth=2;dashPattern=8 4;', 'edge')).strokeDasharray).toBe('16 8');
+  });
+
+  it('ends a line in a filled dot unless its fill is off', () => {
+    const ends = (style: string) => drawioConnectorAppearance(resolveDrawioStyle(style, 'edge'));
+    expect(ends('startArrow=oval;').markerStart).toBe('circle-filled');
+    expect(ends('startArrow=oval;startFill=0;').markerStart).toBe('circle');
+  });
+});
+
+describe('drawioLabelPlate', () => {
+  it('gives a label cell no plate unless its style sets one, and the line\'s own for `default`', () => {
+    expect(drawioLabelPlate(resolveDrawioStyle('labelBackgroundColor=none;', 'vertex'))).toBe('transparent');
+    expect(drawioLabelPlate(resolveDrawioStyle('', 'vertex'))).toBe('transparent');
+    expect(drawioLabelPlate(resolveDrawioStyle('edgeLabel;', 'vertex'))).toBeUndefined();
+    expect(drawioLabelPlate(resolveDrawioStyle('labelBackgroundColor=#ffcc00;', 'vertex'))).toBe('#ffcc00');
+  });
+});
+
+describe('drawioCornerRadius', () => {
+  it('rounds a box only with rounded=1, by draw.io\'s arc rules', () => {
+    const radius = (style: string, start?: number) => drawioCornerRadius(parseDrawioStyle(style), 200, 100, start);
+    expect(radius('')).toBe(0);
+    expect(radius('rounded=1;')).toBe(15);
+    expect(radius('rounded=1;arcSize=10;')).toBe(10);
+    expect(radius('rounded=1;absoluteArcSize=1;arcSize=24;')).toBe(12);
+    expect(radius('rounded=1;', 26)).toBeCloseTo(11.7);
+  });
+});
+
+describe('drawioShapeName', () => {
+  it('takes a shape from `shape=` or one of draw.io’s own named styles, never from a colour preset or a word its sheet lacks', () => {
+    expect(drawioShapeName(resolveDrawioStyle('text;html=1;', 'vertex'))).toBe('text');
+    expect(drawioShapeName(resolveDrawioStyle('ellipse;whiteSpace=wrap;', 'vertex'))).toBe('ellipse');
+    expect(drawioShapeName(resolveDrawioStyle('fillColor=#F6F6F6;9E9E9E;html=1;', 'vertex'))).toBe('');
+    expect(drawioShapeName(resolveDrawioStyle('plain-purple;html=1;', 'vertex'))).toBe('');
+    expect(drawioShapeName(resolveDrawioStyle('shape=mxgraph.flowchart.on-page_reference;plain-purple;', 'vertex'))).toBe('mxgraph.flowchart.on-page_reference');
   });
 });

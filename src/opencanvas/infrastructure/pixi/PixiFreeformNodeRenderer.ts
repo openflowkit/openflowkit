@@ -170,6 +170,7 @@ export class PixiFreeformNodeRenderer {
         matrix,
         bounds: createBounds2d(0, 0, node.size.width, node.size.height),
         opacity: visual.presentation.opacity,
+        stretch: visual.presentation.fit === 'stretch',
         resolveUrl: async () => imageUrl
           ?? (assetId && this.resolveAsset ? this.resolveAsset(assetId) : null),
       });

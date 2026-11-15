@@ -8,6 +8,8 @@ interface PixiMediaLoadRequest {
   readonly matrix: Matrix2d;
   readonly bounds: Bounds2d;
   readonly opacity?: number;
+  /** Fill the bounds instead of keeping the picture's proportions. */
+  readonly stretch?: boolean;
   readonly resolveUrl: () => Promise<string | null>;
   /** Names the image: a texture loaded once under this key is placed at once on every later draw (Map mode redraws per frame). */
   readonly cacheKey?: string;
@@ -93,8 +95,8 @@ export class PixiMediaLayer {
       request.bounds.width / textureWidth,
       request.bounds.height / textureHeight
     );
-    sprite.width = textureWidth * scale;
-    sprite.height = textureHeight * scale;
+    sprite.width = request.stretch ? request.bounds.width : textureWidth * scale;
+    sprite.height = request.stretch ? request.bounds.height : textureHeight * scale;
     sprite.position.set(
       request.bounds.x + (request.bounds.width - sprite.width) / 2,
       request.bounds.y + (request.bounds.height - sprite.height) / 2

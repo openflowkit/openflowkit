@@ -11,6 +11,8 @@ export interface RouteTerminal extends RouteBox {
   readonly style: Readonly<Record<string, string>>;
   readonly relativeX: number | null;
   readonly isEdge: boolean;
+  /** The lifeline this end belongs to (itself, or the lifeline an activation bar sits on): a sequence self-call's test. */
+  readonly lifeline?: string | null;
 }
 
 export interface RouteEdge {

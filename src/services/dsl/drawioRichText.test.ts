@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { RichBlock } from '../../opencanvas/domain/text/richLabel';
 import { drawioRichLabel } from './drawioRichText';
 
 describe('draw.io HTML labels as rich labels', () => {
@@ -55,6 +56,29 @@ describe('draw.io HTML labels as rich labels', () => {
     ]);
   });
 
+  it('leaves a header cell on the left under a left-aligned label, as a browser does', () => {
+    // authority_matrix: a `text` cell (draw.io aligns it left) whose table's headers sit left.
+    const { blocks } = drawioRichLabel('<table><tr><th>Tasks</th><th align="center">Mid</th></tr></table>', 12, 'left')!;
+    expect(blocks[0]).toMatchObject({ kind: 'row', cells: [{ runs: [{ text: 'Tasks', bold: true }] }, { align: 'center' }] });
+    expect((blocks[0] as { readonly cells: readonly { readonly align?: string }[] }).cells[0]!.align).toBeUndefined();
+  });
+
+  it('reads a table’s cell widths, row and cell colours, its lines and its height, keeping colours set by HTML attributes in dark mode', () => {
+    // educational's timetable and authority_matrix's grid.
+    const { blocks } = drawioRichLabel('<table border="1" style="width: 100% ; height: 100% ; border-collapse: collapse">'
+      + '<tr style="background-color: #a7c942 ; border: 1px solid #98bf21"><th width="4%">#</th><th bgcolor="#F00">Mon</th></tr>'
+      + '<tr><td>1</td><td style="background-color: rgb(0, 0, 255)">x</td></tr></table>', 12)!;
+    expect(blocks).toEqual([
+      { kind: 'row', table: 0, padding: 1, full: true, fill: true, cells: [
+        { runs: [{ text: '#', bold: true }], align: 'center', width: 0.04, background: '#a7c942', border: '#98bf21' },
+        { runs: [{ text: 'Mon', bold: true }], align: 'center', background: '#ff0000', border: '#98bf21', keep: ['background'] },
+      ] },
+      { kind: 'row', table: 0, padding: 1, full: true, fill: true, cells: [
+        { runs: [{ text: '1' }], border: '#808080', keep: ['border'] }, { runs: [{ text: 'x' }], background: '#0000ff', border: '#808080', keep: ['border'] },
+      ] },
+    ]);
+  });
+
   it('keeps a table’s cells apart from the words after it, and numbers each table', () => {
     const { blocks } = drawioRichLabel('<table><tr><td>a</td><td>b</td></tr></table>after<table><tr><td>c</td></tr></table>', 12)!;
     expect(blocks.map((block) => block.kind === 'row' ? `row${block.table}` : block.kind)).toEqual(['row0', 'text', 'row1']);
@@ -64,5 +88,18 @@ describe('draw.io HTML labels as rich labels', () => {
   it('starts no line for a break that ends a paragraph or a cell (database_2, database_3)', () => {
     const fields = '<p style="margin: 0px ; margin-left: 8px">field4 = value4<br></p><p style="margin: 0px ; margin-left: 8px">field5 = value5<br></p>';
     expect(drawioRichLabel(fields, 12)!.blocks.map((block) => block.kind === 'text' && block.runs.map((run) => run.text).join(''))).toEqual(['field4 = value4', 'field5 = value5']);
+  });
+
+  it('puts each break and paragraph in a table cell on a line of its own (org charts’ name and position)', () => {
+    const cells = (html: string) => (drawioRichLabel(`<table><tr><td>${html}</td></tr></table>`, 12)!.blocks[0] as Extract<RichBlock, { kind: 'row' }>).cells[0]!.runs.map((run) => run.text).join('');
+    expect(cells('<b>Name</b><br>Position')).toBe('Name\nPosition');
+    expect(cells('<div>Name</div><div>Position</div>')).toBe('Name\nPosition');
+    expect(cells('Name<br><div>Position</div>')).toBe('Name\nPosition');
+  });
+
+  it('sets a table inside a cell as its words, a line for each of its rows, and keeps the outer table’s rows', () => {
+    const html = '<table><tr><td>a<table><tr><td>b</td><td>c</td></tr><tr><td>d</td></tr></table></td><td>e</td></tr><tr><td>f</td></tr></table>';
+    const rows = drawioRichLabel(html, 12)!.blocks.map((block) => block.kind === 'row' && block.cells.map((cell) => cell.runs.map((run) => run.text).join('')));
+    expect(rows).toEqual([['a\nb c\nd', 'e'], ['f']]);
   });
 });

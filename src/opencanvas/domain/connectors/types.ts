@@ -1,6 +1,7 @@
 import type { Point2d } from '../geometry/types';
 import type { NodeStyle } from '../nodes/nodeStyle';
 import type { RichBlock } from '../text/richLabel';
+import type { DrawnPart } from '../nodes/drawnShape';
 
 export type ConnectorPathCommand =
   | { readonly kind: 'move'; readonly point: Point2d }
@@ -19,6 +20,7 @@ export type ConnectorMarkerGlyph =
   | 'diamond-open'
   | 'diamond-filled'
   | 'circle'
+  | 'circle-filled'
   | 'bar'
   | 'cross'
   | 'crow-foot';
@@ -29,6 +31,8 @@ interface ConnectorLabelGeometry {
   readonly point: Point2d;
   /** The words' formatting, when the label has any. */
   readonly rich?: readonly RichBlock[] | null;
+  /** The label's own plate colour, over the connector's (`ConnectorLabel.background`). */
+  readonly background?: string;
 }
 
 export interface ConnectorStrokePresentation {
@@ -56,4 +60,6 @@ export interface ProjectedConnector {
   readonly samples: readonly Point2d[];
   readonly labels: readonly ConnectorLabelGeometry[];
   readonly presentation: ConnectorPresentation;
+  /** A line draw.io draws with a shape of its own: its parts along the route, painted instead of the line and its ends. */
+  readonly drawn?: { readonly parts: readonly DrawnPart[]; readonly fill: string } | null;
 }

@@ -1,8 +1,10 @@
-page "Page 1": 1 layer(s), 32 nodes, 13 connectors
-  section @340,290 480x430 fill transparent
+page "Page 1": 1 layer(s), 34 nodes, 13 connectors
+  section @340,290 480x430 fill transparent ink #000000
   section "AWS Cloud" @50,80 780x650 fill transparent ink #232f3e
+  process drawn mxgraph.aws4.group @0,0 780x650 fill transparent ink #232f3e in UEzPUAAOIrF-is8g5C7q-74
   process rectangle "AWS Cloud" @32,7 746x646 fill transparent ink #232f3e in UEzPUAAOIrF-is8g5C7q-74
   section "AWS Cloud" @850,80 270x650 fill transparent ink #232f3e
+  process drawn mxgraph.aws4.group @0,0 270x650 fill transparent ink #232f3e in UEzPUAAOIrF-is8g5C7q-75
   process rectangle "AWS Cloud" @32,7 236x646 fill transparent ink #232f3e in UEzPUAAOIrF-is8g5C7q-75
   process rectangle @90,140 78x78 fill transparent ink #232f3e
   process rectangle "Object" @2,85 74x78 fill transparent ink #232f3e in UEzPUAAOIrF-is8g5C7q-76
@@ -10,27 +12,27 @@ page "Page 1": 1 layer(s), 32 nodes, 13 connectors
   process rectangle "Bucket" @2,85 71x78 fill transparent ink #232f3e in UEzPUAAOIrF-is8g5C7q-77
   process rectangle @1020,140 75x78 fill transparent ink #232f3e
   process rectangle "Bucket" @2,85 71x78 fill transparent ink #232f3e in UEzPUAAOIrF-is8g5C7q-78
-  process rectangle @370,310 78x78 fill transparent ink #232f3e
+  process drawn mxgraph.aws4.resourceIcon @370,310 78x78 fill #bc1356 ink #232f3e
   process rectangle "AWS⏎CloudTrail" @2,85 74x78 fill transparent ink #232f3e in UEzPUAAOIrF-is8g5C7q-79
-  process rectangle @480,310 78x78 fill transparent ink #232f3e
+  process drawn mxgraph.aws4.resourceIcon @480,310 78x78 fill #bc1356 ink #232f3e
   process rectangle "Amazon⏎CloudWatch" @2,85 74x78 fill transparent ink #232f3e in UEzPUAAOIrF-is8g5C7q-80
-  process rectangle @600,310 78x78 fill transparent ink #232f3e
+  process drawn mxgraph.aws4.resourceIcon @600,310 78x78 fill #bc1356 ink #232f3e
   process rectangle "Amazon Simple⏎Notification Service" @2,85 74x78 fill transparent ink #232f3e in UEzPUAAOIrF-is8g5C7q-81
-  process rectangle @723,310 78x78 fill transparent ink #232f3e
+  process drawn mxgraph.aws4.resourceIcon @723,310 78x78 fill #bc1356 ink #232f3e
   process rectangle "Amazon Simple⏎Queue Service" @2,85 74x78 fill transparent ink #232f3e in UEzPUAAOIrF-is8g5C7q-82
-  process rectangle @880,310 78x78 fill transparent ink #232f3e
+  process drawn mxgraph.aws4.resourceIcon @880,310 78x78 fill #bc1356 ink #232f3e
   process rectangle "Amazon⏎CloudWatch" @2,85 74x78 fill transparent ink #232f3e in UEzPUAAOIrF-is8g5C7q-83
-  process rectangle @1019,310 78x78 fill transparent ink #232f3e
+  process drawn mxgraph.aws4.resourceIcon @1019,310 78x78 fill #bc1356 ink #232f3e
   process rectangle "AWS⏎CloudTrail" @2,85 74x78 fill transparent ink #232f3e in UEzPUAAOIrF-is8g5C7q-84
-  process rectangle @599,450 78x78 fill transparent ink #232f3e
+  process drawn mxgraph.aws4.resourceIcon @599,450 78x78 fill #d05c17 ink #232f3e
   process rectangle "AWS Lambda" @2,91 74x78 fill transparent ink #232f3e in UEzPUAAOIrF-is8g5C7q-85
-  process rectangle @489,590 78x78 fill transparent ink #232f3e
+  process drawn mxgraph.aws4.resourceIcon @489,590 78x78 fill #5a30b5 ink #232f3e
   process rectangle "Amazon Kinesis⏎Data Firehose" @2,85 74x78 fill transparent ink #232f3e in UEzPUAAOIrF-is8g5C7q-86
-  process rectangle @710,590 78x78 fill transparent ink #232f3e
+  process drawn mxgraph.aws4.resourceIcon @710,590 78x78 fill #3334b9 ink #232f3e
   process rectangle "Amazon⏎DynamoDB" @2,85 74x78 fill transparent ink #232f3e in UEzPUAAOIrF-is8g5C7q-87
   process rectangle @120,590 75x78 fill transparent ink #232f3e
   process rectangle "Bucket" @2,85 71x78 fill transparent ink #232f3e in UEzPUAAOIrF-is8g5C7q-98
-  section @860,290 250x430 fill transparent
+  section @860,290 250x430 fill transparent ink #000000
   UEzPUAAOIrF-is8g5C7q-76 -> UEzPUAAOIrF-is8g5C7q-77 direct, 0 bends
   UEzPUAAOIrF-is8g5C7q-77 -> UEzPUAAOIrF-is8g5C7q-79 polyline, 1 bends
   UEzPUAAOIrF-is8g5C7q-77 -> UEzPUAAOIrF-is8g5C7q-78 direct, 0 bends
@@ -44,4 +46,4 @@ page "Page 1": 1 layer(s), 32 nodes, 13 connectors
   UEzPUAAOIrF-is8g5C7q-85 -> UEzPUAAOIrF-is8g5C7q-86 polyline, 2 bends
   UEzPUAAOIrF-is8g5C7q-85 -> UEzPUAAOIrF-is8g5C7q-87 polyline, 3 bends
   UEzPUAAOIrF-is8g5C7q-86 -> UEzPUAAOIrF-is8g5C7q-98 direct, 0 bends
-losses: 13 icons from draw.io’s “aws4” set are drawn as boxes (object, bucket with objects, cloudtrail and 7 more)
+losses: 4 icons from draw.io’s “aws4” set are drawn as boxes (object, bucket with objects and bucket)

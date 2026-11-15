@@ -46,6 +46,22 @@ function hex(value: string | undefined): string | undefined {
   return undefined;
 }
 
+interface Paint { readonly background?: string; readonly border?: string; readonly keep?: readonly ('background' | 'border')[] }
+
+/**
+ * A table part's own fill and the colour of its lines. Colours set in CSS flip in draw.io's dark mode; those set by
+ * HTML attributes (`bgcolor`, `bordercolor`) are kept, as draw.io rewrites only CSS colours.
+ */
+function paintOf(attrs: Map<string, string>): Paint {
+  const style = css(attrs.get('style'));
+  const styled = hex(style.get('background-color') ?? style.get('background'));
+  const background = styled ?? hex(attrs.get('bgcolor'));
+  const line = hex(style.get('border-color') ?? (style.get('border') ?? '').split(/\s+(?![^(]*\))/).find((part) => hex(part)));
+  const border = line ?? hex(attrs.get('bordercolor'));
+  const keep = [...(background && !styled ? ['background' as const] : []), ...(border && !line ? ['border' as const] : [])];
+  return { ...(background ? { background } : {}), ...(border ? { border } : {}), ...(keep.length ? { keep } : {}) };
+}
+
 /** What a tag and its inline CSS set on the words inside it, over `outer`. */
 function inlineOf(tag: string, attrs: Map<string, string>, outer: Inline, base: number): Inline {
   const next: { -readonly [K in keyof Inline]: Inline[K] } = { ...outer };
@@ -110,17 +126,24 @@ const TABLE_PARTS = new Set(['table', 'thead', 'tbody', 'tfoot', 'tr', 'td', 'th
 
 /**
  * draw.io's HTML label as rich blocks, `base` its cell's font size; null when nothing in it is formatted (plain
- * words and line breaks), so the plain label says it all.
+ * words and line breaks), so the plain label says it all. `align` is the cell's: a header cell (`th`) centres its
+ * words only under a centred label (`labelAlign`), as a browser's `th` does under its parent's left or right alignment.
  */
-export function drawioRichLabel(value: string, base: number): { readonly blocks: readonly RichBlock[] } | null {
+export function drawioRichLabel(value: string, base: number, labelAlign = 'center'): { readonly blocks: readonly RichBlock[] } | null {
   const html = withoutClosingBreaks(withoutCode(value));
   const blocks: RichBlock[] = [];
   const stack: Frame[] = [];
-  /** The open table (`cellpadding` its cells' padding, a browser's 1 when unset), its row's cells, and the cell filling. */
-  let table: { readonly id: number; readonly padding: number; readonly full: boolean } | null = null;
+  /**
+   * The open table (`cellpadding` its cells' padding, a browser's 1 when unset; `border` the colour of the lines
+   * around its cells), its row's cells and own colours, and the cell filling.
+   */
+  let table: { readonly id: number; readonly padding: number; readonly full: boolean; readonly fill: boolean; readonly border?: string; readonly keepBorder?: boolean } | null = null;
   let tables = 0;
+  /** How deep inside a cell's own tables the words are (0: in the outer table, or none). */
+  let nested = 0;
   let row: RichCell[] | null = null;
-  let cell: { readonly align?: RichAlign } | null = null;
+  let rowPaint: Paint = {};
+  let cell: Omit<RichCell, 'runs'> | null = null;
   /** The paragraph being filled: its runs, and the block settings it opened with. */
   let runs: RichRun[] = [];
   let open: { align?: RichAlign; indent: number; before: number; background?: string; padding: number } = { indent: 0, before: 0, padding: 0 };
@@ -163,16 +186,22 @@ export function drawioRichLabel(value: string, base: number): { readonly blocks:
   /** A cell's words, trimmed and on one line, as its row sets them. */
   const endCell = () => {
     if (!cell || !row) return;
-    const words = runs.map((run) => ({ ...run, text: run.text.replace(/\n/g, ' ') }));
-    if (words[0]) words[0] = { ...words[0], text: words[0].text.replace(/^ +/, '') };
-    if (words.at(-1)) words[words.length - 1] = { ...words.at(-1)!, text: words.at(-1)!.text.replace(/ +$/, '') };
-    row.push({ runs: words.filter((run) => run.text !== ''), ...(cell.align ? { align: cell.align } : {}) });
+    // Its breaks are its lines; spaces at a line's ends, and breaks at the cell's, take no room.
+    const words = runs.map((run) => ({ ...run, text: run.text.replace(/ *\n */g, '\n') }));
+    if (words[0]) words[0] = { ...words[0], text: words[0].text.replace(/^[ \n]+/, '') };
+    if (words.at(-1)) words[words.length - 1] = { ...words.at(-1)!, text: words.at(-1)!.text.replace(/[ \n]+$/, '') };
+    row.push({ ...cell, runs: words.filter((run) => run.text !== '') });
     runs = [];
     cell = null;
   };
   const endRow = () => {
     endCell();
-    if (row && table) blocks.push({ kind: 'row', table: table.id, cells: row, ...(table.padding > 0 ? { padding: table.padding } : {}), ...(table.full ? { full: true } : {}) });
+    if (row && table) {
+      blocks.push({
+        kind: 'row', table: table.id, cells: row, ...(table.padding > 0 ? { padding: table.padding } : {}),
+        ...(table.full ? { full: true } : {}), ...(table.fill ? { fill: true } : {}),
+      });
+    }
     row = null;
   };
   const closeBlock = (after: number) => {
@@ -180,6 +209,11 @@ export function drawioRichLabel(value: string, base: number): { readonly blocks:
     const last = blocks.at(-1);
     if (last && last.kind !== 'row' && after > 0) blocks[blocks.length - 1] = { ...last, spaceAfter: Math.max(last.spaceAfter ?? 0, after) };
     else if (!last) pendingAfter = Math.max(pendingAfter, after);
+  };
+  /** A new line in the cell, unless it is empty so far or its line just ended. */
+  const breakCellLine = () => {
+    const sofar = runs.map((run) => run.text).join('');
+    if (sofar.trim() && !/\n *$/.test(sofar)) write('\n');
   };
   const write = (text: string) => {
     if (!text) return;
@@ -199,16 +233,20 @@ export function drawioRichLabel(value: string, base: number): { readonly blocks:
       write(decodeEntities((match[4] ?? match[5]!).replace(/\s+/g, ' ')).replace(/\u00a0/g, ' '));
       continue;
     }
-    const name = match[2]!.toLowerCase();
+    const raw = match[2]!.toLowerCase();
+    // A table inside a cell is set as its words, its rows on lines of their own: its parts are none of the outer table's.
+    const name = nested > 0 && TABLE_PARTS.has(raw) ? `nested:${raw}` : raw;
     const closing = match[1] === '/';
     if (closing) {
       const at = stack.map((frame) => frame.tag).lastIndexOf(name);
       if (at === -1) continue;
       const closed = stack.splice(at);
+      nested -= closed.filter((frame) => frame.tag === 'nested:table').length;
       if (closed.some((frame) => frame.tag === 'td' || frame.tag === 'th')) endCell();
       if (closed.some((frame) => frame.tag === 'tr')) endRow();
       if (closed.some((frame) => frame.tag === 'table')) { endRow(); table = null; open = { ...blockSettings(), before: 0 }; continue; }
-      if (table) continue;
+      // A paragraph closing in a cell ends its line there.
+      if (table) { if (closed.some((frame) => BLOCKS.has(frame.tag) && !TABLE_PARTS.has(frame.tag))) breakCellLine(); continue; }
       const block = closed.find((frame) => frame.block);
       if (block) closeBlock(block.settings?.after ?? 0);
       continue;
@@ -216,29 +254,58 @@ export function drawioRichLabel(value: string, base: number): { readonly blocks:
     const attrs = new Map<string, string>();
     for (const attr of match[3]!.matchAll(ATTRIBUTE)) attrs.set(attr[1]!.toLowerCase(), attr[2] ?? attr[3] ?? attr[4] ?? '');
     if (name === 'br') { write('\n'); continue; }
+    // ponytail: a table inside a table's cell is set as its words — upgrade by laying tables out as nested boxes.
+    if (table && (name.startsWith('nested:') || name === 'table')) {
+      if (raw === 'table') nested += 1;
+      if (raw === 'table' || raw === 'tr') breakCellLine();
+      else if (raw === 'td' || raw === 'th') write(' ');
+      stack.push({ tag: nested > 0 && raw === 'table' ? 'nested:table' : name, inline: inlineOf(raw, attrs, inline(), base), block: false });
+      continue;
+    }
     if (TABLE_PARTS.has(name) && (name === 'table' || table)) {
       const own = inlineOf(name, attrs, inline(), base);
       if (name === 'table') {
-        // ponytail: a table inside a table's cell is set as its words — upgrade by laying tables out as nested boxes.
-        if (table) { stack.push({ tag: name, inline: own, block: false }); continue; }
         closeBlock(0);
         const padding = Number(attrs.get('cellpadding'));
-        const width = css(attrs.get('style')).get('width') ?? attrs.get('width');
-        table = { id: tables++, padding: Number.isFinite(padding) && padding >= 0 ? padding : 1, full: width === '100%' };
+        const style = css(attrs.get('style'));
+        const width = style.get('width') ?? attrs.get('width');
+        const height = style.get('height') ?? attrs.get('height');
+        // `border="1"` outlines every cell, in a browser's grey unless the table's CSS gives a colour.
+        const lines = paintOf(attrs);
+        const border = lines.border ?? (Number(attrs.get('border')) > 0 ? '#808080' : undefined);
+        // A browser's own grey is no CSS colour draw.io rewrites: dark mode keeps it.
+        const kept = lines.border ? lines.keep?.includes('border') === true : border !== undefined;
+        table = { id: tables++, padding: Number.isFinite(padding) && padding >= 0 ? padding : 1, full: width === '100%', fill: height === '100%', ...(border ? { border, keepBorder: kept } : {}) };
       }
-      if (name === 'tr') endRow();
+      if (name === 'tr') { endRow(); rowPaint = paintOf(attrs); }
       if (name === 'tr' || ((name === 'td' || name === 'th') && !row)) row = [];
       if (name === 'td' || name === 'th') {
         endCell();
-        const align = blockOf(name, attrs, base).align ?? (attrs.get('align') === 'center' ? 'center' : attrs.get('align') === 'right' ? 'end' : name === 'th' ? 'center' : undefined);
-        cell = align ? { align } : {};
+        const align = blockOf(name, attrs, base).align ?? (attrs.get('align') === 'center' ? 'center' : attrs.get('align') === 'right' ? 'end' : name === 'th' && labelAlign === 'center' ? 'center' : undefined);
+        const paint = paintOf(attrs);
+        // A cell's own colours over its row's; its lines over the table's.
+        const fromBackground = paint.background ? paint : rowPaint;
+        const fromBorder = paint.border ? paint : rowPaint.border ? rowPaint : null;
+        const background = fromBackground.background;
+        const border = fromBorder?.border ?? table?.border;
+        const keep = [
+          ...(background && fromBackground.keep?.includes('background') ? ['background' as const] : []),
+          ...(border && (fromBorder ? fromBorder.keep?.includes('border') : table?.keepBorder) ? ['border' as const] : []),
+        ];
+        const share = /^([\d.]+)%$/.exec((css(attrs.get('style')).get('width') ?? attrs.get('width') ?? '').trim());
+        const width = share ? Number(share[1]) / 100 : 0;
+        cell = { ...(align ? { align } : {}), ...(width > 0 && width <= 1 ? { width } : {}), ...(background ? { background } : {}), ...(border ? { border } : {}), ...(keep.length ? { keep } : {}) };
         runs = [];
       }
       stack.push({ tag: name, inline: own, block: false });
       continue;
     }
-    // Inside a table, a paragraph is part of its cell: its words join the cell's line.
-    if (table && BLOCKS.has(name)) { if (runs.length) write(' '); stack.push({ tag: name, inline: inlineOf(name, attrs, inline(), base), block: false }); continue; }
+    // Inside a table, a paragraph is part of its cell, on a line of its own.
+    if (table && BLOCKS.has(name)) {
+      breakCellLine();
+      stack.push({ tag: name, inline: inlineOf(name, attrs, inline(), base), block: false });
+      continue;
+    }
     if (name === 'hr') {
       const em = inline().size ?? base;
       closeBlock(0);

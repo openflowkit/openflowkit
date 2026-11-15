@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { createTestConnector, createTestDocument, createTestNode } from '../../testing/builders/documentBuilder';
+import type { JsonObject } from '../document/json';
 import type { ScenePage } from '../document/types';
 import type { FrameState } from './types';
+import { projectPageConnectors } from '../connectors/routeProjection';
 import { frameDrawList, type DrawOp, type DrawPathOp, type DrawTextOp } from './drawList';
 
 const VIEW_BOX = { x: -24, y: -24, width: 400, height: 300 };
@@ -40,6 +42,23 @@ describe('frame draw list', () => {
     expect(outline!.closed).toBe(true);
     const [label] = texts(ops);
     expect(label).toMatchObject({ text: 'Alpha', x: 50, y: 25, align: 'center', baseline: 'middle' });
+  });
+
+  it('draws a draw.io shape and a draw.io line as the parts draw.io’s code drew, in their own colours', () => {
+    const fold = { path: [{ kind: 'move', x: 0, y: 0 }, { kind: 'line', x: 10, y: 10 }], fill: null, stroke: '#ff0000', strokeWidth: 2, dash: [], fillOpacity: 1, strokeOpacity: 1 };
+    const note = createTestNode('a', { size: { width: 100, height: 50 }, content: { label: '', drawio: { shape: 'note' }, drawioParts: [fold], drawioSize: { width: 100, height: 50 } } });
+    const ops = paths(frameDrawList(pageOf({ nodes: [note] }), frameOf(), 'light', VIEW_BOX));
+    expect(ops).toHaveLength(1);
+    expect(ops[0]).toMatchObject({ closed: false, fill: null, stroke: { color: '#ff0000' }, strokeWidth: 3, commands: [{ kind: 'move', point: { x: 0, y: 0 } }, { kind: 'line', point: { x: 10, y: 10 } }] });
+
+    const b = createTestNode('b', { transform: { ...createTestNode('x').transform, translation: { x: 300, y: 0 } } });
+    const plain = createTestConnector('a-b', 'a', 'b');
+    const page = pageOf({ nodes: [createTestNode('a'), b], connectors: [plain] });
+    const points = projectPageConnectors(page)[0]!.samples;
+    const band = { ...fold, path: [{ kind: 'move', x: 1, y: 1 }, { kind: 'line', x: 2, y: 2 }, { kind: 'close' }], fill: 'fill', stroke: 'stroke' };
+    const shaped = { ...plain, extensions: { drawioLine: { style: { shape: 'flexArrow' }, fill: '#123456', points, parts: [band] } as unknown as JsonObject } };
+    const drawn = paths(frameDrawList({ ...page, connectors: [shaped] }, frameOf(), 'light', VIEW_BOX)).filter((op) => op.closed && op.fill?.color === '#123456');
+    expect(drawn).toHaveLength(1);
   });
 
   it('draws a label that wraps by its sizing policy in the lines the canvas wraps it to', () => {

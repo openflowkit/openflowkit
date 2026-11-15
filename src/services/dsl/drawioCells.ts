@@ -1,3 +1,4 @@
+import { drawioSketchSeed } from './drawioSketch';
 import type { Point2d } from '../../opencanvas/domain/geometry/types';
 import { resolveDrawioStyle, type DrawioStyle } from './drawioStyle';
 import { parseXml, type XmlElement } from './xmlReader';
@@ -73,11 +74,14 @@ export function readCell(element: XmlElement, resolve: typeof resolveDrawioStyle
   const id = wrapped ? element.attributes.id : cell?.attributes.id;
   if (!cell || !id) return null;
   const { attributes } = cell;
+  const style = resolve(attributes.style, attributes.edge === '1' ? 'edge' : 'vertex');
   return {
     id,
     parent: attributes.parent ?? null,
-    value: (wrapped ? element.attributes.label : attributes.value) ?? '',
-    style: resolve(attributes.style, attributes.edge === '1' ? 'edge' : 'vertex'),
+    // `noLabel=1`: draw.io draws no words for the cell, though it keeps them.
+    value: style.noLabel === '1' ? '' : (wrapped ? element.attributes.label : attributes.value) ?? '',
+    // A sketched cell wobbles by its id, as in draw.io; the seed rides in its style, which is kept with its drawing.
+    style: style.sketch === '1' ? { ...style, sketchSeed: String(drawioSketchSeed(id)) } : style,
     vertex: attributes.vertex === '1',
     edge: attributes.edge === '1',
     source: attributes.source ?? null,

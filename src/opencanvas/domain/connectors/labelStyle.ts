@@ -49,8 +49,9 @@ function labelStyleOf(id: string, a: SceneConnector['appearance']): NodeStyle {
       fontWeight: a.labelFontWeight ?? 500,
       fontStyle: a.labelFontStyle ?? 'normal',
       textDecoration: a.labelTextDecoration ?? 'none',
-      textPadding: 5,
-      cornerRadius: 4,
+      // The plate's inset and corners: ours pads and rounds; a draw.io label's plate sits tight and square (0, 0).
+      textPadding: typeof a.labelPadding === 'number' ? a.labelPadding : 5,
+      cornerRadius: typeof a.labelCornerRadius === 'number' ? a.labelCornerRadius : 4,
     },
   });
 }
@@ -64,6 +65,11 @@ export function connectorLabelOnCanvas(own: NodeStyle, canvasColor?: unknown): N
   // those defaults follows the canvas too.
   return { ...style, fill: canvasColor, textColor: style.textColor === '#334155' ? '#e2e8f0' : style.textColor,
     stroke: style.stroke === '#e2e8f0' ? '#475569' : style.stroke };
+}
+
+/** A label's style: the connector's, on the label's own plate when it has one. */
+export function ownLabelStyle(style: NodeStyle, label: { readonly background?: string }): NodeStyle {
+  return label.background === undefined ? style : { ...style, fill: label.background };
 }
 
 /** Labels wrap here, as the canvas draws them. */

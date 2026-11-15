@@ -14,10 +14,10 @@ page "Page 1": 1 layer(s), 94 nodes, 77 connectors
   process rounded "Branch 2" @337,993 420x157 fill #bac8d3 ink #ae4132
   process rounded "Branch 1" @243,809 440x171 fill #bac8d3 ink #ae4132
   process rounded "Consumers" @22,488 115x542 fill #bac8d3 ink #ae4132
-  process cloud "Cloud 3" @1480,118 120x80 fill #bac8d3 ink #23445d
-  process cloud "Cloud 4" @1480,220 120x80 fill #bac8d3 ink #23445d
-  process cloud "Internet" @970,790 120x80 fill #bac8d3 ink #23445d
-  process rectangle @360,230 440x20 fill transparent ink #f08705
+  process drawn cloud "Cloud 3" @1480,118 120x80 fill #bac8d3 ink #23445d
+  process drawn cloud "Cloud 4" @1480,220 120x80 fill #bac8d3 ink #23445d
+  process drawn cloud "Internet" @970,790 120x80 fill #bac8d3 ink #23445d
+  process drawn mxgraph.eip.messageChannel @360,230 440x20 fill #ffffff ink #f08705
   process rectangle @385,97 80x80 fill transparent ink #f08705
   process rectangle @270,97 80x80 fill transparent ink #f08705
   process rectangle @500,97 80x80 fill transparent ink #f08705
@@ -41,12 +41,12 @@ page "Page 1": 1 layer(s), 94 nodes, 77 connectors
   process rectangle @925,484 80x80 fill transparent ink #f08705
   process rectangle @1025,484 80x80 fill transparent ink #f08705
   process rectangle @1115,484 80x80 fill transparent ink #f08705
-  process rectangle @918,229 422x20 fill transparent ink #f08705
-  process rectangle @350,399 440x20 fill transparent ink #f08705
-  process rectangle @918,399 412x20 fill transparent ink #f08705
-  process rectangle @230,594 1090x20 fill transparent ink #f08705
-  process cloud "Cloud 1" @50,97 120x80 fill #bac8d3 ink #23445d
-  process cloud "Cloud 2" @50,359 120x80 fill #bac8d3 ink #23445d
+  process drawn mxgraph.eip.messageChannel @918,229 422x20 fill #ffffff ink #f08705
+  process drawn mxgraph.eip.messageChannel @350,399 440x20 fill #ffffff ink #f08705
+  process drawn mxgraph.eip.messageChannel @918,399 412x20 fill #ffffff ink #f08705
+  process drawn mxgraph.eip.messageChannel @230,594 1090x20 fill #ffffff ink #f08705
+  process drawn cloud "Cloud 1" @50,97 120x80 fill #bac8d3 ink #23445d
+  process drawn cloud "Cloud 2" @50,359 120x80 fill #bac8d3 ink #23445d
   process rectangle @1240,117 80x80 fill transparent ink #f08705
   process rectangle @1250,281 80x80 fill transparent ink #f08705
   process rectangle @660,679 80x80 fill transparent ink #f08705
@@ -57,19 +57,19 @@ page "Page 1": 1 layer(s), 94 nodes, 77 connectors
   process rectangle @258,815 80x80 fill transparent ink #f08705
   process rectangle @348,815 80x80 fill transparent ink #f08705
   process rectangle @448,815 80x80 fill transparent ink #f08705
-  process rectangle @258,925 415x20 fill transparent ink #f08705
+  process drawn mxgraph.eip.messageChannel @258,925 415x20 fill #ffffff ink #f08705
   process rectangle @362,993 80x80 fill transparent ink #f08705
   process rectangle @452,993 80x80 fill transparent ink #f08705
   process rectangle @552,993 80x80 fill transparent ink #f08705
-  process rectangle @362,1095 385x20 fill transparent ink #f08705
+  process drawn mxgraph.eip.messageChannel @362,1095 385x20 fill #ffffff ink #f08705
   process rectangle @1502,784 80x80 fill transparent ink #f08705
   process rectangle @1412,784 80x80 fill transparent ink #f08705
   process rectangle @1302,784 80x80 fill transparent ink #f08705
-  process rectangle @1202,908 400x20 fill transparent ink #f08705
+  process drawn mxgraph.eip.messageChannel @1202,908 400x20 fill #ffffff ink #f08705
   process rectangle @1231,979 80x80 fill transparent ink #f08705
   process rectangle @1321,979 80x80 fill transparent ink #f08705
   process rectangle @1421,979 80x80 fill transparent ink #f08705
-  process rectangle @1091,1091 430x20 fill transparent ink #f08705
+  process drawn mxgraph.eip.messageChannel @1091,1091 430x20 fill #ffffff ink #f08705
   process rectangle @657,993 80x80 fill transparent ink #f08705
   process rectangle @1520,419 80x80 fill transparent ink #f08705
   process rectangle @1520,524 80x80 fill transparent ink #f08705
@@ -170,4 +170,4 @@ page "Page 1": 1 layer(s), 94 nodes, 77 connectors
   169 -> 56 polyline, 15 bends
   168 -> 168 direct, 0 bends
   27 -> 27 direct, 0 bends
-losses: 63 pictures come from draw.io’s own image library, so they are drawn as a box; draw.io’s “mxgraph.eip.messageChannel” shape is drawn as a box (9 shapes)
+losses: 63 pictures come from draw.io’s own image library, so they are drawn as a box

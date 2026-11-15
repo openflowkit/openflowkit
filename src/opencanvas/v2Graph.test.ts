@@ -23,6 +23,8 @@ const V2_ROOTS = [
 // The kernel the editor builds on: pure domain, application services, adapters.
 const SHARED_KERNEL = [
   path.join(ocDir, 'domain'),
+  // Third-party code kept unchanged (draw.io's shape code, Apache-2.0), loaded only by its wrapper in services/dsl.
+  path.join(srcDir, 'vendor'),
   path.join(srcDir, 'dsl'),
   path.join(ocDir, 'application', 'history'),
   // Map mode's pure pieces (navigation, motion plan, geometry, ELK layout with injected ports): the editor and the map viewer share them.

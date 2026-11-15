@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ConnectorEndpoint, SceneDocumentV1 } from '../../opencanvas/domain/document/types';
 import { resolveNodeStyle } from '../../opencanvas/domain/nodes/nodeStyle';
-import { paintOver } from '../../opencanvas/domain/color/adaptiveColor';
+import { invertForDark, paintOver } from '../../opencanvas/domain/color/adaptiveColor';
 import { contrastRatio } from '../../lib/colorUtils';
 import { drawioToDocument } from './drawio';
 import flowchart from './fixtures/drawio/flowchart.drawio?raw';
@@ -23,7 +23,9 @@ function golden(document: SceneDocumentV1, losses: readonly string[]): string {
     lines.push(`page "${page.name}": ${page.layers.length} layer(s), ${page.nodes.length} nodes, ${page.connectors.length} connectors`);
     for (const node of page.nodes) {
       const { x, y } = node.transform.translation;
-      const shape = typeof node.content.shape === 'string' ? ` ${node.content.shape}` : '';
+      const drawio = node.content.drawio as { shape?: string } | undefined;
+      // A shape draw.io's own code draws says which: that is what shows, not the box under it.
+      const shape = drawio?.shape ? ` drawn ${drawio.shape}` : typeof node.content.shape === 'string' ? ` ${node.content.shape}` : '';
       const label = typeof node.content.label === 'string' && node.content.label ? ` "${node.content.label.replace(/\n/g, '⏎')}"` : '';
       const fill = typeof node.appearance.fill === 'string' ? ` fill ${node.appearance.fill}` : '';
       const color = node.appearance.textColor ?? node.content.customColor;
@@ -87,13 +89,25 @@ function contrasts(document: SceneDocumentV1, canvas: string): Map<string, numbe
 describe('draw.io labels in the dark theme', () => {
   it.each([
     ['flowchart', flowchart], ['swimlanes', swimlanes], ['architecture-images', architectureImages],
-    ['aws-compressed', awsCompressed], ['multi-page', multiPage], ['dark-drawn', darkDrawn],
+    ['aws-compressed', awsCompressed], ['multi-page', multiPage],
   ])('%s: no label reads worse on the dark canvas than draw.io drew it on white', async (_name, text) => {
     const result = await drawioToDocument(text, 'doc', NOW);
     if ('error' in result) throw new Error(result.error);
     const light = contrasts(result.document, '#f7f7f5');
     const dark = contrasts(result.document, '#191b19');
-    const worse = [...dark].filter(([key, ratio]) => ratio < Math.min(4.5, light.get(key)! - 0.01)).map(([key, ratio]) => `${key} ${ratio.toFixed(2)} (light ${light.get(key)!.toFixed(2)})`);
+    // A label unreadable at its centre in light (a lane title, its words on the title band, not the middle) is
+    // measured at the wrong spot; draw.io turns its white words to the page colour there as we do.
+    const worse = [...dark].filter(([key]) => light.get(key)! >= 1.5).filter(([key, ratio]) => ratio < Math.min(4.5, light.get(key)! - 0.01)).map(([key, ratio]) => `${key} ${ratio.toFixed(2)} (light ${light.get(key)!.toFixed(2)})`);
     expect(worse).toEqual([]);
+  });
+
+  it('dark-drawn: flips a page drawn dark exactly as draw.io’s dark mode does, as its `adaptiveColors` (unset: auto) says', async () => {
+    const result = await drawioToDocument(darkDrawn, 'doc', NOW);
+    if ('error' in result) throw new Error(result.error);
+    const nodes = result.document.pages[0]!.nodes;
+    const slab = resolveNodeStyle(nodes.find((node) => node.appearance.fill === '#282828')!, '#191b19');
+    expect(slab.fill).toBe(invertForDark('#282828'));
+    const words = resolveNodeStyle(nodes.find((node) => node.appearance.textColor === '#f18808')!, '#191b19');
+    expect(words.textColor).toBe(invertForDark('#f18808'));
   });
 });

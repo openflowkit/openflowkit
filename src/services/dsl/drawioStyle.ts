@@ -47,44 +47,50 @@ export function drawioShapeName(style: DrawioStyle): string {
   if (style.shape) return style.shape;
   // Asked several times a cell, of styles a big file shares between thousands of cells: found once a style.
   let name = BARE_NAMES.get(style);
-  if (name === undefined) BARE_NAMES.set(style, name = Object.keys(style).find((key) => style[key] === '') ?? '');
+  if (name === undefined) BARE_NAMES.set(style, name = Object.keys(style).find((key) => style[key] === '' && namesKind(key)) ?? '');
   return name;
 }
 const BARE_NAMES = new WeakMap<DrawioStyle, string>();
 
+/** Keys a named style sets only to colour a cell (draw.io's `plain-blue`, `fancy`): naming one picks no kind of shape. */
+const LOOKS = new Set(['shadow', 'glass', 'gradientColor', 'fillColor', 'strokeColor']);
+
+/**
+ * Whether a bare word picks what a cell is (`text`, `group`, `ellipse`): one of draw.io's own named styles that is
+ * more than a colour. draw.io ignores a word its sheet doesn't have, and a colour preset leaves the default box.
+ */
+const namesKind = (word: string): boolean => {
+  const named = own(DRAWIO_STYLESHEET, word);
+  return named !== undefined && Object.keys(named).some((key) => !LOOKS.has(key));
+};
+
+/**
+ * The draw.io shapes OpenFlowKit draws identically itself. Every other shape is drawn by draw.io's own code or
+ * stencil (drawioShapes.ts), so it looks as in draw.io instead of as the nearest shape we have.
+ */
 const SHAPES: Readonly<Record<string, ShapeKind>> = {
-  '': 'rectangle', rect: 'rectangle', rectangle: 'rectangle', label: 'rectangle', process: 'rectangle', partialRectangle: 'rectangle',
-  ellipse: 'ellipse', doubleEllipse: 'ellipse', rhombus: 'diamond', triangle: 'triangle',
-  hexagon: 'hexagon', parallelogram: 'parallelogram', trapezoid: 'trapezoid',
-  cylinder: 'cylinder', cylinder2: 'cylinder', cylinder3: 'cylinder', datastore: 'cylinder',
-  cloud: 'cloud', document: 'document', umlActor: 'actor', actor: 'actor', step: 'chevron',
-  note: 'page', folder: 'folder', cube: 'cube', star: 'star', callout: 'speech-bubble',
-  cross: 'plus', singleArrow: 'arrow-right', mxgraph_basic_heart: 'heart',
-  // draw.io's Bootstrap wireframe set: plain and rounded boxes, a bare label, form controls.
-  mxgraph_bootstrap_rect: 'rectangle', mxgraph_bootstrap_rrect: 'rounded', mxgraph_bootstrap_anchor: 'rectangle',
-  mxgraph_bootstrap_checkbox: 'rectangle', mxgraph_bootstrap_radioButton: 'circle',
-  // draw.io's flowchart, basic and arrow sets repeat shapes we have under other names.
-  mxgraph_flowchart_process: 'rectangle', mxgraph_flowchart_predefined_process: 'rectangle',
-  mxgraph_flowchart_decision: 'diamond', mxgraph_flowchart_terminator: 'capsule', mxgraph_flowchart_data: 'parallelogram',
-  mxgraph_flowchart_document: 'document', 'mxgraph_flowchart_on-page_reference': 'circle',
-  mxgraph_flowchart_start_1: 'ellipse', mxgraph_flowchart_start_2: 'circle',
-  mxgraph_basic_star: 'star', mxgraph_basic_octagon: 'octagon',
-  mxgraph_basic_oval_callout: 'speech-bubble', mxgraph_basic_roundRectCallout: 'speech-bubble',
-  mxgraph_basic_rectCallout: 'speech-bubble', mxgraph_basic_rounded_rectangular_callout: 'speech-bubble',
-  mxgraph_arrows2_arrow: 'arrow-right', mxgraph_arrows2_stylisedArrow: 'arrow-right',
+  '': 'rectangle', rect: 'rectangle', rectangle: 'rectangle', label: 'rectangle', ellipse: 'ellipse', rhombus: 'diamond',
+  mxgraph_bootstrap_anchor: 'rectangle',
 };
 
 /** Shapes draw.io draws with no outline and no fill: only their label shows. */
 const BARE = new Set(['mxgraph.bootstrap.anchor']);
 
 /** The library shape a draw.io vertex becomes, and its own name when it had to become a box. */
+/** The name draw.io's code registers a shape under: a box written without a shape, or as `rect`, is its `rectangle`. */
+export const drawioCodeName = (name: string): string => (name === '' || name === 'rect' ? 'rectangle' : name);
+
 export function drawioShape(style: DrawioStyle, width: number, height: number): { readonly kind: ShapeKind; readonly unknown?: string } {
   const name = drawioShapeName(style);
   if (name === 'text') return { kind: 'text' };
   const kind = own(SHAPES, name.replace(/\./g, '_'));
   if (!kind) return { kind: 'rectangle', unknown: name };
+  // A sketched shape (`sketch=1`) is drawn by hand, by draw.io's own sketch code (drawioSketch), whatever its kind.
+  if (style.sketch === '1') return { kind: kind === 'ellipse' && Math.abs(width - height) < 1 ? 'circle' : kind, unknown: drawioCodeName(name) };
   if (kind === 'rectangle' && style.rounded === '1') return { kind: 'rounded' };
-  if (kind === 'ellipse' && Math.abs(width - height) < 1) return { kind: 'circle' };
+  // An ellipse is drawn by draw.io's own ellipse code, on true curves (ours is a 24-sided outline, cornered when large),
+  // with any dot in it (a UML final state: `centerRadius`).
+  if (kind === 'ellipse') return { kind: Math.abs(width - height) < 1 ? 'circle' : kind, unknown: name };
   return { kind };
 }
 
@@ -110,20 +116,24 @@ export function drawioColor(value: string | undefined): string | undefined {
   return /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(value) ? value.toLowerCase() : undefined;
 }
 
-/** A line colour: draw.io's default black (and near-black grey) is left unset, so lines follow our theme and show on a dark canvas. */
-export const drawioLine = (value: string | undefined): string | undefined => {
-  const color = drawioColor(value);
-  return drawioDarkInk(color) ? undefined : color;
-};
-
-/** A near-black grey (`#000` to `#555`): the ink draw.io writes by default, meant for a light page. */
-export function drawioDarkInk(value: unknown): boolean {
-  if (typeof value !== 'string' || !/^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(value)) return false;
-  const lower = value.toLowerCase();
-  const hex = lower.length === 4 ? lower.replace(/[0-9a-f]/g, (digit) => digit + digit) : lower;
-  const [r, g, b] = [1, 3, 5].map((at) => Number.parseInt(hex.slice(at, at + 2), 16));
-  return Math.max(r!, g!, b!) <= 0x55 && Math.max(r!, g!, b!) - Math.min(r!, g!, b!) <= 8;
+/**
+ * A colour as draw.io paints it: `default` (what draw.io's stylesheet gives every cell) is draw.io's own default for
+ * that paint, `none` is transparent. On a dark canvas it flips with every other draw.io colour (`darkColors: 'invert'`),
+ * as draw.io's dark mode flips its defaults. Unset, or a word we can't read (`inherit`), is left to the theme.
+ */
+export function drawioPaint(value: string | undefined, fallback: string): string | undefined {
+  return value === 'default' ? fallback : drawioColor(value);
 }
+
+/** draw.io's dash: its `dashPattern` (default 3 on, 3 off) in line widths, as page px (mxSvgCanvas2D.createDashPattern). */
+export function drawioDash(style: DrawioStyle): string {
+  const width = Math.max(1, finite(style.strokeWidth) ?? 1);
+  const steps = (style.dashPattern ?? '3 3').split(/[ ,]+/).map(Number).filter((step) => Number.isFinite(step) && step > 0);
+  return (steps.length > 0 ? steps : [3, 3]).map((step) => step * width).join(' ');
+}
+
+/** A line colour: draw.io's default is black. */
+export const drawioLine = (value: string | undefined): string | undefined => drawioPaint(value, '#000000');
 
 const finite = (value: string | undefined): number | undefined => {
   if (value === undefined || value === '') return undefined;
@@ -135,11 +145,11 @@ const finite = (value: string | undefined): number | undefined => {
 export function drawioNodeAppearance(style: DrawioStyle): JsonObject {
   // draw.io's dark mode draws every colour a cell sets with its lightness flipped (`invertForDark`).
   const appearance: Record<string, string | number | boolean> = { darkColors: 'invert' };
-  // Paint the cell doesn't set is left to the theme, which pairs fill and ink in light and dark alike.
   const bare = BARE.has(drawioShapeName(style));
-  const fill = bare ? 'transparent' : drawioFaded(drawioColor(style.fillColor), style.fillOpacity);
+  const fill = bare ? 'transparent' : drawioFaded(drawioPaint(style.fillColor, '#ffffff'), style.fillOpacity);
   const stroke = bare ? 'transparent' : drawioFaded(drawioLine(style.strokeColor), style.strokeOpacity);
-  const text = drawioColor(style.fontColor);
+  // textOpacity fades the words alone, as fillOpacity fades the fill.
+  const text = drawioFaded(drawioPaint(style.fontColor, '#000000'), style.textOpacity);
   if (fill) appearance.fill = fill;
   if (stroke) appearance.stroke = stroke;
   if (text && text !== 'transparent') appearance.textColor = text;
@@ -151,8 +161,8 @@ export function drawioNodeAppearance(style: DrawioStyle): JsonObject {
   const side = style.align === 'left' ? finite(style.spacingLeft) : style.align === 'right' ? finite(style.spacingRight) : 0;
   const inset = (finite(style.spacing) ?? 2) + (side ?? 0);
   appearance.textPadding = Math.min(32, Math.max(0, inset));
-  const strokeWidth = finite(style.strokeWidth);
-  if (strokeWidth !== undefined) appearance.strokeWidth = strokeWidth;
+  // draw.io draws a line 1 wide unless the cell says otherwise.
+  appearance.strokeWidth = finite(style.strokeWidth) ?? 1;
   const fontSize = finite(style.fontSize);
   if (fontSize !== undefined && fontSize > 0) appearance.fontSize = fontSize;
   // fontStyle is a bit mask: 1 bold, 2 italic, 4 underline.
@@ -161,7 +171,10 @@ export function drawioNodeAppearance(style: DrawioStyle): JsonObject {
   appearance.fontWeight = fontStyle & 1 ? 700 : 400;
   if (fontStyle & 2) appearance.fontStyle = 'italic';
   if (fontStyle & 4) appearance.textDecoration = 'underline';
-  if (style.dashed === '1') appearance.strokeStyle = 'dashed';
+  if (style.dashed === '1') {
+    appearance.strokeStyle = 'dashed';
+    appearance.strokeDasharray = drawioDash(style);
+  }
   const opacity = finite(style.opacity);
   if (opacity !== undefined && opacity < 100) appearance.opacity = Math.max(0, opacity) / 100;
   const gradient = drawioColor(style.gradientColor);
@@ -199,19 +212,24 @@ const OUR_FONTS = new Set(['helvetica', 'arial', 'verdana', 'inter', 'sans-serif
 
 /**
  * What a cell's style asks for that we don't draw, one plain line each; the importer counts them across the page.
- * Arrow heads are named by draw.io's word, since `marker` draws any head it doesn't know as an arrow.
+ * Arrow heads are named by draw.io's word when its code isn't to hand, since `marker` draws any head it doesn't know as a triangle.
  */
-export function drawioStyleLosses(style: DrawioStyle, of: 'shape' | 'connector'): string[] {
+export function drawioStyleLosses(style: DrawioStyle, of: 'shape' | 'connector', endsDrawn = false): string[] {
   const losses: string[] = [];
   if (style.gradientColor && style.gradientColor !== 'none' && !drawioColor(style.gradientColor)) losses.push('gradient fills are drawn solid');
-  if (style.sketch === '1' || style.comic === '1') losses.push('the hand-drawn sketch look is drawn clean');
-  if (style.fillStyle && style.fillStyle !== 'solid' && style.fillStyle !== 'auto') losses.push('hatched and patterned fills are drawn solid');
+  // A sketched shape is drawn by draw.io's sketch code; draw.io's older `comic` jiggle is not.
+  if (style.sketch === '1' ? style.sketchStyle === 'comic' : style.comic === '1') losses.push('the hand-drawn comic look is drawn clean');
+  if (style.sketch !== '1' && style.fillStyle && style.fillStyle !== 'solid' && style.fillStyle !== 'auto') losses.push('hatched and patterned fills are drawn solid');
   if (style.glass === '1') losses.push('the glass shine is left off');
   const unread = (value: string | undefined) => value !== undefined && !COLOUR_WORDS.has(value) && drawioColor(value) === undefined;
   if (unread(style.fillColor) || unread(style.strokeColor) || unread(style.fontColor)) losses.push('colours not written as #hex use the theme’s instead');
   const font = style.fontFamily?.trim();
   if (font && !OUR_FONTS.has(font.toLowerCase())) losses.push(`the “${font}” font is drawn in ours`);
-  if (of === 'connector') {
+  if (style.textShadow === '1') losses.push('shadows under words are left off');
+  if (style.clipPath && style.clipPath !== 'none') losses.push('cropped pictures are shown whole');
+  if (style.textDirection && style.textDirection !== 'ltr' && style.textDirection !== 'auto') losses.push('right-to-left and vertical words are set left to right');
+  // With draw.io's code to hand, its connector draws every end itself (drawioCode.shapedLine).
+  if (of === 'connector' && !endsDrawn) {
     // Entity-relation ends on a line with a pair are drawn as its relation; on their own, as their glyphs.
     const relation = drawioErRelation(style) !== null;
     for (const head of [style.endArrow, style.startArrow]) {
@@ -237,7 +255,9 @@ function marker(value: string | undefined, fallback: string | null, filled: stri
   const name = value ?? fallback;
   if (name === null || name === 'none' || name === '') return null;
   const hollow = filled === '0';
-  if (name === 'oval' || name === 'circle' || name === 'circlePlus') return 'circle';
+  // An oval or circle end is a filled dot unless its fill is off; draw.io's circlePlus is always open.
+  if (name === 'oval' || name === 'circle') return hollow ? 'circle' : 'circle-filled';
+  if (name === 'circlePlus') return 'circle';
   if (name.startsWith('diamond')) return hollow ? 'diamond-open' : 'diamond-filled';
   if (name === 'cross') return 'cross';
   if (name === 'open' || name === 'openThin' || name === 'openAsync' || name === 'async') return 'arrow';
@@ -246,10 +266,12 @@ function marker(value: string | undefined, fallback: string | null, filled: stri
   return hollow ? 'triangle-open' : 'triangle-filled';
 }
 
-/** draw.io's entity-relation ends, as the cardinality symbols Mermaid writes on each side of `--`. */
+/**
+ * draw.io's entity-relation ends, as the cardinality symbols Mermaid writes on each side of `--`. Its single bar
+ * (`ERone`) and bare crow's foot (`ERmany`) have no symbol, so a line with one keeps its own heads instead.
+ */
 const ER_ENDS: Readonly<Record<string, readonly [source: string, target: string]>> = {
-  ERmandOne: ['||', '||'], ERone: ['||', '||'], ERzeroToOne: ['|o', 'o|'],
-  ERoneToMany: ['}|', '|{'], ERmany: ['}|', '|{'], ERzeroToMany: ['}o', 'o{'],
+  ERmandOne: ['||', '||'], ERzeroToOne: ['|o', 'o|'], ERoneToMany: ['}|', '|{'], ERzeroToMany: ['}o', 'o{'],
 };
 
 /**
@@ -273,9 +295,12 @@ export function drawioConnectorAppearance(style: DrawioStyle): JsonObject {
   if (start) appearance.markerStart = start;
   const stroke = drawioLine(style.strokeColor);
   if (stroke && stroke !== 'transparent') appearance.stroke = stroke;
-  const strokeWidth = finite(style.strokeWidth);
-  if (strokeWidth !== undefined) appearance.strokeWidth = strokeWidth;
-  if (style.dashed === '1') appearance.dashPattern = 'dashed';
+  // draw.io draws a line 1 wide unless the cell says otherwise.
+  appearance.strokeWidth = finite(style.strokeWidth) ?? 1;
+  if (style.dashed === '1') {
+    appearance.dashPattern = 'dashed';
+    appearance.strokeDasharray = drawioDash(style);
+  }
   // A line is one paint: its own opacity and the whole cell's multiply.
   const opacity = (finite(style.opacity) ?? 100) * (finite(style.strokeOpacity) ?? 100) / 100;
   if (opacity < 100) appearance.opacity = Math.max(0, opacity) / 100;
@@ -289,7 +314,10 @@ export function drawioConnectorAppearance(style: DrawioStyle): JsonObject {
   const plate = style.labelBackgroundColor;
   if (plate && plate !== 'default') appearance.labelBackground = drawioColor(plate) ?? 'transparent';
   appearance.labelFontSize = finite(style.fontSize) ?? 11;
-  const ink = drawioColor(style.fontColor);
+  // draw.io's plate is the words' own box: no inset, square corners (its `labelPadding` is never drawn).
+  appearance.labelPadding = 0;
+  appearance.labelCornerRadius = 0;
+  const ink = drawioPaint(style.fontColor, '#000000');
   if (ink && ink !== 'transparent') appearance.labelColor = ink;
   return appearance;
 }
@@ -320,9 +348,15 @@ export function withoutClosingBreaks(value: string): string {
 }
 
 /** A label as plain text: draw.io's `html=1` labels lose their markup, keeping line breaks. */
+/** An `html=1` label as draw.io renders it: each line break in its text is a `<br>`, unless `nl2Br=0` (mxText.replaceLinefeeds). */
+export function drawioHtmlValue(value: string, style: DrawioStyle): string {
+  return style.html === '1' && style.nl2Br !== '0' ? value.replace(/\r?\n/g, '<br>') : value;
+}
+
 export function drawioLabel(value: string | undefined, style: DrawioStyle): string {
   if (!value) return '';
   if (style.html !== '1') return value.trim();
+  value = drawioHtmlValue(value, style);
   // A block (`Global<div>Partnerships</div>`) starts and ends a line: its edges mark a break, and the run of
   // marks between two blocks is one break. `<br>` is a break of its own, so `<br><br>` keeps its blank line.
   // Source whitespace collapses as a browser's would; `[^<>]` keeps a run of unclosed `<` linear, not quadratic.
@@ -389,6 +423,24 @@ export function drawioLayoutBox(children: readonly Box[], style: DrawioStyle): B
  */
 export function drawioStandIn(style: DrawioStyle): JsonObject {
   const { stroke: _stroke, ...appearance } = drawioNodeAppearance(style);
-  const ink = drawioLine(style.fillColor) ?? drawioLine(style.strokeColor);
+  // An icon's fill is its colour; a picture's isn't painted at all (draw.io's image shape), so its line colour is.
+  const picture = drawioShapeName(style) === 'image';
+  const line = drawioLine(style.strokeColor);
+  const ink = picture ? (line && line !== 'transparent' ? line : '#000000') : drawioLine(style.fillColor) ?? line;
   return { ...appearance, fill: 'transparent', ...(ink && ink !== 'transparent' ? { stroke: ink } : {}), strokeStyle: 'dashed' };
+}
+
+/** A label cell's own plate: none unless its style sets one; `default` (as `edgeLabel` sets) is the line's own plate. */
+export function drawioLabelPlate(style: DrawioStyle): string | undefined {
+  const plate = style.labelBackgroundColor;
+  return plate === 'default' ? undefined : (plate && drawioColor(plate)) || 'transparent';
+}
+
+/** A box's corner radius as draw.io rounds it (mxShape.getArcSize; a lane by its title band, getSwimlaneArcSize); 0 unless `rounded=1`. */
+export function drawioCornerRadius(style: DrawioStyle, width: number, height: number, start?: number): number {
+  if (style.rounded !== '1') return 0;
+  const arc = Number.parseFloat(style.arcSize ?? '');
+  if (style.absoluteArcSize === '1') return Math.min(width / 2, height / 2, (Number.isFinite(arc) ? arc : 20) / 2);
+  const factor = (Number.isFinite(arc) ? arc : 15) / 100;
+  return start === undefined ? Math.min(width, height) * factor : Math.min(start, start * factor * 3);
 }

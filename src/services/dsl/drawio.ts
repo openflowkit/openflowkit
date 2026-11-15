@@ -9,13 +9,15 @@ import { createImageNode, STENCIL_FILL, STENCIL_STROKE } from '../../opencanvas/
 import { createShapeNode } from '../../opencanvas/domain/nodes/shapeNode';
 import { measurePortableText } from '../../opencanvas/domain/text/measurement';
 import { validateSceneDocumentV1 } from '../../opencanvas/domain/document/validation';
-import { drawioStyleLosses, own, drawioColor, drawioImageUrl, drawioLabel, drawioLine, drawioNodeAppearance, drawioShape, drawioShapeName, drawioStandIn, type DrawioStyle } from './drawioStyle';
+import { drawioCornerRadius, drawioHtmlValue, drawioLabelPlate, drawioStyleLosses, own, drawioColor, drawioImageUrl, drawioLabel, drawioLine, drawioNodeAppearance, drawioShape, drawioShapeName, drawioStandIn, type DrawioStyle } from './drawioStyle';
 import { pageCells, pageModel, type Cell } from './drawioCells';
 import { drawioConnector, type EndNode, type LabelAt } from './drawioConnectors';
 import { drawioRoutes } from './drawioEdgeView';
+import { drawnAsLabel, drawnContent, shapedLine, drawnLine, installDrawioCode, stencilNames, usesDrawioCode } from './drawioCode';
+import type { DrawioShapes } from './drawioShapes';
 import { DrawioView, type EdgeState } from './drawioView';
 import { drawioFreehands, freehandContent } from './drawioStencil';
-import { keepDarkDrawnPage } from './drawioDarkMode';
+import { applyAdaptiveColors } from './drawioDarkMode';
 import { standInLosses } from './drawioLosses';
 import { drawioRichLabel } from './drawioRichText';
 import { drawioLabelFit, type DrawioLabelBox } from './drawioLabelBox';
@@ -23,6 +25,8 @@ import { centreOf, labelLayout, labelNode, placeBox } from './drawioLabelNode';
 import { parseXml, type XmlElement } from './xmlReader';
 import { loadStencils, siteStencils, type StencilSource } from './drawioStencilLibrary';
 import { stencilSvg } from './drawioStencilSvg';
+import { stackUnderLines, treeRanks } from './drawioStacking';
+import { drawioLaneLine, drawioTableLines, TABLE_LINES } from './drawioTable';
 
 // A draw.io file (`.drawio`, or its `.xml` export) as an OpenFlowKit document.
 // draw.io keeps exact positions, so this builds the scene directly instead of
@@ -37,9 +41,6 @@ export type DrawioImport =
 export function looksLikeDrawio(text: string): boolean {
   return /^\s*(?:<\?xml[^>]*\?>\s*)?(?:<!--[\s\S]*?-->\s*)*<(?:mxfile|mxGraphModel)\b/.test(text);
 }
-
-/** Degrees our north-pointing triangle turns to point where draw.io's `direction` says. */
-const TRIANGLE_TURN: Readonly<Record<string, number>> = { north: 0, east: 90, south: 180, west: 270 };
 
 const CONTAINER_KIND: Readonly<Record<string, string>> = { swimlane: 'swimlane', group: 'group', table: 'section' };
 
@@ -60,6 +61,8 @@ class PageBuilder {
   private readonly styleLosses = new Map<string, number>();
   /** Shapes and connectors draw.io hides (`visible="0"`, or inside something hidden). */
   private hidden = 0;
+  /** Each drawn line's points on the page, for what it paints over. */
+  private readonly lines: { id: string; points: readonly Point2d[] }[] = [];
   /** Pictures from draw.io's own image library: only its servers have them. */
   private libraryImages = 0;
   private readonly view: DrawioView;
@@ -70,6 +73,8 @@ class PageBuilder {
     cells: readonly Cell[], private readonly loss: (message: string) => void,
     private readonly freehand: ReadonlyMap<string, readonly (readonly Point2d[])[]> = new Map(),
     private readonly stencils: ReadonlyMap<string, XmlElement> = new Map(),
+    /** draw.io's own shape code, when the page has shapes it draws (`loadDrawioShapes`). */
+    private readonly code: DrawioShapes | null = null,
   ) {
     for (const cell of cells) {
       if (this.cells.has(cell.id)) { loss(`two cells share the id “${cell.id}”, so the later one was left out`); continue; }
@@ -136,8 +141,9 @@ class PageBuilder {
     }
     for (const message of standInLosses(this.unknownShapes)) this.loss(message);
     for (const [message, count] of this.styleLosses) this.loss(count > 1 ? `${message} (${count} places)` : message);
-    keepDarkDrawnPage(this.nodes, this.connectors);
+    if (root && this.lines.length) stackUnderLines(this.nodes, this.lines, treeRanks(root.id, (id) => this.childrenOf(id)), this.placed);
   }
+
 
   /** The layer a cell sits in: the layer cell at the top of its parent chain. */
   private layerOf(cell: Cell, layers: ReadonlyMap<string, string>): string {
@@ -156,7 +162,7 @@ class PageBuilder {
   }
 
   private noteStyle(style: DrawioStyle, of: 'shape' | 'connector'): void {
-    for (const message of drawioStyleLosses(style, of)) this.styleLosses.set(message, (this.styleLosses.get(message) ?? 0) + 1);
+    for (const message of drawioStyleLosses(style, of, this.code !== null)) this.styleLosses.set(message, (this.styleLosses.get(message) ?? 0) + 1);
   }
 
   private fontSize(style: DrawioStyle): number {
@@ -167,14 +173,14 @@ class PageBuilder {
   /** The node with draw.io's formatting of its words (an `html=1` label's paragraphs, dividers and styled words), if any. */
   private formatted(node: SceneNode, cell: Cell, style: DrawioStyle): SceneNode {
     if (style.html !== '1' || typeof node.content.label !== 'string' || !node.content.label) return node;
-    const rich = drawioRichLabel(this.valueOf(cell), this.fontSize(style));
+    const rich = drawioRichLabel(drawioHtmlValue(this.valueOf(cell), style), this.fontSize(style), style.align);
     return rich ? { ...node, content: { ...node.content, richLabel: rich.blocks as unknown as JsonValue } } : node;
   }
 
   /** A label's formatting, as the blocks a node's `richLabel` holds. */
   private richOf(cell: Cell, style: DrawioStyle): JsonValue | undefined {
     if (style.html !== '1') return undefined;
-    return drawioRichLabel(this.valueOf(cell), this.fontSize(style))?.blocks as unknown as JsonValue | undefined;
+    return drawioRichLabel(drawioHtmlValue(this.valueOf(cell), style), this.fontSize(style), style.align)?.blocks as unknown as JsonValue | undefined;
   }
 
   private childrenOf(id: string): readonly Cell[] {
@@ -238,14 +244,12 @@ class PageBuilder {
     const inside = parentId ? this.placed.get(parentId)?.matrix ?? null : null;
     const base = { parentId, layerId, zIndex: 0 };
     const page: ScenePage = { id: '', name: '', diagramKind: 'flowchart', layers: this.layers, nodes: [], connectors: [], metadata: {}, extensions: {} };
-    // draw.io's triangle points east unless `direction` says otherwise; ours points north. Turning it east or
-    // west turns its box too, so the box is drawn upright with the sides swapped.
-    const turn = name === 'triangle' ? own(TRIANGLE_TURN, style.direction ?? 'east') ?? 90 : 0;
+    // A shape's `direction` is drawn by draw.io's own code (drawioShapes.ts); the box stays as draw.io has it.
     const centre = centreOf(state.box);
-    const [width, height] = turn % 180 !== 0 ? [state.box.height, state.box.width] : [state.box.width, state.box.height];
+    const { width, height } = state.box;
     const size = { width: Math.max(1, width), height: Math.max(1, height) };
     const box = { x: centre.x - width / 2, y: centre.y - height / 2, width, height };
-    const placement = placeBox(inside, box, state.rotation + turn, centre);
+    const placement = placeBox(inside, box, state.rotation, centre);
     const { transform } = placement;
     const strokes = this.freehand.get(cell.id);
     if (strokes && !hasChildren) {
@@ -281,27 +285,51 @@ class PageBuilder {
       // group's middle), so ours is hidden and the words are set where draw.io has them, inside the container.
       // draw.io paints a lane's `fillColor` on its title band alone; the body is `swimlaneFillColor`, or nothing.
       const lane = name === 'swimlane';
+      const band = Math.max(0, Number.parseFloat(style.startSize ?? '') || 0);
       const paint = drawioNodeAppearance(lane ? { ...style, fillColor: style.swimlaneFillColor ?? 'none' } : style);
+      // A container draw.io draws in code (a lifeline; a lane: its band, body, title line, footer) has that drawing behind its children.
+      const backdrop = (lane || !own(CONTAINER_KIND, name)) && !flat.fill ? drawnContent(this.code, name, style, size) : null;
       this.push({
         id: cell.id, kind: own(CONTAINER_KIND, name) ?? 'section', ...base, transform, size,
         // Ours cycle colours by id when none is set; draw.io's are plain. Its own colours, if any, are the appearance's.
         content: { label, color: 'slate', showHeader: false },
-        appearance: { ...paint, ...flat },
+        appearance: backdrop ? { ...paint, fill: 'transparent', stroke: 'transparent' } : { ...paint, ...flat, cornerRadius: drawioCornerRadius(style, width, height, lane ? band : undefined) },
         ports: [], metadata: {}, extensions: {},
       }, placement.matrix);
-      const band = Math.max(0, Number.parseFloat(style.startSize ?? '') || 0);
       const bandFill = drawioColor(style.fillColor);
-      if (lane && band > 0 && bandFill && bandFill !== 'transparent' && !flat.fill) {
+      if (!backdrop && lane && band > 0 && bandFill && bandFill !== 'transparent' && !flat.fill) {
         const along = style.horizontal !== '0';
         const bandSize = along ? { width: size.width, height: Math.min(band, size.height) } : { width: Math.min(band, size.width), height: size.height };
         const { stroke, strokeWidth, strokeStyle } = paint;
         const node = createShapeNode(page, {
           kind: 'rectangle', id: `${cell.id}:band`, at: { x: 0, y: 0 }, size: bandSize, label: '',
-          appearance: { fill: bandFill, ...(stroke === undefined ? {} : { stroke }), ...(strokeWidth === undefined ? {} : { strokeWidth }), ...(strokeStyle === undefined ? {} : { strokeStyle }) },
+          appearance: { fill: bandFill, ...(paint.darkColors === undefined ? {} : { darkColors: paint.darkColors }), ...(stroke === undefined ? {} : { stroke }), ...(strokeWidth === undefined ? {} : { strokeWidth }), ...(strokeStyle === undefined ? {} : { strokeStyle }) },
         });
         this.push({ ...node, ...base, parentId: cell.id }, placement.matrix);
       }
+      // A table's grid and a lane's title line are drawn under its children, as draw.io paints them.
+      const grid = name === 'table' ? drawioTableLines(cell, (id) => this.childrenOf(id), drawnLine(style))
+        : lane && !backdrop ? drawioLaneLine(cell, width, height, band, drawnLine(style)) : null;
+      for (const [suffix, drawn] of [['shape', backdrop], ['lines', grid && { drawio: { shape: TABLE_LINES }, drawioParts: [grid as unknown as JsonObject], drawioSize: { ...size } }]] as const) {
+        if (!drawn) continue;
+        const node = createShapeNode(page, { kind: 'rectangle', id: `${cell.id}:${suffix}`, at: { x: 0, y: 0 }, size, label: '', appearance: { ...plain, strokeWidth: drawnLine(style) } });
+        this.push({ ...node, ...base, parentId: cell.id, content: { ...node.content, ...drawn } }, placement.matrix);
+      }
       wordsBelong(cell.id);
+      return true;
+    }
+    // A shape draw.io draws (in code or by its stencil, or code with a stencil inside) is drawn by draw.io's code.
+    const code = shape.unknown && !imageUrl ? drawnContent(this.code, name, style, size) : null;
+    if (code) {
+      // A shape draw.io draws in code is drawn by that code: its parts, in the node's own colours, redrawn at any size.
+      const fit = drawioLabelFit(state.box, state.label, state.rotation);
+      const layout = labelLayout(state.label, fit.padding);
+      const node = createShapeNode(page, {
+        kind: shape.kind, id: cell.id, at: transform.translation, size, label: fit.inside ? label : '',
+        appearance: { ...drawioNodeAppearance(style), strokeWidth: drawnLine(style), ...(fit.inside ? layout.appearance : {}) },
+      });
+      this.push(this.formatted({ ...node, ...base, transform, content: { ...node.content, ...code, sizingPolicy: layout.sizingPolicy } }, cell, style), placement.matrix);
+      if (!fit.inside) wordsBelong(cell.id);
       return true;
     }
     const drawn = shape.unknown && !imageUrl ? this.stencilPicture(name, style, width, height) : null;
@@ -319,9 +347,11 @@ class PageBuilder {
       const unknown = style.resIcon?.startsWith('mxgraph.') ? style.resIcon : shape.unknown;
       this.unknownShapes.set(unknown, (this.unknownShapes.get(unknown) ?? 0) + 1);
     }
-    if (imageUrl) {
+    // draw.io's label card (its default shape) draws its picture inside its box, where its own code places it.
+    const card = imageUrl && drawnAsLabel(style) ? this.code?.draw({ ...style, shape: 'label' }, width, height)?.images[0] ?? null : null;
+    if (imageUrl && !card) {
       // Our image node draws no words, so a picture's are always a box of their own.
-      this.push({ ...createImageNode(page, { id: cell.id, at: transform.translation, size, label: label || 'Image', url: imageUrl }), ...base, transform }, placement.matrix);
+      this.push({ ...createImageNode(page, { id: cell.id, at: transform.translation, size, label: label || 'Image', url: imageUrl, stretch: style.imageAspect === '0' }), ...base, transform }, placement.matrix);
       wordsBelong(cell.id);
       return true;
     }
@@ -341,11 +371,11 @@ class PageBuilder {
       appearance: { ...appearance, ...(fit.inside ? layout.appearance : {}), ...flat },
     });
     this.push(this.formatted({ ...node, ...base, transform, content: { ...node.content, sizingPolicy: layout.sizingPolicy } }, cell, style), placement.matrix);
+    if (card) this.push({ ...createImageNode(page, { id: `${cell.id}:image`, at: { x: card.x, y: card.y }, size: { width: card.width, height: card.height }, label: 'Image', url: imageUrl! }), ...base, parentId: cell.id }, placement.matrix);
     if (!fit.inside) wordsBelong(cell.id);
     return true;
   }
 
-  /** The cell drawn by its draw.io stencil, or null when its shape isn't one we have. */
   /**
    * The cell drawn by its draw.io stencil, or null when its shape isn't one we have. Its fill and line are left as
    * stand-ins the node's own colours fill in (`stencilPictureUrl`), so it recolours as a draw.io stencil does.
@@ -358,9 +388,9 @@ class PageBuilder {
     if (!stencil && !icon) return null;
     const standIns = { ...style, ...(style.fillColor === 'none' ? {} : { fillColor: STENCIL_FILL }), ...(style.strokeColor === 'none' ? {} : { strokeColor: STENCIL_STROKE }) };
     const { svg, margin } = icon ? stencilSvg(icon, standIns, width, height, lookup, { stencil: icon, kind: 'resource' }) : stencilSvg(stencil!, standIns, width, height, lookup);
-    // draw.io's own defaults where the cell sets none: a white fill and a black line.
+    // draw.io's own defaults where the cell sets none: a white fill and a black line, flipped in its dark mode.
     const colour = (value: string | undefined, fallback: string) => (value === 'none' ? 'transparent' : drawioColor(value) ?? fallback);
-    return { svg, margin, paint: { fill: colour(style.fillColor, '#ffffff'), stroke: colour(style.strokeColor, '#000000') } };
+    return { svg, margin, paint: { fill: colour(style.fillColor, '#ffffff'), stroke: colour(style.strokeColor, '#000000'), darkColors: 'invert' } };
   }
 
   private addConnector(cell: Cell, state: EdgeState, layerId: string): void {
@@ -375,7 +405,7 @@ class PageBuilder {
     for (const child of this.childrenOf(cell.id)) {
       const text = drawioLabel(this.valueOf(child), child.style);
       const at = ridesLine(child) && child.visible ? this.view.vertex(child.id) : null;
-      if (at && text) labels.push({ id: `${child.id}:label`, text, at: centred(at.label.anchor, text, child.style), along: child.geometry?.relative ? child.geometry.x : 0, rich: this.richOf(child, child.style) });
+      if (at && text) labels.push({ id: `${child.id}:label`, text, at: centred(at.label.anchor, text, child.style), along: child.geometry?.relative ? child.geometry.x : 0, rich: this.richOf(child, child.style), background: drawioLabelPlate(child.style) });
     }
     // A block arrow (`arrow`, `flexArrow`) is painted by its fill: with no line colour, ours is drawn in that.
     const filled = ['arrow', 'flexArrow'].includes(drawioShapeName(style)) ? drawioColor(style.fillColor) : undefined;
@@ -391,7 +421,11 @@ class PageBuilder {
       }
       return;
     }
-    this.connectors.push(drawioConnector(state, unlined ? { ...style, strokeColor: filled! } : style, (id) => this.placed.get(id) ?? null, labels));
+    this.lines.push({ id: cell.id, points: state.line.points });
+    const connector = drawioConnector(state, unlined ? { ...style, strokeColor: filled! } : style, (id) => this.placed.get(id) ?? null, labels);
+    const shaped = shapedLine(this.code, connector, style, state.line.points);
+    if (shaped.lost) this.styleLosses.set(shaped.lost, (this.styleLosses.get(shaped.lost) ?? 0) + 1);
+    this.connectors.push(shaped.connector);
   }
 }
 
@@ -428,18 +462,6 @@ function summarize(losses: readonly string[]): string[] {
   return [...new Set(losses)];
 }
 
-/** Every stencil a page's cells name: their shapes, and the icons AWS's resource icons carry. */
-function stencilNames(cells: readonly Cell[]): string[] {
-  const names: string[] = [];
-  for (const cell of cells) {
-    if (!cell.vertex) continue;
-    const shape = cell.style.shape;
-    if (shape?.startsWith('mxgraph.')) names.push(shape);
-    if (cell.style.resIcon?.startsWith('mxgraph.')) names.push(cell.style.resIcon);
-  }
-  return names;
-}
-
 /** Every page of a draw.io file as one OpenFlowKit document under `id`; library shapes come from `stencils`. */
 export async function drawioToDocument(text: string, id: string, now = new Date().toISOString(), stencils: StencilSource = siteStencils()): Promise<DrawioImport> {
   if (!text.trim()) return { error: 'It’s empty.' };
@@ -455,8 +477,11 @@ export async function drawioToDocument(text: string, id: string, now = new Date(
     const pageName = diagram.attributes.name?.trim() || `Page ${index + 1}`;
     if ('error' in model) { losses.push(`“${pageName}”: ${model.error}, so it was left out`); continue; }
     const cells = pageCells(model);
-    const builder = new PageBuilder(cells, (message) => losses.push(diagrams.length > 1 ? `${pageName}: ${message}` : message), await drawioFreehands(cells), await loadStencils(stencilNames(cells), stencils));
+    const code = usesDrawioCode(cells) ? await installDrawioCode() : null;
+    const library = await loadStencils(stencilNames(cells), stencils); code?.addStencils(library);
+    const builder = new PageBuilder(cells, (message) => losses.push(diagrams.length > 1 ? `${pageName}: ${message}` : message), await drawioFreehands(cells), library, code);
     builder.build();
+    applyAdaptiveColors(builder.nodes, builder.connectors, model.attributes.adaptiveColors);
     pages.push({
       id: `${id}:page-${index + 1}`, name: pageName, diagramKind: 'flowchart',
       layers: builder.layers, nodes: builder.nodes, connectors: builder.connectors, metadata: {}, extensions: {},

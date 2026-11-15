@@ -26,7 +26,7 @@ function boundedNumber(
 }
 
 const GLYPHS: ReadonlySet<string> = new Set<ConnectorMarkerGlyph>([
-  'arrow', 'triangle-open', 'triangle-filled', 'diamond-open', 'diamond-filled', 'circle', 'bar', 'cross', 'crow-foot',
+  'arrow', 'triangle-open', 'triangle-filled', 'diamond-open', 'diamond-filled', 'circle', 'circle-filled', 'bar', 'cross', 'crow-foot',
 ]);
 
 function markerFromAppearance(value: JsonValue | undefined): ConnectorMarkerGlyph[] {
@@ -143,6 +143,15 @@ function semanticMarkers(connector: SceneConnector): {
 }
 
 export function resolveConnectorPresentation(connector: SceneConnector): ConnectorPresentation {
+  return {
+    ...resolveConnectorLine(connector),
+    cornerRadius: boundedNumber(connector.appearance.cornerRadius, 8, 0, 24),
+    label: resolveConnectorLabelStyle(connector),
+  };
+}
+
+/** The line alone (its stroke and its ends), without the label style a full presentation also resolves. */
+export function resolveConnectorLine(connector: SceneConnector): Pick<ConnectorPresentation, 'stroke' | 'sourceMarkers' | 'targetMarkers'> {
   const markers = semanticMarkers(connector);
   const condition = optionalString(connector.semantics.condition);
   const stroke: ConnectorStrokePresentation = {
@@ -154,16 +163,8 @@ export function resolveConnectorPresentation(connector: SceneConnector): Connect
   };
   return {
     stroke,
-    cornerRadius: boundedNumber(connector.appearance.cornerRadius, 8, 0, 24),
-    label: resolveConnectorLabelStyle(connector),
-    sourceMarkers:
-      markers.source.length > 0
-        ? markers.source
-        : markerFromAppearance(connector.appearance.markerStart),
-    targetMarkers:
-      markers.target.length > 0
-        ? markers.target
-        : markerFromAppearance(connector.appearance.markerEnd),
+    sourceMarkers: markers.source.length > 0 ? markers.source : markerFromAppearance(connector.appearance.markerStart),
+    targetMarkers: markers.target.length > 0 ? markers.target : markerFromAppearance(connector.appearance.markerEnd),
   };
 }
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { SceneConnector } from '../document/types';
 import { invertForDark } from '../color/adaptiveColor';
-import { connectorLabelLines, connectorLabelOnCanvas, connectorLabelPlate, LABEL_WRAP_WIDTH, resolveConnectorLabelStyle } from './labelStyle';
+import { connectorLabelLines, connectorLabelOnCanvas, connectorLabelPlate, LABEL_WRAP_WIDTH, ownLabelStyle, resolveConnectorLabelStyle } from './labelStyle';
 
 function connector(appearance: SceneConnector['appearance']): SceneConnector {
   return {
@@ -22,6 +22,10 @@ describe('resolveConnectorLabelStyle', () => {
     expect(resolveConnectorLabelStyle(connector({
       labelBackground: 'transparent', labelColor: '#ff0000', labelFontSize: 14, labelFontFamily: 'mono', labelFontStyle: 'italic',
     }))).toMatchObject({ fill: 'transparent', textColor: '#ff0000', fontSize: 14, fontFamily: 'mono', fontStyle: 'italic' });
+  });
+  it('pads and rounds its plate unless the line sets its own (a draw.io line: tight and square)', () => {
+    expect(resolveConnectorLabelStyle(connector({}))).toMatchObject({ textPadding: 5, cornerRadius: 4 });
+    expect(resolveConnectorLabelStyle(connector({ labelPadding: 0, labelCornerRadius: 0 }))).toMatchObject({ textPadding: 0, cornerRadius: 0 });
   });
 });
 
@@ -69,5 +73,13 @@ describe('connector label wrap width', () => {
     expect(connectorLabelOnCanvas(drawio, '#ffffff')).toMatchObject({ textColor: '#ff0000', invertColors: false });
     const ours = resolveConnectorLabelStyle(connector({ labelColor: '#ff0000' }));
     expect(connectorLabelOnCanvas(ours, '#1a1a1a').textColor).toBe('#ff0000');
+  });
+});
+
+describe('ownLabelStyle', () => {
+  it('puts a label on its own plate, and leaves one without on the connector\'s', () => {
+    const style = resolveConnectorLabelStyle(connector({}));
+    expect(ownLabelStyle(style, { background: 'transparent' }).fill).toBe('transparent');
+    expect(ownLabelStyle(style, {})).toBe(style);
   });
 });

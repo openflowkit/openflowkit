@@ -4,7 +4,7 @@ import {
   createTestDocument,
   createTestNode,
 } from '../../testing/builders/documentBuilder';
-import { resolveConnectorPresentation } from './presentation';
+import { resolveConnectorLine, resolveConnectorPresentation } from './presentation';
 
 function edge(appearance: Record<string, string | number>) {
   const page = createTestDocument({
@@ -15,6 +15,15 @@ function edge(appearance: Record<string, string | number>) {
 }
 
 describe('connector presentation', () => {
+  it('resolves the line alone exactly as the full presentation does', () => {
+    const page = createTestDocument({
+      nodes: [createTestNode('a'), createTestNode('b')],
+      connectors: [createTestConnector('edge', 'a', 'b', { appearance: { markerStart: 'dot', markerEnd: 'arrow', strokeWidth: 3, strokeStyle: 'dashed' } })],
+    }).pages[0];
+    const { stroke, sourceMarkers, targetMarkers } = resolveConnectorPresentation(page.connectors[0]);
+    expect(resolveConnectorLine(page.connectors[0])).toEqual({ stroke, sourceMarkers, targetMarkers });
+  });
+
   it('maps marker ends to glyphs', () => {
     expect(edge({ markerStart: 'none', markerEnd: 'none' }).sourceMarkers).toEqual([]);
     expect(edge({ markerStart: 'none', markerEnd: 'none' }).targetMarkers).toEqual([]);
@@ -25,6 +34,8 @@ describe('connector presentation', () => {
     expect(edge({ markerEnd: 'triangle-filled' }).targetMarkers).toEqual(['triangle-filled']);
     expect(edge({ markerEnd: 'diamond-filled' }).targetMarkers).toEqual(['diamond-filled']);
     expect(edge({ markerStart: 'crow-foot circle' }).sourceMarkers).toEqual(['crow-foot', 'circle']);
+    // OpenFlowKit's own `dot` is the open circle; draw.io's filled oval is `circle-filled`.
+    expect(edge({ markerStart: 'circle-filled' }).sourceMarkers).toEqual(['circle-filled']);
   });
 
   it('resolves stroke color, width, and dash', () => {

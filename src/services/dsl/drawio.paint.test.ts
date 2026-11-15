@@ -76,17 +76,18 @@ describe('draw.io cells that paint nothing, or paint turned', () => {
       + lane('side', 200, 'startSize=30;horizontal=0;fillColor=#A0522D;swimlaneFillColor=#EEEEEE;') + lane('bare', 400, 'startSize=30;fillColor=none;')
       + lane('none', 600, 'startSize=0;fillColor=#A0522D;'));
     const byId = new Map(page.nodes.map((node) => [node.id, node]));
+    // draw.io's own swimlane code draws the lane behind its children: the band in the lane's colour (the 'fill'
+    // paint), the body in swimlaneFillColor or not at all, and the line under the title.
+    const parts = (id: string) => byId.get(`${id}:shape`)!.content.drawioParts as unknown as { fill: string | null; path: { x?: number; y?: number }[] }[];
     expect(byId.get('todo')!.appearance.fill).toBe('transparent');
-    expect(byId.get('todo:band')).toMatchObject({
-      parentId: 'todo', transform: { translation: { x: 0, y: 0 } }, size: { width: 180, height: 30 }, appearance: { fill: '#a0522d' }, content: { label: '' },
-    });
-    // The band is painted before the title, so the words stay on top of it.
-    expect(page.nodes.findIndex((node) => node.id === 'todo:band')).toBeLessThan(page.nodes.findIndex((node) => node.id === 'todo:label'));
-    // Turned, the band runs down the left side.
-    expect(byId.get('side')!.appearance.fill).toBe('#eeeeee');
-    expect(byId.get('side:band')!.size).toEqual({ width: 30, height: 400 });
-    // No colour, or no band at all: nothing extra is drawn.
-    expect(byId.has('bare:band')).toBe(false);
-    expect(byId.has('none:band')).toBe(false);
+    expect(byId.get('todo:shape')).toMatchObject({ parentId: 'todo', appearance: { fill: '#a0522d', stroke: '#333333' } });
+    expect(parts('todo').map((part) => part.fill)).toEqual(['fill', null, null]);
+    // The band and the body are painted before the title, so the words stay on top of them.
+    expect(page.nodes.findIndex((node) => node.id === 'todo:shape')).toBeLessThan(page.nodes.findIndex((node) => node.id === 'todo:label'));
+    // Turned, the band runs down the left side; the body takes swimlaneFillColor.
+    expect(parts('side').map((part) => part.fill)).toEqual(['fill', '#eeeeee', null]);
+    expect(Math.max(...parts('side')[0]!.path.map((at) => at.x ?? 0))).toBe(30);
+    // No colour: outlines only.
+    expect(parts('bare').every((part) => part.fill === null)).toBe(true);
   });
 });

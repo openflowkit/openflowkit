@@ -63,6 +63,8 @@ export interface ConnectorLabel {
   readonly metadata: JsonObject;
   /** Formatting of `text`'s words, as a node's `content.richLabel` (see text/richLabel.ts). */
   readonly richLabel?: JsonValue;
+  /** This label's own plate colour ('transparent': none), over the connector's label plate. */
+  readonly background?: string;
 }
 
 export interface SceneConnector {

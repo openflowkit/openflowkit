@@ -29,6 +29,11 @@ describe('drawioEdgeLine', () => {
     expect(line('exitX=0.3;exitY=0.6;exitPerimeter=0;', a, b)![0]).toEqual({ x: 30, y: 36 });
   });
 
+  it('keeps a pinned end’s perimeter spacing only where fixedPointSpacing=1 says, moved along the line', () => {
+    expect(line('exitX=1;exitY=0.5;entryX=0;entryY=0.5;sourcePerimeterSpacing=10;', a, b)![0]).toEqual({ x: 100, y: 30 });
+    expect(line('exitX=1;exitY=0.5;entryX=0;entryY=0.5;sourcePerimeterSpacing=10;fixedPointSpacing=1;', a, b)![0]).toEqual({ x: 110, y: 30 });
+  });
+
   it('stops short of the outline by each end’s perimeter spacing', () => {
     expect(line('sourcePerimeterSpacing=10;targetPerimeterSpacing=7;', a, b)).toEqual([{ x: 110, y: 30 }, { x: 293, y: 30 }]);
   });
@@ -58,6 +63,9 @@ describe('drawioEdgeLine', () => {
   it('loops a line from a shape back to itself out of its right side', () => {
     expect(line('', a, a)).toEqual([{ x: 100, y: 22.86 }, { x: 120, y: 20 }, { x: 120, y: 40 }, { x: 100, y: 37.14 }]);
     expect(line('edgeStyle=orthogonalEdgeStyle;', a, a)).toEqual([{ x: 100, y: 20 }, { x: 120, y: 20 }, { x: 120, y: 40 }, { x: 100, y: 40 }]);
+    // `loopStyle` picks the loop's own router (draw.io's key; `loop` is not one).
+    expect(line('loopStyle=elbowEdgeStyle;', a, a)).not.toEqual(line('', a, a));
+    expect(line('loop=elbowEdgeStyle;', a, a)).toEqual(line('', a, a));
   });
 
   it('draws a router it doesn’t know straight through the saved bends', () => {

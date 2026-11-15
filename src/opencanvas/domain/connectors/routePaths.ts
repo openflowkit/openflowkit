@@ -1,6 +1,6 @@
 import type { SceneConnector, SceneNode } from '../document/types';
 import { applyMatrixToPoint } from '../geometry/matrix';
-import { dedupePolyline } from '../geometry/polyline';
+import { dedupePolyline, roundPolylineCorners } from '../geometry/polyline';
 import { distanceBetweenPoints } from '../geometry/point';
 import type { Matrix2d, Point2d } from '../geometry/types';
 import { dropCollinear } from './obstacleRouting';
@@ -184,4 +184,16 @@ export function midShift(start: OrthogonalEnd, end: OrthogonalEnd): number {
   const shift = -start.offset * toward(start.point, end.point, start.side) + end.offset * toward(end.point, start.point, end.side);
   // `shift` runs from start to end; the router wants a coordinate offset.
   return end.point[along] >= start.point[along] ? shift : -shift;
+}
+
+/**
+ * The path a connector is drawn with: a line without curves has its corners rounded at its corner radius, as the
+ * canvas draws it (PixiConnectorRenderer), so exports match it.
+ */
+export function roundedConnectorCommands(connector: {
+  readonly commands: readonly ConnectorPathCommand[]; readonly samples: readonly Point2d[]; readonly presentation: { readonly cornerRadius: number };
+}): readonly ConnectorPathCommand[] {
+  const { commands, samples, presentation } = connector;
+  if (presentation.cornerRadius <= 0 || samples.length <= 2 || commands.some((command) => command.kind === 'cubic')) return commands;
+  return roundPolylineCorners(samples, presentation.cornerRadius).map((point, index) => ({ kind: index ? 'line' : 'move', point }));
 }

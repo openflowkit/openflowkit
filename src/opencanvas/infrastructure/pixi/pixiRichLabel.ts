@@ -3,7 +3,7 @@ import { applyMatrixToPoint } from '../../domain/geometry/matrix';
 import type { Matrix2d } from '../../domain/geometry/types';
 import { FONT_STACKS, type NodeStyle } from '../../domain/nodes/nodeStyle';
 import { layoutRichLabel, type MeasureText, type RichBlock } from '../../domain/text/richLabel';
-import { richBand, richBaseOf, richInk, richOrigin } from '../../domain/text/richLabelStyle';
+import { richBaseOf, richBoxColor, richInk, richOrigin } from '../../domain/text/richLabelStyle';
 import { pixiPaintColor } from './pixiColor';
 import { markTitle } from './pixiText';
 import type { PixiTextPool } from './pixiTextPool';
@@ -27,7 +27,7 @@ export function drawPixiRichLabel(
 ): void {
   const family = FONT_STACKS[style.fontFamily];
   const width = wraps ? Math.max(1, size.width - style.textPadding * 2) : null;
-  const layout = layoutRichLabel(blocks, richBaseOf(style), width, { keepWords: style.keepWords, measure: measurer(family), box: Math.max(0, size.width - style.textPadding * 2) });
+  const layout = layoutRichLabel(blocks, richBaseOf(style), width, { keepWords: style.keepWords, measure: measurer(family), box: Math.max(0, size.width - style.textPadding * 2), height: Math.max(0, size.height - style.textPadding * 2) });
   const origin = richOrigin(style, size, layout, wraps);
   const block = new Container();
   const placed = applyMatrixToPoint(matrix, origin);
@@ -35,7 +35,9 @@ export function drawPixiRichLabel(
   block.rotation = Math.atan2(matrix.b, matrix.a);
   // Paragraph backgrounds sit under the words.
   const bands = new Graphics();
-  for (const band of layout.bands) bands.rect(band.x, band.y, band.width, band.height).fill({ color: pixiPaintColor(richBand(band.color, style), 0xe4e4e4).color });
+  for (const band of layout.bands) bands.rect(band.x, band.y, band.width, band.height).fill({ color: pixiPaintColor(richBoxColor(band, style), 0xe4e4e4).color });
+  // Lines around table cells, over their fills.
+  for (const edge of layout.borders) bands.rect(edge.x + 0.5, edge.y + 0.5, Math.max(0, edge.width - 1), Math.max(0, edge.height - 1)).stroke({ width: 1, color: pixiPaintColor(richBoxColor(edge, style), 0x808080).color });
   block.addChild(bands);
   const rules = new Graphics();
   for (const line of layout.lines) {

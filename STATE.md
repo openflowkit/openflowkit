@@ -26,7 +26,6 @@ smoke the MCP Worker, push `mcp-vX.Y.Z` (registry), then the app tag `vX.Y.Z` (i
 - Agents: one op registry for MCP, CLI, WebMCP, in-app assistant, PR Action, Claude Code / Codex plugins.
 - Comment threads: pins on the canvas, the Threads panel, agent tools; a `.openflow.json` keeps them, exports and
   share links leave them out unless **Include comments**.
-
 ## Known ceilings (`// ponytail:` in code)
 - Whole SVG re-emitted per export; GIF 256 colours ≤ 20 fps; headless layout 1000 shapes / 400 connections.
 - Translucent `#rrggbbaa` fills count as opaque for label ink; off-screen comment pins are culled (out of Tab order).
@@ -36,5 +35,6 @@ smoke the MCP Worker, push `mcp-vX.Y.Z` (registry), then the app tag `vX.Y.Z` (i
   the custom picker could save `#rrggbb` when alpha is ff; CLI `--page` → `start_thread` `pageId`; #104's IME
   `composing()` in six other text fields; comment shortcuts missing from `keyboard-shortcuts.md`; an open comment card
   in its own layer (it lifts every pin above the toolbars now); `add_shape.kind` errors say only "Invalid input".
-- draw.io import (@Mr-Macharia): native `shape=table` cells.
+- draw.io import (@Mr-Macharia, 11-13): every draw.io shape native (option D: draw.io's Apache-2.0 shape code on one
+  pen-move canvas, fetched in the background); then stencils, rules checked vs draw.io's viewer, picker; `shape=table`.
 - Unconfirmed since 10-14: D1 migration 0004 before the share Worker; origin check on `/e`. After launch: npm trusted publishing, click-through.

@@ -1,7 +1,7 @@
 import type { Point2d } from '../../opencanvas/domain/geometry/types';
 import type { JsonObject } from '../../opencanvas/domain/document/json';
 import { inflate, num, type Cell } from './drawioCells';
-import { drawioLine, type DrawioStyle } from './drawioStyle';
+import { drawioColor, type DrawioStyle } from './drawioStyle';
 import { parseXml, type XmlElement } from './xmlReader';
 
 // draw.io keeps a freehand line as a stencil shape (`shape=stencil(...)` with `lineShape=1`): a path on the
@@ -51,9 +51,17 @@ export async function drawioFreehands(cells: readonly Cell[]): Promise<ReadonlyM
   return lines;
 }
 
+/** Black and near-black grey (draw.io's paper inks): a pen, which doesn't flip in the dark theme, leaves them to the theme. */
+function paperInk(value: string): boolean {
+  const hex = value.length === 4 ? value.replace(/[0-9a-f]/g, (digit) => digit + digit) : value;
+  const [r, g, b] = [1, 3, 5].map((at) => Number.parseInt(hex.slice(at, at + 2), 16));
+  return Math.max(r!, g!, b!) <= 0x55 && Math.max(r!, g!, b!) - Math.min(r!, g!, b!) <= 8;
+}
+
 /** A pen node's content for a line over a `width`×`height` box; draw.io's default black is left to the theme. */
 export function freehandContent(line: readonly Point2d[], style: DrawioStyle, width: number, height: number): JsonObject {
-  const ink = drawioLine(style.strokeColor);
+  const set = drawioColor(style.strokeColor);
+  const ink = set && set !== 'transparent' && paperInk(set) ? undefined : set;
   const points = line.map((point) => ({ x: point.x * width, y: point.y * height }));
   const middle = centreLine(points);
   return {

@@ -68,6 +68,10 @@ export function washOnDark<T extends WashInk>(ink: T, canvas: string): T {
   };
 }
 
+const DRAWIO_DARK_PAGE = 0x12;
+/** Our dark canvas (#191b19, as the export and the canvas paint it). */
+const CANVAS_RGB = [0x19, 0x1b, 0x19] as const;
+
 /**
  * A colour as draw.io's dark mode draws it (`mxUtils.getInverseColor`): inverted 93% of the way, then turned 180°
  * round the hue wheel, so its lightness flips and its hue stays. A see-through `#rrggbbaa` keeps its alpha; anything
@@ -84,7 +88,16 @@ export function invertForDark(color: string): string {
     0.2126 - 0.2126 * cos + 0.143 * sin, 0.7152 + (1 - 0.7152) * cos + 0.14 * sin, 0.0722 - 0.0722 * cos - 0.283 * sin,
     0.2126 - 0.2126 * cos - 0.7874 * sin, 0.7152 - 0.7152 * cos + 0.7152 * sin, 0.0722 + 0.9278 * cos + 0.0722 * sin,
   ];
+  // draw.io's white lands on its page, #121212; ours lands on our canvas, and darker colours shift with it, so a
+  // light-grey group still shows a step above the canvas. Light ink barely moves (#ededed → #eeeeee).
+  const lift = (value: number, canvas: number) => value + ((canvas - DRAWIO_DARK_PAGE) * Math.max(0, 255 - value)) / (255 - DRAWIO_DARK_PAGE);
   const clamp = (value: number) => Math.round(Math.max(0, Math.min(255, value)));
-  const out = rgbToHex(clamp(m[0]! * r! + m[1]! * g! + m[2]! * b!), clamp(m[3]! * r! + m[4]! * g! + m[5]! * b!), clamp(m[6]! * r! + m[7]! * g! + m[8]! * b!));
+  // draw.io reads `#444` two digits at a time (mxUtils.parseColor), so its blue is NaN and the flip comes out black.
+  const short = /^#[0-9a-f]{3}$/i.test(color);
+  const out = rgbToHex(
+    clamp(lift(short ? 0 : m[0]! * r! + m[1]! * g! + m[2]! * b!, CANVAS_RGB[0])),
+    clamp(lift(short ? 0 : m[3]! * r! + m[4]! * g! + m[5]! * b!, CANVAS_RGB[1])),
+    clamp(lift(short ? 0 : m[6]! * r! + m[7]! * g! + m[8]! * b!, CANVAS_RGB[2])),
+  );
   return color.length === 9 ? `${out}${color.slice(7).toLowerCase()}` : out;
 }

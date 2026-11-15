@@ -5,7 +5,11 @@ import type { Point2d } from '../../opencanvas/domain/geometry/types';
 // shape's box allows one. Each returns null where draw.io's does, and the caller then takes the shape's centre.
 
 export interface PerimeterBox { readonly x: number; readonly y: number; readonly width: number; readonly height: number }
-export interface PerimeterShape { readonly direction?: string; readonly strokeWidth?: number; readonly backboneSize?: number }
+export interface PerimeterShape {
+  readonly direction?: string; readonly strokeWidth?: number; readonly backboneSize?: number;
+  /** The shape's whole style, for draw.io's own outline rules (`installDrawioPerimeters`). */
+  readonly style?: Readonly<Record<string, string>>;
+}
 export type Perimeter = (bounds: PerimeterBox, shape: PerimeterShape, next: Point2d, orthogonal: boolean) => Point2d | null;
 
 /** Where the segment a→b crosses the segment c→d, as mxUtils.intersection. */
@@ -256,16 +260,19 @@ const PERIMETERS: Readonly<Record<string, Perimeter>> = {
   backbonePerimeter: backbone,
 };
 
-/** Outlines draw.io draws along a shape's slanted sides, not ported yet: they meet the shape's box. */
-const BOXED = new Set(['parallelogramPerimeter', 'trapezoidPerimeter', 'stepPerimeter', 'calloutPerimeter', 'lifelinePerimeter', 'hexagonPerimeter2']);
+/** Outlines not ported here: draw.io's own code draws them once loaded (`installDrawioPerimeters`); until then, the box. */
+export const DRAWIO_CODE_PERIMETERS: ReadonlySet<string> = new Set(['parallelogramPerimeter', 'trapezoidPerimeter', 'stepPerimeter', 'calloutPerimeter', 'lifelinePerimeter', 'hexagonPerimeter2']);
+
+let fromDrawio: ((name: string) => Perimeter | null) | null = null;
+/** Hands the outlines in DRAWIO_CODE_PERIMETERS to draw.io's own code (src/services/dsl/drawioShapes.ts). */
+export function installDrawioPerimeters(lookup: (name: string) => Perimeter | null): void { fromDrawio = lookup; }
 
 /**
  * The outline function a style's `perimeter` names. Null for none or a name draw.io doesn't know: the line then
  * ends at the shape's centre, as draw.io's does.
- * ponytail: the six in BOXED meet the box — port each when the checker shows its files.
  */
 export function drawioPerimeter(name: string | undefined): Perimeter | null {
   if (!name || name === 'none') return null;
   if (Object.hasOwn(PERIMETERS, name)) return PERIMETERS[name]!;
-  return BOXED.has(name) ? rectangle : null;
+  return DRAWIO_CODE_PERIMETERS.has(name) ? (fromDrawio?.(name) ?? rectangle) : null;
 }

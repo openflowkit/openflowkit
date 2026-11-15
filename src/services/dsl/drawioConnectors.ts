@@ -41,7 +41,7 @@ function curveThrough(points: readonly Point2d[]): Point2d[] {
   return out;
 }
 
-export interface LabelAt { readonly id: string; readonly text: string; readonly at: Point2d; readonly along: number; readonly rich?: JsonValue }
+export interface LabelAt { readonly id: string; readonly text: string; readonly at: Point2d; readonly along: number; readonly rich?: JsonValue; readonly background?: string | undefined }
 
 /**
  * `endNode` finds the node an end is drawn to (null: the end is a free point). `labels` are the connector's own
@@ -68,11 +68,11 @@ export function drawioConnector(state: EdgeState, style: DrawioStyle, endNode: (
     target: end(state.targetId, line.at(-1)!),
     route: { kind: bezier ? 'bezier' : waypoints.length ? 'polyline' : 'direct', ownership: 'imported-fixed' },
     waypoints,
-    labels: labels.map(({ id, text, at, along, rich }): ConnectorLabel => {
+    labels: labels.map(({ id, text, at, along, rich, background }): ConnectorLabel => {
       const pathRatio = Math.min(1, Math.max(0, (along + 1) / 2));
       const on = pointAtPolylineRatio(samples, pathRatio) ?? line[0]!;
       const round = (value: number) => Math.round(value * 100) / 100 + 0;
-      return { id, text, pathRatio, offset: { x: round(at.x - on.x), y: round(at.y - on.y) }, metadata: {}, ...(rich ? { richLabel: rich } : {}) };
+      return { id, text, pathRatio, offset: { x: round(at.x - on.x), y: round(at.y - on.y) }, metadata: {}, ...(rich ? { richLabel: rich } : {}), ...(background === undefined ? {} : { background }) };
     }),
     appearance: curved && line.length > 3 ? { ...appearance, cornerRadius: 0 } : appearance,
     semantics: drawioErRelation(style) ? { erRelation: drawioErRelation(style)! } : {}, metadata: {}, extensions: {},

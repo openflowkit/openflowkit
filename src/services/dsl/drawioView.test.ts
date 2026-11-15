@@ -66,6 +66,17 @@ describe('DrawioView edges', () => {
     expect(round(state.labelAt)).toEqual({ x: 374.99, y: 132.64 });
   });
 
+  it('meets the outline of the cell its targetPort names, still ending on its own terminal', () => {
+    const ported = view(vertex('k', '1', 'x="0" y="0" width="40" height="40"') + vertex('t', '1', 'x="200" y="0" width="100" height="100"')
+      + vertex('p', 't', 'x="0" y="60" width="20" height="20"')
+      + '<mxCell id="e" edge="1" parent="1" source="k" target="t" style="targetPort=p;"><mxGeometry relative="1" as="geometry"/></mxCell>');
+    const state = ported.edge('e')!;
+    // The port's own outline, 200..220 across and 60..80 down: the line meets it on its left side.
+    expect(state.line.points.at(-1)!.x).toBeCloseTo(200);
+    expect(state.line.points.at(-1)!.y).toBeGreaterThan(20);
+    expect(state.targetId).toBe('t');
+  });
+
   it('places a label that rides the line a quarter of the way along, moved by its offset', () => {
     const riding = page.vertex('on')!;
     expect(round(riding.box)).toEqual({ x: 262.99, y: 123.72 });

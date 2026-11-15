@@ -120,8 +120,10 @@ export class DrawioView {
     }
     const rotation = Number.parseFloat(style.rotation ?? '') || 0;
     const shape = drawioShapeName(style);
+    // Graph.getSequenceLifeline: an activation bar on a lifeline belongs to that lifeline.
+    const lifeline = shape !== 'umlLifeline' && parent?.kind === 'vertex' && parent.shape === 'umlLifeline' ? parent.cell.id : cell.id;
     const terminal: EdgeTerminal = {
-      ...box, style, relativeX: geometry.relative ? geometry.x : null, isEdge: false,
+      ...box, style, relativeX: geometry.relative ? geometry.x : null, isEdge: false, lifeline,
       centre: { x: box.x + width / 2, y: box.y + height / 2 },
     };
     return { kind: 'vertex', cell, box, origin, rotation, shape, label: drawioLabelBox(box, style, shape, labelOffset, rotation), terminal };
@@ -143,12 +145,16 @@ export class DrawioView {
     const origin = parent?.origin ?? ZERO;
     const ends: (EdgeTerminal | null)[] = [];
     const ids: (string | null)[] = [];
-    for (const id of [cell.source, cell.target]) {
+    for (const [index, id] of [cell.source, cell.target].entries()) {
       const shown = this.visibleTerminal(id);
       const state = shown ? this.resolve(shown.id, depth + 1) : null;
       // An end that names a cell draw.io can't show leaves the whole line out.
       if (id !== null && this.cells.has(id) && (!state || state.kind === 'layer')) return null;
-      ends.push(state && state.kind !== 'layer' ? state.terminal : null);
+      // `sourcePort`/`targetPort` name another cell whose outline the end meets, the line still bound to its terminal
+      // (mxGraphView.getTerminalPort).
+      const portId = cell.style[index === 0 ? 'sourcePort' : 'targetPort'];
+      const port = state && portId && this.cells.has(portId) ? this.resolve(portId, depth + 1) : null;
+      ends.push(port && port.kind !== 'layer' ? port.terminal : state && state.kind !== 'layer' ? state.terminal : null);
       ids.push(state && state.kind !== 'layer' ? state.cell.id : null);
     }
     const style = cell.style;

@@ -20,6 +20,12 @@ describe('drawioCells', () => {
     expect(cells[2]).toMatchObject({ value: '%status%', placeholders: true, data: { status: 'New' } });
   });
 
+  it('draws no words for a cell marked noLabel=1', () => {
+    const cells = pageCells(xml(`<mxGraphModel><root><mxCell id="0"/>
+      <mxCell id="a" value="Hidden" style="noLabel=1;" vertex="1" parent="0"/></root></mxGraphModel>`));
+    expect(cells[1]!.value).toBe('');
+  });
+
   it('inflates a compressed page and says when it cannot', async () => {
     const inner = '<mxGraphModel><root><mxCell id="0"/></root></mxGraphModel>';
     const packed = deflateRawSync(Buffer.from(encodeURIComponent(inner))).toString('base64');

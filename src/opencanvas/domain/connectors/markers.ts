@@ -16,7 +16,7 @@ export type MarkerShape =
       /** `stroke-linejoin: round` (the open arrow chevron). */
       readonly round: boolean;
     }
-  | { readonly kind: 'circle'; readonly center: Point2d; readonly radius: number };
+  | { readonly kind: 'circle'; readonly center: Point2d; readonly radius: number; readonly filled?: boolean };
 
 /** Segments shorter than this at a route's end (a corner's rounding, a 1-3px jog) never set the head's direction. */
 const MICRO_SEGMENT = 4;
@@ -80,8 +80,8 @@ export function connectorMarkerShapes(
       subpaths: [[tip, offsetPoint(middle, normal, 4.5), far, offsetPoint(middle, normal, -4.5)]],
     }];
   }
-  if (glyph === 'circle') {
-    return [{ kind: 'circle', center: offsetPoint(tip, outward, -5), radius: 4 }];
+  if (glyph === 'circle' || glyph === 'circle-filled') {
+    return [{ kind: 'circle', center: offsetPoint(tip, outward, -5), radius: 4, filled: glyph === 'circle-filled' }];
   }
   if (glyph === 'bar') {
     const center = offsetPoint(tip, outward, -3);

@@ -4,13 +4,14 @@ import { pointAtPolylineRatio } from '../geometry/polyline';
 import type { Bounds2d, Matrix2d, Point2d } from '../geometry/types';
 import { connectorLabelPlate } from './labelStyle';
 import { richLabelOf } from '../text/richLabel';
+import { drawnLineOf, drawnLineParts, keepsLook } from './drawnLine';
 import { transformBounds } from '../geometry/matrix';
 import { containerTextBounds } from '../nodes/nodeLabelBounds';
 import { buildNodeWorldMatrices, nodeWorldBounds, nodeWorldCenter } from '../scene/worldGeometry';
 import { resolveSequenceNodePresentation, SEQUENCE_ACTIVATION_WIDTH } from '../nodes/sequenceNodePresentation';
 import { resolveConnectorPresentation } from './presentation';
 import { routeOrthogonalBetweenSides } from './obstacleRouting';
-import type { ProjectedConnector } from './types';
+import type { ConnectorPresentation, ProjectedConnector } from './types';
 import { clearLabelPoint } from './routeLabels';
 import { connectWorldBounds, endpointPoint, orthogonalEnd, pointBounds, spreadEnds, type SpreadEnd } from './routeEnds';
 import {
@@ -301,9 +302,19 @@ function finishConnector(draft: ConnectorDraft, points: ReadonlyMap<string, Poin
     id: connector.id,
     commands: draft.commands,
     samples: draft.samples,
-    labels: connector.labels.map((label) => ({ id: label.id, text: label.text, point: points.get(`${connector.id}:${label.id}`) ?? draft.start, rich: richLabelOf({ richLabel: label.richLabel }) })),
+    labels: connector.labels.map((label) => ({ id: label.id, text: label.text, point: points.get(`${connector.id}:${label.id}`) ?? draft.start, rich: richLabelOf({ richLabel: label.richLabel }), ...(label.background === undefined ? {} : { background: label.background }) })),
     presentation: draft.presentation,
+    ...drawnOf(connector, draft.samples, draft.presentation),
   };
+}
+
+/** A draw.io line's parts along its route now (`drawnLine`); nothing for an ordinary line or one drawn plain. */
+function drawnOf(connector: SceneConnector, samples: readonly Point2d[], presentation: ConnectorPresentation): Pick<ProjectedConnector, 'drawn'> {
+  const line = drawnLineOf(connector);
+  const { stroke, sourceMarkers, targetMarkers } = presentation;
+  if (line && !keepsLook(line.look, { width: stroke.width, dash: stroke.dash, start: sourceMarkers, end: targetMarkers })) return {};
+  const parts = line && drawnLineParts(line, samples);
+  return parts ? { drawn: { parts, fill: line.fill } } : {};
 }
 
 export function projectConnector(

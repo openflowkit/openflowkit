@@ -18,18 +18,30 @@ export interface RichRun {
   readonly size?: number;
 }
 
-/** One cell of a table row: its words on one line, on the side it is aligned to. */
-export interface RichCell { readonly runs: readonly RichRun[]; readonly align?: RichAlign }
+/**
+ * One cell of a table row: its words, a line for each `\n`, on the side it is aligned to. `width` is its column's share of the
+ * label (0–1, a `width="20%"`), `background` its fill, `border` the colour of the line around it. `keep` names the
+ * colours dark mode leaves as they are (draw.io flips colours set in CSS, not those set by HTML attributes).
+ */
+export interface RichCell {
+  readonly runs: readonly RichRun[];
+  readonly align?: RichAlign;
+  readonly width?: number;
+  readonly background?: string;
+  readonly border?: string;
+  readonly keep?: readonly ('background' | 'border')[];
+}
 
 /**
  * A paragraph, a divider line across the label, or a table row. Spacing is in px; the space between two blocks is the
  * larger of theirs. A paragraph's `background` fills a band the label's width behind it, `padding` inside the band.
- * Rows of one `table` share their columns, each as wide as its widest cell; a `full` table stretches to the label.
+ * Rows of one `table` share their columns, each as wide as its widest cell; a `full` table stretches to the label's
+ * width, a `fill` table's rows to its height.
  */
 export type RichBlock =
   | { readonly kind: 'text'; readonly runs: readonly RichRun[]; readonly align?: RichAlign; readonly indent?: number; readonly spaceBefore?: number; readonly spaceAfter?: number; readonly background?: string; readonly padding?: number }
   | { readonly kind: 'rule'; readonly spaceBefore?: number; readonly spaceAfter?: number }
-  | { readonly kind: 'row'; readonly table: number; readonly cells: readonly RichCell[]; readonly padding?: number; readonly full?: boolean };
+  | { readonly kind: 'row'; readonly table: number; readonly cells: readonly RichCell[]; readonly padding?: number; readonly full?: boolean; readonly fill?: boolean };
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 const finiteOr = (value: unknown): number | undefined => (typeof value === 'number' && Number.isFinite(value) ? value : undefined);
@@ -40,14 +52,21 @@ function readRun(value: unknown): RichRun | null {
   const size = finiteOr(value.size);
   return {
     text: value.text,
-    ...(value.bold === true ? { bold: true } : {}),
-    ...(value.italic === true ? { italic: true } : {}),
-    ...(value.underline === true ? { underline: true } : {}),
-    ...(value.strike === true ? { strike: true } : {}),
+    // A run says yes or no to each; one it doesn't mention follows the node (a `false` undoes the node's bold).
+    ...(typeof value.bold === 'boolean' ? { bold: value.bold } : {}),
+    ...(typeof value.italic === 'boolean' ? { italic: value.italic } : {}),
+    ...(typeof value.underline === 'boolean' ? { underline: value.underline } : {}),
+    ...(typeof value.strike === 'boolean' ? { strike: value.strike } : {}),
     ...(typeof value.color === 'string' && HEX.test(value.color) ? { color: value.color.toLowerCase() } : {}),
     ...(size !== undefined && size > 0 ? { size: Math.min(size, 400) } : {}),
   };
 }
+
+const keepOf = (value: unknown) => {
+  const keep = Array.isArray(value) ? (['background', 'border'] as const).filter((key) => value.includes(key)) : [];
+  return keep.length ? { keep } : {};
+};
+const colorOf = (key: string, value: unknown) => (typeof value === 'string' && HEX.test(value) ? { [key]: value.toLowerCase() } : {});
 
 function spacing(value: Record<string, unknown>): { spaceBefore?: number; spaceAfter?: number } {
   const before = finiteOr(value.spaceBefore);
@@ -67,13 +86,21 @@ export function richLabelOf(content: Readonly<Record<string, unknown>>): readonl
     if (!isRecord(value)) continue;
     if (value.kind === 'rule') { blocks.push({ kind: 'rule', ...spacing(value) }); continue; }
     if (value.kind === 'row' && Array.isArray(value.cells)) {
-      const cells = value.cells.filter(isRecord).map((cell) => ({ runs: runsOf(cell.runs), ...alignOf(cell.align) }));
-      blocks.push({ kind: 'row', table: finiteOr(value.table) ?? 0, cells, ...positive('padding', value.padding), ...(value.full === true ? { full: true } : {}) });
+      const cells = value.cells.filter(isRecord).map((cell) => {
+        const share = finiteOr(cell.width);
+        return {
+          runs: runsOf(cell.runs), ...alignOf(cell.align), ...(share !== undefined && share > 0 && share <= 1 ? { width: share } : {}),
+          ...colorOf('background', cell.background), ...colorOf('border', cell.border), ...keepOf(cell.keep),
+        };
+      });
+      blocks.push({
+        kind: 'row', table: finiteOr(value.table) ?? 0, cells, ...positive('padding', value.padding),
+        ...(value.full === true ? { full: true } : {}), ...(value.fill === true ? { fill: true } : {}),
+      });
       continue;
     }
     if (value.kind !== 'text' || !Array.isArray(value.runs)) continue;
-    const background = typeof value.background === 'string' && HEX.test(value.background) ? { background: value.background.toLowerCase() } : {};
-    blocks.push({ kind: 'text', runs: runsOf(value.runs), ...alignOf(value.align), ...positive('indent', value.indent), ...spacing(value), ...background, ...positive('padding', value.padding) });
+    blocks.push({ kind: 'text', runs: runsOf(value.runs), ...alignOf(value.align), ...positive('indent', value.indent), ...spacing(value), ...colorOf('background', value.background), ...positive('padding', value.padding) });
   }
   return blocks.length ? blocks : null;
 }
@@ -125,12 +152,17 @@ export interface RichLine {
   readonly columns?: boolean;
 }
 
+/** A band or cell outline; `keep` when dark mode leaves its colour as it is. */
+export interface RichBox { readonly x: number; readonly y: number; readonly width: number; readonly height: number; readonly color: string; readonly keep?: boolean }
+
 export interface RichLayout {
   readonly lines: readonly RichLine[];
   /** Divider lines, each across the label at `y`, from `x` for `width`. */
   readonly rules: readonly { readonly x: number; readonly y: number; readonly width: number }[];
-  /** Paragraph backgrounds, each a band across the label, drawn under the words. */
-  readonly bands: readonly { readonly x: number; readonly y: number; readonly width: number; readonly height: number; readonly color: string }[];
+  /** Paragraph and table-cell backgrounds, drawn under the words. */
+  readonly bands: readonly RichBox[];
+  /** Lines around table cells, each a box outlined 1px wide. */
+  readonly borders: readonly RichBox[];
   readonly width: number;
   readonly height: number;
 }
@@ -145,20 +177,23 @@ type Styled = Omit<RichPiece, 'x' | 'width'>;
  * Sets a rich label in lines: each paragraph wraps at `width` less its indent (null: never wraps), breaking only
  * between words; a word wider than the line breaks into letters unless `keepWords`. Lines sit on the side their
  * paragraph is aligned to, inside `width`; when it doesn't wrap, inside `box` or the widest line, whichever is wider.
+ * A table set to fill the label stretches its rows to `height`, the room the label has.
  */
 export function layoutRichLabel(
   blocks: readonly RichBlock[], base: RichBase, width: number | null,
-  options: { readonly keepWords?: boolean; readonly measure?: MeasureText; readonly box?: number } = {},
+  options: { readonly keepWords?: boolean; readonly measure?: MeasureText; readonly box?: number; readonly height?: number } = {},
 ): RichLayout {
   const measure = options.measure ?? ESTIMATE;
   type Measured = Styled & { width: number };
-  type Row = { readonly table: number; readonly padding: number; readonly full: boolean; readonly cells: readonly { readonly pieces: readonly Measured[]; readonly align: RichAlign; readonly width: number }[] };
+  type CellLine = { readonly pieces: readonly Measured[]; readonly tallest: number; readonly height: number; readonly width: number };
+  type Cell = { readonly pieces: readonly Measured[]; readonly lines: readonly CellLine[]; readonly height: number; readonly align: RichAlign; readonly width: number; readonly share?: number; readonly background?: string; readonly border?: string; readonly keep?: readonly string[] };
+  type Row = { readonly table: number; readonly padding: number; readonly full: boolean; readonly fill: boolean; readonly cells: readonly Cell[] };
   type Pending = { readonly align: RichAlign; readonly indent: number; readonly pieces: Measured[]; readonly row?: Row };
-  const set: { readonly y: number; readonly height: number; readonly baseline: number; readonly line: Pending }[] = [];
+  const set: { y: number; height: number; baseline: number; readonly line: Pending }[] = [];
   const rules: number[] = [];
   const bands: { y: number; height: number; color: string }[] = [];
   const styled = (run: RichRun): Styled => ({
-    text: '', size: run.size ?? base.fontSize, weight: run.bold ? 700 : base.fontWeight, italic: run.italic ?? base.italic,
+    text: '', size: run.size ?? base.fontSize, weight: run.bold === undefined ? base.fontWeight : run.bold ? 700 : 400, italic: run.italic ?? base.italic,
     underline: run.underline ?? base.underline, strike: run.strike ?? base.strike, color: run.color ?? base.color,
   });
   let y = 0;
@@ -177,21 +212,38 @@ export function layoutRichLabel(
       continue;
     }
     if (block.kind === 'row') {
-      // A cell's words stay on one line. ponytail: no wrapping inside a cell — upgrade by wrapping at its column's width.
+      // A cell's lines break only where it says (`\n`): its column is never narrower than its widest line.
+      // ponytail: no wrapping inside a cell — upgrade by wrapping at its column's width when the table outgrows the label.
       const padding = block.padding ?? 0;
       const cells = block.cells.map((cell) => {
-        const pieces = cell.runs.map((run) => {
+        const split: Measured[][] = [[]];
+        for (const run of cell.runs) {
           const style = styled(run);
-          const text = run.text.replace(/\s+/g, ' ');
-          return { ...style, text, width: measure(text, style.size, style.weight, style.italic) };
-        }).filter((piece) => piece.text !== '');
-        return { pieces, align: cell.align ?? 'start', width: pieces.reduce((sum, piece) => sum + piece.width, 0) };
+          run.text.split('\n').forEach((part, index) => {
+            if (index > 0) split.push([]);
+            const text = part.replace(/\s+/g, ' ');
+            if (text) split.at(-1)!.push({ ...style, text, width: measure(text, style.size, style.weight, style.italic) });
+          });
+        }
+        // A break at a cell's end starts no line, as in a browser.
+        while (split.length > 1 && !split.at(-1)!.length) split.pop();
+        const cellLines = split.map((pieces) => {
+          const tallest = pieces.reduce((most, piece) => Math.max(most, piece.size), pieces.length ? 0 : base.fontSize);
+          return { pieces, tallest, height: tallest * base.lineHeight, width: pieces.reduce((sum, piece) => sum + piece.width, 0) };
+        });
+        const pieces = cellLines.flatMap((line) => line.pieces);
+        return {
+          pieces, lines: cellLines, height: cellLines.reduce((sum, line) => sum + line.height, 0),
+          align: cell.align ?? 'start', width: cellLines.reduce((most, line) => Math.max(most, line.width), 0),
+          ...(cell.width ? { share: cell.width } : {}), ...(cell.background ? { background: cell.background } : {}), ...(cell.border ? { border: cell.border } : {}),
+          ...(cell.keep ? { keep: cell.keep } : {}),
+        };
       });
       const tallest = cells.flatMap((cell) => cell.pieces).reduce((most, piece) => Math.max(most, piece.size), base.fontSize);
-      const text = tallest * base.lineHeight;
+      const text = Math.max(tallest * base.lineHeight, ...cells.map((cell) => cell.height));
       advance(0);
       set.push({ y, height: text + padding * 2, baseline: padding + (text - tallest) / 2 + tallest * 0.8,
-        line: { align: 'start', indent: 0, pieces: [], row: { table: block.table, padding, full: block.full === true, cells } } });
+        line: { align: 'start', indent: 0, pieces: [], row: { table: block.table, padding, full: block.full === true, fill: block.fill === true, cells } } });
       y += text + padding * 2;
       margin = 0;
       continue;
@@ -264,38 +316,87 @@ export function layoutRichLabel(
     if (block.background) bands.push({ y: top, height: y - top, color: block.background });
     margin = block.spaceAfter ?? 0;
   }
+  // A table set to fill the label shares the room left below the words equally among its rows, as a browser does.
+  const stretched = set.filter(({ line }) => line.row?.fill);
+  const extra = stretched.length && options.height !== undefined && options.height > y ? (options.height - y) / stretched.length : 0;
+  const tops = set.map((entry) => entry.y);
+  /** How far stretched rows above `at` push it down. */
+  const shift = (at: number) => (extra ? set.reduce((sum, entry, index) => sum + (entry.line.row?.fill && tops[index]! < at ? extra : 0), 0) : 0);
+  if (extra) {
+    for (const band of bands) band.y += shift(band.y);
+    rules.forEach((at, index) => { rules[index] = at + shift(at); });
+    for (const entry of set) {
+      entry.y += shift(entry.y);
+      if (entry.line.row?.fill) { entry.height += extra; entry.baseline += extra / 2; }
+    }
+    y += extra * stretched.length;
+  }
   // Each table's columns are as wide as their widest cell, as a browser's automatic table layout sets them.
   const columns = new Map<number, number[]>();
+  const shares = new Map<number, number[]>();
   for (const { line: { row } } of set) {
     if (!row) continue;
     const widths = columns.get(row.table) ?? [];
-    row.cells.forEach((cell, index) => { widths[index] = Math.max(widths[index] ?? 0, cell.width + row.padding * 2); });
+    const own = shares.get(row.table) ?? [];
+    row.cells.forEach((cell, index) => {
+      widths[index] = Math.max(widths[index] ?? 0, cell.width + row.padding * 2);
+      if (cell.share) own[index] = Math.max(own[index] ?? 0, cell.share);
+    });
     columns.set(row.table, widths);
+    shares.set(row.table, own);
   }
   const natural = (table: number) => (columns.get(table) ?? []).reduce((sum, each) => sum + (each ?? 0), 0);
   const widest = set.reduce((most, { line }) => Math.max(most, line.row ? natural(line.row.table)
     : line.indent + line.pieces.reduce((sum, piece) => sum + piece.width, 0)), 0);
   // Lines align in the label's box (`options.box`), or in the widest line when that is wider.
   const box = width ?? Math.max(widest, options.box ?? 0);
-  const placeRow = (row: Row): RichPiece[] => {
+  /**
+   * A table's column widths. A full-width table gives a column with a share that share of the label (at least its
+   * words), and the room left over to the others in proportion to their widths, as a browser does.
+   */
+  const columnWidths = (row: Row): number[] => {
     const widths = (columns.get(row.table) ?? []).map((each) => each ?? 0);
-    const total = widths.reduce((sum, each) => sum + each, 0);
-    // A full-width table shares the room left over among its columns in proportion to their widths, as a browser does.
-    const extra = row.full && box > total ? box - total : 0;
-    let x = 0;
-    return row.cells.flatMap((cell, index) => {
-      const column = widths[index]! + (total > 0 ? (extra * widths[index]!) / total : extra / widths.length);
-      const inner = column - row.padding * 2;
-      let at = x + row.padding + (cell.align === 'center' ? (inner - cell.width) / 2 : cell.align === 'end' ? inner - cell.width : 0);
-      x += column;
-      return cell.pieces.map((piece) => { const placed = { ...piece, x: at }; at += piece.width; return placed; });
-    });
+    if (!row.full || box <= 0) return widths;
+    const own = shares.get(row.table) ?? [];
+    const fixed = widths.map((each, index) => (own[index] ? Math.max(each, own[index]! * box) : null));
+    const used = fixed.reduce<number>((sum, each) => sum + (each ?? 0), 0);
+    const free = widths.filter((_, index) => fixed[index] === null);
+    const freeWidth = free.reduce((sum, each) => sum + each, 0);
+    if (!free.length) return used > 0 && used < box ? fixed.map((each) => (each! * box) / used) : fixed.map((each) => each!);
+    const left = Math.max(0, box - used - freeWidth);
+    return widths.map((each, index) => fixed[index] ?? each + (freeWidth > 0 ? (left * each) / freeWidth : left / free.length));
   };
-  const lines: RichLine[] = set.map(({ y: top, height, baseline, line }) => {
-    if (line.row) {
-      const pieces = placeRow(line.row);
-      return { y: top, height, baseline, align: 'start', left: 0, right: pieces.at(-1) ? pieces.at(-1)!.x + pieces.at(-1)!.width : 0, pieces, columns: true };
-    }
+  const cellBands: RichBox[] = [];
+  const borders: RichBox[] = [];
+  /** A row's words: one line across its cells, or, when a cell breaks into lines, each cell's lines centred in the row. */
+  const placeRow = (row: Row, top: number, height: number, baseline: number): RichLine[] => {
+    const widths = columnWidths(row);
+    const stacked = row.cells.some((cell) => cell.lines.length > 1);
+    const across: RichPiece[] = [];
+    const own: RichLine[] = [];
+    let x = 0;
+    row.cells.forEach((cell, index) => {
+      const column = widths[index] ?? 0;
+      const kept = (key: string) => (cell.keep?.includes(key) ? { keep: true } : {});
+      if (cell.background) cellBands.push({ x, y: top, width: column, height, color: cell.background, ...kept('background') });
+      if (cell.border) borders.push({ x, y: top, width: column, height, color: cell.border, ...kept('border') });
+      const inner = column - row.padding * 2;
+      const start = (width: number) => x + row.padding + (cell.align === 'center' ? (inner - width) / 2 : cell.align === 'end' ? inner - width : 0);
+      let y = top + (height - cell.height) / 2;
+      for (const line of stacked ? cell.lines : [{ pieces: cell.pieces, width: cell.width, tallest: 0, height: 0 }]) {
+        let at = start(line.width);
+        const pieces = line.pieces.map((piece) => { const placed = { ...piece, x: at }; at += piece.width; return placed; });
+        if (!stacked) across.push(...pieces);
+        else if (pieces.length) own.push({ y, height: line.height, baseline: (line.height - line.tallest) / 2 + line.tallest * 0.8, align: 'start', left: pieces[0]!.x, right: at, pieces, columns: true });
+        y += line.height;
+      }
+      x += column;
+    });
+    if (stacked) return own;
+    return [{ y: top, height, baseline, align: 'start', left: 0, right: across.at(-1) ? across.at(-1)!.x + across.at(-1)!.width : 0, pieces: across, columns: true }];
+  };
+  const lines: RichLine[] = set.flatMap(({ y: top, height, baseline, line }): RichLine[] => {
+    if (line.row) return placeRow(line.row, top, height, baseline);
     const total = line.pieces.reduce((sum, piece) => sum + piece.width, 0);
     const room = Math.max(0, box - line.indent);
     const left = line.indent + (line.align === 'center' ? (room - total) / 2 : line.align === 'end' ? room - total : 0);
@@ -305,7 +406,10 @@ export function layoutRichLabel(
       x += piece.width;
       return placed;
     });
-    return { y: top, height, baseline, align: line.align, left, right: left + total, pieces };
+    return [{ y: top, height, baseline, align: line.align, left, right: left + total, pieces }];
   });
-  return { lines, rules: rules.map((at) => ({ x: 0, y: at, width: box })), bands: bands.map((band) => ({ x: 0, width: box, ...band })), width: box, height: y };
+  return {
+    lines, rules: rules.map((at) => ({ x: 0, y: at, width: box })),
+    bands: [...bands.map((band) => ({ x: 0, width: box, ...band })), ...cellBands], borders, width: box, height: y,
+  };
 }

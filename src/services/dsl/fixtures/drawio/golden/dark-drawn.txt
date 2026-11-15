@@ -1,10 +1,10 @@
 page "Page 1": 1 layer(s), 61 nodes, 20 connectors
   process rectangle @854,31 776x1700 fill #333333 ink #ffffff
-  process circle @896,271 350x350 fill #282828 ink #dddddd
-  process circle @896,764 350x350 fill #282828 ink #dddddd
-  process circle @896,1256 350x350 fill #282828 ink #dddddd
-  process circle @1223,1010 350x350 fill #282828 ink #dddddd
-  process circle @1223,518 350x350 fill #282828 ink #dddddd
+  process drawn ellipse @896,271 350x350 fill #282828 ink #dddddd
+  process drawn ellipse @896,764 350x350 fill #282828 ink #dddddd
+  process drawn ellipse @896,1256 350x350 fill #282828 ink #dddddd
+  process drawn ellipse @1223,1010 350x350 fill #282828 ink #dddddd
+  process drawn ellipse @1223,518 350x350 fill #282828 ink #dddddd
   process rectangle "LESS IS MORE" @951,389 186x30 fill transparent ink #dddddd
   process rectangle "1" @875,312 106x120 fill transparent ink #f18808
   process rectangle "2" @1196,534 70x120 fill transparent ink #f18808
@@ -27,21 +27,21 @@ page "Page 1": 1 layer(s), 61 nodes, 20 connectors
   process rectangle "Each section or group of⏎content should use the same⏎spacing to the next, and should⏎be strictly aligned." @951,1445 261x73 fill transparent ink #888888
   image "Image" @1375,1637 215x56
   process rectangle "Created with draw.io" @1176,1666 176x20 fill transparent ink #888888
-  group @1212,358 66x66 fill transparent
-  process circle @0,0 66x66 fill transparent ink #dddddd in 1016
-  process circle @4,4 58x58 fill #666666 ink #dddddd in 1016
-  group @1183,683 66x66 fill transparent
-  process circle @0,0 66x66 fill transparent ink #dddddd in 1019
-  process circle @4,4 58x58 fill #666666 ink #dddddd in 1019
-  group @1212,893 66x66 fill transparent
-  process circle @0,0 66x66 fill transparent ink #dddddd in 1022
-  process circle @4,4 58x58 fill #666666 ink #dddddd in 1022
-  group @1183,1177 66x66 fill transparent
-  process circle @0,0 66x66 fill transparent ink #dddddd in 1025
-  process circle @4,4 58x58 fill #666666 ink #dddddd in 1025
-  group @1212,1396 66x66 fill transparent
-  process circle @0,0 66x66 fill transparent ink #dddddd in 1028
-  process circle @4,4 58x58 fill #666666 ink #dddddd in 1028
+  group @1212,358 66x66 fill transparent ink #000000
+  process drawn ellipse @0,0 66x66 fill transparent ink #dddddd in 1016
+  process drawn ellipse @4,4 58x58 fill #666666 ink #dddddd in 1016
+  group @1183,683 66x66 fill transparent ink #000000
+  process drawn ellipse @0,0 66x66 fill transparent ink #dddddd in 1019
+  process drawn ellipse @4,4 58x58 fill #666666 ink #dddddd in 1019
+  group @1212,893 66x66 fill transparent ink #000000
+  process drawn ellipse @0,0 66x66 fill transparent ink #dddddd in 1022
+  process drawn ellipse @4,4 58x58 fill #666666 ink #dddddd in 1022
+  group @1183,1177 66x66 fill transparent ink #000000
+  process drawn ellipse @0,0 66x66 fill transparent ink #dddddd in 1025
+  process drawn ellipse @4,4 58x58 fill #666666 ink #dddddd in 1025
+  group @1212,1396 66x66 fill transparent ink #000000
+  process drawn ellipse @0,0 66x66 fill transparent ink #dddddd in 1028
+  process drawn ellipse @4,4 58x58 fill #666666 ink #dddddd in 1028
   process rectangle @1228,909 33x34 fill transparent ink #dddddd
   process rectangle @1233,914 23x12 fill #282828 ink #dddddd
   process rectangle @1229,1410 31x39 fill transparent ink #dddddd
@@ -51,15 +51,15 @@ page "Page 1": 1 layer(s), 61 nodes, 20 connectors
   process rectangle @1235,1437 8x8 fill #282828 ink #dddddd
   process rectangle @1246,1426 8x19 fill #282828 ink #dddddd
   process rectangle @1194,704 44x25 fill transparent ink #dddddd
-  process circle @1205,705 22x22 fill #282828 ink #dddddd
-  process circle @1207,707 18x18 fill #666666 ink #dddddd
-  process circle @1209,709 15x15 fill #282828 ink #dddddd
-  process circle @1206,1199 5x5 fill #282828 ink #dddddd
-  process circle @1228,1203 5x5 fill #282828 ink #dddddd
-  process circle @1221,1216 5x5 fill #282828 ink #dddddd
-  process circle @1199,1212 5x5 fill #282828 ink #dddddd
-  process hexagon @1201,1201 15x18 fill transparent ink #dddddd
-  process hexagon @1216,1201 15x18 fill transparent ink #dddddd
+  process drawn ellipse @1205,705 22x22 fill #282828 ink #dddddd
+  process drawn ellipse @1207,707 18x18 fill #666666 ink #dddddd
+  process drawn ellipse @1209,709 15x15 fill #282828 ink #dddddd
+  process drawn ellipse @1206,1199 5x5 fill #282828 ink #dddddd
+  process drawn ellipse @1228,1203 5x5 fill #282828 ink #dddddd
+  process drawn ellipse @1221,1216 5x5 fill #282828 ink #dddddd
+  process drawn ellipse @1199,1212 5x5 fill #282828 ink #dddddd
+  process drawn hexagon @1201,1201 15x18 fill transparent ink #dddddd
+  process drawn hexagon @1216,1201 15x18 fill transparent ink #dddddd
   (1169,717) -> (1246,438) polyline, 3 bends
   (1091,663) -> (1091,589) direct, 0 bends
   (1109,536) -> (1254,514) polyline, 3 bends

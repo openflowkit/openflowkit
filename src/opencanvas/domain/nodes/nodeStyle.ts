@@ -10,6 +10,7 @@ import { hasExplicitColor, nodePaletteName, PALETTE_KEYS, paletteResolver } from
 import { widgetLabelBox } from './widgetNodePresentation';
 import { framePresetOf } from './framePreset';
 import { DRAWN_SHAPE_FILL } from './shapeNode';
+import { drawnFillIsHatched } from './drawnShape';
 import { contrastRatio, mixHex, normalizeHex, readableTextOn } from '../../../lib/colorUtils';
 
 // Every visible property of a node, resolved from flat `appearance` keys
@@ -323,7 +324,7 @@ function computeNodeStyle(node: SceneNode, canvasColor?: string): NodeStyle {
   // fill or the fill is transparent. A tinted (rgba) container fill keeps its palette ink,
   // except as a dark-canvas wash.
   const opacity = clampNumber(a.opacity, { min: 0, max: 1 }, 1);
-  const textBackdrop = defaults.labelOnCanvas || fill === 'transparent' || darkWash ? canvasColor
+  const textBackdrop = defaults.labelOnCanvas || fill === 'transparent' || darkWash || drawnFillIsHatched(node) ? canvasColor
     : fill.startsWith('#') ? (canvasColor === undefined ? fill : paintOver(fill, canvasColor, opacity)) : undefined;
   const adaptive = canvasColor !== undefined && textBackdrop !== undefined
     ? resolveAdaptiveInk(explicitTextColor, textBackdrop)

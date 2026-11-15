@@ -122,7 +122,7 @@ export function exportImageNode(
 ): string {
   const background = theme === 'dark' ? '#1e293b' : '#fff7ed';
   const media = presentation.sourceUrl
-    ? `<image href="${xml(presentation.sourceUrl)}" width="${number(node.size.width)}" height="${number(node.size.height)}" opacity="${number(presentation.opacity)}" preserveAspectRatio="xMidYMid meet"/>`
+    ? `<image href="${xml(presentation.sourceUrl)}" width="${number(node.size.width)}" height="${number(node.size.height)}" opacity="${number(presentation.opacity)}" preserveAspectRatio="${presentation.fit === 'stretch' ? 'none' : 'xMidYMid meet'}"/>`
     : textElement(
         presentation.label || 'No Image',
         node.size.width / 2,

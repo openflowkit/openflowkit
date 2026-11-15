@@ -30,7 +30,7 @@ describe('loadStencils', () => {
 });
 
 describe('drawioToDocument with library shapes', () => {
-  it('draws a library shape by its stencil, and a resource icon by its icon, instead of a box', async () => {
+  it('draws a library shape, and a resource icon with its icon inside, as native shapes by draw.io’s own code', async () => {
     const { drawioToDocument } = await import('./drawio');
     const file = `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>
       <mxCell id="a" value="Lambda" style="shape=mxgraph.aws4.lambda_function;fillColor=#ED7100;strokeColor=#ffffff;" vertex="1" parent="1"><mxGeometry x="10" y="10" width="78" height="78" as="geometry"/></mxCell>
@@ -40,16 +40,17 @@ describe('drawioToDocument with library shapes', () => {
     const result = await drawioToDocument(file, 'doc', '2026-11-11T00:00:00.000Z', diskStencils);
     if ('error' in result) throw new Error(result.error);
     const nodes = result.document.pages[0]!.nodes;
-    const kind = (id: string) => nodes.find((node) => node.id === id)?.kind;
-    expect(kind('a')).toBe('image');
-    expect(kind('b')).toBe('image');
-    // The picture is painted by the node's own colours, so recolouring the node recolours the stencil.
-    const icon = nodes.find((node) => node.id === 'b')!;
-    expect(icon.appearance).toMatchObject({ fill: '#ed7100', stroke: '#ffffff' });
-    expect(stencilPictureUrl(icon)).toContain(encodeURIComponent('#ed7100'));
-    expect(stencilPictureUrl({ ...icon, appearance: { ...icon.appearance, fill: '#123456' } })).toContain(encodeURIComponent('#123456'));
-    expect(stencilPictureUrl({ ...icon, appearance: { ...icon.appearance, fill: '#123456' } })).not.toContain(encodeURIComponent('#ed7100'));
-    expect(kind('c')).not.toBe('image');
+    const node = (id: string) => nodes.find((each) => each.id === id)!;
+    const parts = (id: string) => node(id).content.drawioParts as unknown as { fill: string | null; stroke: string | null; path: unknown[] }[];
+    expect(node('a').content.drawio).toMatchObject({ shape: 'mxgraph.aws4.lambda_function' });
+    expect(parts('a').length).toBeGreaterThan(0);
+    // The resource icon is its coloured square in the node's fill, and the Lambda icon on it in the node's line.
+    expect(node('b').appearance).toMatchObject({ fill: '#ed7100', stroke: '#ffffff' });
+    expect(parts('b').some((part) => part.fill === 'fill')).toBe(true);
+    const icon = parts('b').find((part) => part.fill === 'stroke' || part.stroke === 'stroke');
+    expect(icon?.path.length).toBeGreaterThan(10);
+    // A shape draw.io has no drawing for is a box, and says so.
+    expect(node('c').content.drawio).toBeUndefined();
     expect(result.losses.join(' ')).toContain('mxgraph.nowhere.at_all');
   });
 });
@@ -57,8 +58,22 @@ describe('drawioToDocument with library shapes', () => {
 describe('a library shape on a dark canvas', () => {
   it('is painted in its colours flipped, as draw.io’s dark mode paints it', async () => {
     const { invertForDark } = await import('../../opencanvas/domain/color/adaptiveColor');
-    const node = { content: { stencilSvg: '<svg>#fe0001 #fe0002</svg>' }, appearance: { fill: '#ed7100', stroke: '#ffffff', darkColors: 'invert' } };
+    const node = { content: { stencilSvg: '<svg>#fe0001 #fe0002 #FFFFFF</svg>' }, appearance: { fill: '#ed7100', stroke: '#ffffff', darkColors: 'invert' } };
     expect(stencilPictureUrl(node, '#0f172a')).toContain(encodeURIComponent(invertForDark('#ed7100')));
+    // A colour the stencil sets itself flips too.
+    expect(stencilPictureUrl(node, '#0f172a')).not.toContain('FFFFFF');
+    expect(stencilPictureUrl(node, '#ffffff')).toContain('FFFFFF');
     expect(stencilPictureUrl(node, '#ffffff')).not.toContain(encodeURIComponent(invertForDark('#ed7100')));
+  });
+
+  it('is marked to flip when imported, so cisco_2’s icons lighten on a dark canvas as in draw.io', async () => {
+    const { drawioToDocument } = await import('./drawio');
+    const file = `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>
+      <mxCell id="r" style="shape=mxgraph.cisco.misc.route_switch_processor;html=1;fillColor=#036897;strokeColor=#ffffff;" vertex="1" parent="1"><mxGeometry width="64" height="86" as="geometry"/></mxCell>
+    </root></mxGraphModel>`;
+    const result = await drawioToDocument(file, 'doc', '2026-11-13T00:00:00.000Z', diskStencils);
+    if ('error' in result) throw new Error(result.error);
+    const node = result.document.pages[0]!.nodes.find((each) => each.id === 'r')!;
+    expect(node.appearance).toMatchObject({ darkColors: 'invert' });
   });
 });

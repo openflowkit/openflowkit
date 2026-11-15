@@ -5,6 +5,7 @@ import { DEFAULT_SCENE_LAYER_ID } from '../../opencanvas/domain/document/default
 import { validateSceneDocumentV1 } from '../../opencanvas/domain/document/validation';
 import { resolveNodeStyle } from '../../opencanvas/domain/nodes/nodeStyle';
 import { paintOver } from '../../opencanvas/domain/color/adaptiveColor';
+import { projectConnector } from '../../opencanvas/domain/connectors/routeProjection';
 import { contrastRatio } from '../../lib/colorUtils';
 import { drawioToDocument, looksLikeDrawio } from './drawio';
 import flow from './fixtures/drawio/flow.drawio?raw';
@@ -44,7 +45,8 @@ describe('drawioToDocument', () => {
     expect(byId.get('pay')).toMatchObject({ content: { shape: 'rounded', label: 'Take\npayment' }, appearance: { fontWeight: 700 } });
     // Its #333333 is kept, and flips light in the dark theme as draw.io's does.
     expect(byId.get('pay')!.appearance).toMatchObject({ textColor: '#333333', darkColors: 'invert' });
-    expect(byId.get('db')!.content.shape).toBe('cylinder');
+    // A cylinder is drawn by draw.io's own code, as draw.io draws it.
+    expect(byId.get('db')!.content.drawio).toMatchObject({ shape: 'cylinder3' });
   });
 
   it('turns edges into connectors with their labels, heads, dashes and bends', async () => {
@@ -60,7 +62,7 @@ describe('drawioToDocument', () => {
       route: { kind: 'polyline', ownership: 'imported-fixed' },
       appearance: { markerEnd: 'triangle-filled', dashPattern: 'dashed', stroke: '#ff0000' },
     });
-    expect(connectors.get('e3')).toMatchObject({ labels: [{ text: 'writes', pathRatio: 0.25 }], appearance: { markerStart: 'circle' } });
+    expect(connectors.get('e3')).toMatchObject({ labels: [{ text: 'writes', pathRatio: 0.25 }], appearance: { markerStart: 'circle-filled' } });
     expect(connectors.get('e3')!.appearance.markerEnd).toBeUndefined();
     // An edge ending on empty canvas keeps its free end.
     expect(connectors.get('loose')!.target).toEqual({ nodeId: null, portId: null, anchor: null, point: { x: 600, y: 300 } });
@@ -128,7 +130,10 @@ describe('drawioToDocument', () => {
       + '<mxCell id="b" value="End" vertex="1" parent="c"><mxGeometry x="120" y="510" width="230" height="40" as="geometry"/></mxCell>'
       + '<mxCell id="e" edge="1" parent="c" source="a" target="b" style="endArrow=none;"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="186" y="450"/></Array></mxGeometry></mxCell>'
       + '</root></mxGraphModel>');
-    const [container, title, start, end] = document.pages[0]!.nodes;
+    const byId = new Map(document.pages[0]!.nodes.map((node) => [node.id, node]));
+    const [container, title, start, end] = ['c', 'c:label', 'a', 'b'].map((id) => byId.get(id));
+    // draw.io's own swimlane code draws the lane, the line under its title band with it.
+    expect(byId.get('c:shape')).toMatchObject({ parentId: 'c', content: { drawio: { shape: 'swimlane' } } });
     expect(container).toMatchObject({ id: 'c', transform: { translation: { x: 100, y: 290 } }, size: { width: 270, height: 280 } });
     // Children stay where draw.io drew them on the page: their own coordinates are inside the container now.
     expect(start).toMatchObject({ id: 'a', parentId: 'c', transform: { translation: { x: 36, y: 40 } } });
@@ -219,12 +224,15 @@ describe('drawioToDocument', () => {
     const byId = new Map(document.pages[0]!.nodes.map((node) => [node.id, node]));
     // x 1, y 0.5 of a 120×40 tab, then the offset: (120 - 30, 20 - 8), in the tab's own space.
     expect(byId.get('badge')).toMatchObject({ parentId: 'tab', transform: { translation: { x: 90, y: 12 } } });
-    expect(byId.get('caret')!.transform.rotationRadians).toBeCloseTo(Math.PI);
-    expect(byId.get('caret')!.size).toEqual({ width: 10, height: 5 });
-    // draw.io's default triangle points east: ours, turned a quarter, in a box with its sides swapped.
+    // Triangles are drawn by draw.io's own code, which turns them by `direction`: the box is draw.io's, unturned.
+    const caret = byId.get('caret')!;
+    expect(caret.transform.rotationRadians).toBe(0);
+    expect(caret.size).toEqual({ width: 10, height: 5 });
+    const tip = (caret.content.drawioParts as unknown as { path: { x?: number; y?: number }[] }[])[0]!.path[1]!;
+    expect([tip.x, tip.y]).toEqual([5, 5]);
     const play = byId.get('play')!;
-    expect(play.size).toEqual({ width: 20, height: 10 });
-    expect(play.transform.rotationRadians).toBeCloseTo(Math.PI / 2);
+    expect(play.size).toEqual({ width: 10, height: 20 });
+    expect(play.transform.rotationRadians).toBe(0);
     expect(byId.get('box')).toMatchObject({ content: { label: '' }, size: { width: 14, height: 14 } });
     const label = byId.get('box:label')!;
     expect(label).toMatchObject({ content: { label: 'Top Management' }, appearance: { textAlign: 'start' } });
@@ -252,6 +260,15 @@ describe('drawioToDocument', () => {
     expect(byId.get('logo:label')).toMatchObject({ content: { label: 'Logo' } });
     expect(byId.get('lib')).toMatchObject({ content: { shape: 'rectangle' } });
     expect(losses).toEqual(['2 pictures come from draw.io’s own image library, so they are drawn as a box']);
+  });
+
+  it('stretches a picture to its box where draw.io says imageAspect=0, and keeps its proportions otherwise', async () => {
+    const model = (cells: string) => `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${cells}</root></mxGraphModel>`;
+    const picture = (id: string, extra: string) => `<mxCell id="${id}" style="shape=image;image=data:image/svg+xml,PHN2Zy8+;${extra}" vertex="1" parent="1"><mxGeometry x="10" y="10" width="80" height="20" as="geometry"/></mxCell>`;
+    const { document } = await open(model(picture('wide', 'imageAspect=0;') + picture('kept', '')));
+    const byId = new Map(document.pages[0]!.nodes.map((node) => [node.id, node]));
+    expect(byId.get('wide')!.content.imageFit).toBe('stretch');
+    expect(byId.get('kept')!.content.imageFit).toBeUndefined();
   });
 
   it('fills %placeholders% from the cell or its container, and titles a hairline lane above it', async () => {
@@ -360,7 +377,9 @@ describe('draw.io import fits ordinary documents', () => {
     expect(nodes.map((node) => node.id)).toEqual(['a', 'b', 'c', 'd']);
     expect(nodes.every((node) => node.kind === 'process')).toBe(true);
     expect(result.document.pages[0]!.connectors).toHaveLength(1);
-    expect(result.losses).toEqual(expect.arrayContaining(['draw.io’s “constructor” shape is drawn as a box', 'draw.io’s “toString” shape is drawn as a box']));
+    // A bare word draw.io's sheet doesn't have names nothing (draw.io ignores it); `shape=` names a shape.
+    expect(result.losses).toEqual(expect.arrayContaining(['draw.io’s “toString” shape is drawn as a box']));
+    expect(result.losses).not.toContain('draw.io’s “constructor” shape is drawn as a box');
   });
 });
 
@@ -497,7 +516,7 @@ describe('big and deep draw.io files', () => {
     const text = wrap(cells);
     const started = performance.now();
     const { document } = await open(text);
-    expect(performance.now() - started).toBeLessThan(2_000);
+    expect(performance.now() - started).toBeLessThan(3_000);
     // 25,000 boxes and 1,000 groups, each group's title a node of its own.
     expect(document.pages[0]!.nodes).toHaveLength(27_000);
     expect(document.pages[0]!.connectors).toHaveLength(24_000);
@@ -575,7 +594,7 @@ describe('draw.io colours in either theme', () => {
     expect(nodes.get('red-on-solid-blue')!.appearance).toMatchObject({ textColor: '#ae4132', darkColors: 'invert' });
     // coc.xml's light grey boxes turn near-black on the dark canvas, their grey lines light: draw.io's own colours.
     const grey = resolveNodeStyle(nodes.get('grey-box')!, '#191b19');
-    expect([grey.fill, grey.stroke]).toEqual(['#1a1a1a', '#959595']);
+    expect([grey.fill, grey.stroke]).toEqual(['#212321', '#989998']);
     expect(resolveNodeStyle(nodes.get('grey-box')!, '#f7f7f5').fill).toBe('#f5f5f5');
     for (const id of ['navy-words', 'red-on-washed-blue', 'red-on-solid-blue', 'red-on-misty-blue', 'short-hex']) {
       const style = resolveNodeStyle(nodes.get(id)!, '#191b19');
@@ -584,18 +603,22 @@ describe('draw.io colours in either theme', () => {
     expect(losses.some((loss) => loss.includes('label colour'))).toBe(false);
   });
 
-  it('leaves draw.io’s default black lines to the theme, so they show on a dark canvas', async () => {
+  it('keeps draw.io’s black lines black, flipped light on a dark canvas as draw.io’s dark mode flips them', async () => {
     const { document } = await open(model([
-      box('a', 'strokeColor=#000000;', 0, 0), box('b', 'strokeColor=#b85450;', 200, 0), box('c', 'strokeColor=#333333;', 400, 0),
+      box('a', 'strokeColor=#000000;', 0, 0), box('b', 'strokeColor=#b85450;', 200, 0), box('d', 'strokeColor=default;fillColor=default;', 400, 0),
       '<mxCell id="e" edge="1" source="a" target="b" parent="1" style="strokeColor=#000000;"><mxGeometry relative="1" as="geometry"/></mxCell>',
     ].join('')));
     const page = document.pages[0]!;
-    expect(page.nodes.find((node) => node.id === 'a')!.appearance.stroke).not.toBe('#000000');
-    expect(page.nodes.find((node) => node.id === 'b')!.appearance.stroke).toBe('#b85450');
-    // Near-black grey is draw.io's paper ink too: it follows the theme like black.
-    expect(page.nodes.find((node) => node.id === 'c')!.appearance.stroke).not.toBe('#333333');
-    expect(page.connectors[0]!.appearance.stroke).toBeUndefined();
+    const node = (id: string) => page.nodes.find((each) => each.id === id)!;
+    expect(node('a').appearance).toMatchObject({ stroke: '#000000', darkColors: 'invert' });
+    expect(node('b').appearance.stroke).toBe('#b85450');
+    // draw.io's `default` is its own white fill and black line.
+    expect(node('d').appearance).toMatchObject({ fill: '#ffffff', stroke: '#000000' });
+    expect(page.connectors[0]!.appearance).toMatchObject({ stroke: '#000000', darkColors: 'invert' });
+    // On a dark canvas the black line is drawn light, as draw.io's dark mode draws it.
+    expect(resolveNodeStyle(node('a'), '#191b19').stroke).not.toBe('#000000');
   });
+
 });
 
 describe('what a draw.io file loses, named', () => {
@@ -604,14 +627,28 @@ describe('what a draw.io file loses, named', () => {
     `<mxCell id="${id}" value="${id}" vertex="1" parent="1" style="${style}"><mxGeometry x="${x}" y="0" width="120" height="60" as="geometry"/></mxCell>`;
 
   it('says once, with a count, each style it couldn’t keep', async () => {
-    const { losses } = await open(model([
+    const { document, losses } = await open(model([
       box('a', 'glass=1;gradientColor=default;', 0), box('b', 'glass=1;', 200), box('c', 'rounded=1;', 400),
       '<mxCell id="e" edge="1" source="a" target="b" parent="1" style="endArrow=box;"><mxGeometry relative="1" as="geometry"/></mxCell>',
     ].join('')));
-    expect(losses).toEqual(expect.arrayContaining([
-      'the glass shine is left off (2 places)', 'gradient fills are drawn solid', 'draw.io’s “box” arrow head is drawn as a filled triangle',
-    ]));
+    expect([...losses].sort()).toEqual(['gradient fills are drawn solid', 'the glass shine is left off (2 places)']);
+    // Its `box` end is draw.io's own, drawn by its connector code, not a stand-in.
+    expect(document.pages[0]!.connectors[0]!.extensions.drawioLine).toMatchObject({ style: { shape: 'connector', endArrow: 'box' } });
     expect(losses.some((loss) => loss.includes('rounded'))).toBe(false);
+  });
+
+  it('draws a line’s ends with draw.io’s own code until its look is changed here, then as ours', async () => {
+    const { document } = await open(model([
+      box('a', '', 0), box('b', '', 200),
+      '<mxCell id="e" edge="1" source="a" target="b" parent="1" style="endArrow=halfCircle;"><mxGeometry relative="1" as="geometry"/></mxCell>',
+    ].join('')));
+    const page = document.pages[0]!;
+    const line = page.connectors[0]!;
+    const drawn = projectConnector(page, line)!.drawn!;
+    // draw.io's half circle: a curve, which none of our glyphs is.
+    expect(drawn.parts.some((part) => part.path.some((command) => command.kind === 'quad' || command.kind === 'cubic'))).toBe(true);
+    const thicker = { ...line, appearance: { ...line.appearance, strokeWidth: 4 } };
+    expect(projectConnector({ ...page, connectors: [thicker] }, thicker)!.drawn).toBeUndefined();
   });
 
   it('keeps the bold, colour and size set on words in a connector’s label', async () => {

@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import { reloadOnStaleChunk } from './opencanvas/presentation/v2/V2ErrorBoundary';
 import { startFeedbackSession } from './services/feedback/feedbackSession';
+import { warmDrawioShapes } from './services/dsl/drawioShapes';
 import { withoutV1Params } from './services/storage/v2/v1Import';
 import { entryOf, isViewerRoute, startUsage } from './services/usage/usage';
 import './index.css';
@@ -20,6 +21,8 @@ if (cleanSearch !== null) window.history.replaceState(null, '', `${window.locati
 window.addEventListener('vite:preloadError', () => { reloadOnStaleChunk(); });
 
 startUsage({ entry: entryOf(window.location.hash) });
+// draw.io's own shape code, fetched in the background so draw.io shapes draw as draw.io draws them.
+warmDrawioShapes();
 startFeedbackSession(Date.now(), isViewerRoute(window.location.hash));
 
 const rootElement = document.getElementById('root');

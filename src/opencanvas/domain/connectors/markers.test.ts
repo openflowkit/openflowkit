@@ -28,7 +28,7 @@ describe('connector marker geometry', () => {
 
   it('draws a circle as its centre and radius', () => {
     expect(connectorMarkerShapes('circle', endpoint, outward, 0)).toEqual([
-      { kind: 'circle', center: { x: 100, y: 105 }, radius: 4 },
+      { kind: 'circle', center: { x: 100, y: 105 }, radius: 4, filled: false },
     ]);
   });
 

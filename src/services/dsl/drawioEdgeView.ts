@@ -48,7 +48,7 @@ export function perimeterPoint(terminal: EdgeTerminal, next: Point2d | null, ort
       const flipV = !terminal.isEdge && terminal.style.flipV === '1';
       const [cx, cy] = [bounds.x + bounds.width / 2, bounds.y + bounds.height / 2];
       const mirror = (at: Point2d): Point2d => ({ x: flipH ? 2 * cx - at.x : at.x, y: flipV ? 2 * cy - at.y : at.y });
-      const shape = { direction: styleOf(terminal.style, 'direction'), strokeWidth: numberOf(terminal.style, 'strokeWidth', 1), backboneSize: terminal.style.backboneSize === undefined ? undefined : numberOf(terminal.style, 'backboneSize', 0) };
+      const shape = { style: terminal.style, direction: styleOf(terminal.style, 'direction'), strokeWidth: numberOf(terminal.style, 'strokeWidth', 1), backboneSize: terminal.style.backboneSize === undefined ? undefined : numberOf(terminal.style, 'backboneSize', 0) };
       const hit = perimeter(bounds, shape, mirror(next), orthogonal);
       point = hit ? mirror(hit) : null;
     }
@@ -98,14 +98,23 @@ function pinnedPoint(edgeStyle: Readonly<Record<string, string>>, terminal: Edge
   return point;
 }
 
+/** Routings not ported here, drawn by draw.io's own code once loaded (`installDrawioRouters`). */
+export const DRAWIO_CODE_ROUTERS: ReadonlySet<string> = new Set(['sequenceEdgeStyle']);
+const fromDrawio = new Map<string, Router>();
+/** Hands the routings in DRAWIO_CODE_ROUTERS to draw.io's own code (src/services/dsl/drawioShapes.ts). */
+export function installDrawioRouters(lookup: (name: string) => Router | null): void {
+  for (const name of DRAWIO_CODE_ROUTERS) { const router = lookup(name); if (router) fromDrawio.set(name, router); }
+}
+
 function routerOf(style: Readonly<Record<string, string>>): Router | null {
   if (on(style, 'noEdgeStyle')) return null;
   const name = styleOf(style, 'edgeStyle');
-  return name !== undefined && Object.hasOwn(ROUTERS, name) ? ROUTERS[name]! : null;
+  if (name === undefined) return null;
+  return Object.hasOwn(ROUTERS, name) ? ROUTERS[name]! : (fromDrawio.get(name) ?? null);
 }
 
 /** Whether an `edgeStyle` names a router this port has. */
-export const drawioRoutes = (name: string): boolean => Object.hasOwn(ROUTERS, name);
+export const drawioRoutes = (name: string): boolean => Object.hasOwn(ROUTERS, name) || fromDrawio.has(name);
 
 /** The point along a line at `x` (-1 source end, 0 middle, 1 target end), set off square to its run by `y`, then by `offset` (mxGraphView.getPoint). */
 export function pointOnLine(line: EdgeLine, x: number, y: number, offset: Point2d): Point2d {
@@ -134,7 +143,7 @@ export function drawioEdgeLine(style: Readonly<Record<string, string>>, geometry
   const hints = geometry.points;
   // A line from a shape to itself loops, unless its bends are saved or it is a right-angle loop with a pinned end.
   const looped = !(hints.length >= 2) && !(on(style, 'orthogonalLoop') && (start !== null || end !== null)) && source !== null && source === target;
-  const router = looped ? (Object.hasOwn(ROUTERS, style.loop ?? '') ? ROUTERS[style.loop!]! : loopRouter) : routerOf(style);
+  const router = looped ? (Object.hasOwn(ROUTERS, style.loopStyle ?? '') ? ROUTERS[style.loopStyle!]! : loopRouter) : routerOf(style);
   const edge: RouteEdge = { style, origin, absolutePoints: [start, end] };
   const points: (Point2d | null)[] = [start];
   if (router) router(edge, source, target, hints, points);
@@ -153,6 +162,20 @@ export function drawioEdgeLine(style: Readonly<Record<string, string>>, geometry
   };
   if (!points.at(-1) && target) points[points.length - 1] = float(target, source, false);
   if (!points[0] && source) points[0] = float(source, target, true);
+  // `fixedPointSpacing=1`: an end pinned to a fixed point keeps the line's perimeter spacing too, moved that far
+  // towards its neighbour on the route, never past it.
+  if (on(style, 'fixedPointSpacing')) {
+    for (const [atSource, pinned] of [[true, start], [false, end]] as const) {
+      const spacing = numberOf(style, 'perimeterSpacing', 0) + numberOf(style, atSource ? 'sourcePerimeterSpacing' : 'targetPerimeterSpacing', 0);
+      const at = atSource ? 0 : points.length - 1;
+      const next = points[atSource ? 1 : points.length - 2];
+      if (!pinned || !next || spacing === 0 || !points[at]) continue;
+      const [dx, dy] = [next.x - points[at]!.x, next.y - points[at]!.y];
+      const run = Math.hypot(dx, dy);
+      const step = run === 0 ? 0 : Math.min(spacing, run) / run;
+      points[at] = { x: points[at]!.x + dx * step, y: points[at]!.y + dy * step };
+    }
+  }
   const line = points.filter((point): point is Point2d => point !== null);
   if (!points[0] || !points.at(-1) || line.length < 2) return null;
   const segments: number[] = [];

@@ -1,6 +1,6 @@
 import { invertForDark } from '../color/adaptiveColor';
 import type { NodeStyle } from '../nodes/nodeStyle';
-import type { RichBase, RichPiece } from './richLabel';
+import type { RichBase, RichBox, RichPiece } from './richLabel';
 
 /** What a node's rich label is set in where its runs don't say: the node's own resolved type and ink. */
 export function richBaseOf(style: NodeStyle): RichBase {
@@ -19,6 +19,11 @@ export function richInk(piece: RichPiece, style: NodeStyle): string {
 /** A paragraph's background, flipped with the node's own colours in draw.io's dark mode. */
 export function richBand(color: string, style: NodeStyle): string {
   return style.invertColors ? invertForDark(color) : color;
+}
+
+/** A band's or cell outline's colour: flipped as a paragraph's background is, unless dark mode keeps it. */
+export function richBoxColor(box: RichBox, style: NodeStyle): string {
+  return box.keep ? box.color : richBand(box.color, style);
 }
 
 /** Where a rich label's block sits in its node: the padded box, its top moved for the vertical alignment. */

@@ -89,9 +89,19 @@ describe('draw.io templates as the audit found them', () => {
     const { document } = await open(model(cell('wall', 'shape=mxgraph.floorplan.wallCorner;fillColor=#000000;', 0)
       + cell('lock', 'shape=mxgraph.aws4.door_lock;fillColor=#277116;strokeColor=none;', 200)));
     const [wall, lock] = document.pages[0]!.nodes;
-    expect(wall!.appearance).toMatchObject({ fill: 'transparent', strokeStyle: 'dashed' });
-    expect(wall!.appearance.stroke).not.toBe('#000000');
+    // A wall corner is drawn by draw.io's own code, in its own colour; only a shape nothing draws stands in.
+    expect(wall!.content.drawio).toMatchObject({ shape: 'mxgraph.floorplan.wallCorner' });
+    expect(wall!.appearance).toMatchObject({ fill: '#000000' });
     expect(lock!.appearance).toMatchObject({ fill: 'transparent', stroke: '#277116', strokeStyle: 'dashed' });
+  });
+
+  it('outlines a picture from draw.io’s library in its line colour, not its unpainted white fill', async () => {
+    const { document } = await open(model(cell('pic', 'image;image=img/lib/clip_art/computers/Netbook_128x128.png;fillColor=#FFFFFF;strokeColor=#000000;', 0)
+      + cell('bare', 'image;image=img/lib/clip_art/computers/Netbook_128x128.png;fillColor=#FFFFFF;', 200)));
+    const byId = new Map(document.pages[0]!.nodes.map((node) => [node.id, node]));
+    const [pic, bare] = [byId.get('pic'), byId.get('bare')];
+    expect(pic!.appearance).toMatchObject({ fill: 'transparent', stroke: '#000000', strokeStyle: 'dashed' });
+    expect(bare!.appearance).toMatchObject({ stroke: '#000000' });
   });
 
   it('names a set of icons drawn as boxes once, not one line per icon', async () => {
@@ -110,6 +120,34 @@ describe('draw.io templates as the audit found them', () => {
     expect(a!.content).toMatchObject({ label: 'Bold red', richLabel: [{ kind: 'text', runs: [{ bold: true, text: 'Bold' }, { text: ' ' }, { color: '#ff0000', text: 'red' }] }] });
     expect(b!.content.richLabel).toBeUndefined();
     expect(losses).toEqual([]);
+  });
+
+  it('keeps a line over the shapes drawn before it that it crosses, and under the ones drawn after', async () => {
+    const edge = '<mxCell id="e" edge="1" parent="1" source="a" target="b"><mxGeometry relative="1" as="geometry"/></mxCell>';
+    const { document } = await open(model(cell('a', '', 0) + cell('band', 'fillColor=#dae8fc;', 140) + edge + cell('b', '', 300) + cell('cover', 'fillColor=#ffe6cc;', 200)));
+    const under = document.pages[0]!.nodes.filter((node) => node.content.underLines === true).map((node) => node.id);
+    expect(under).toEqual(['band']);
+  });
+
+  it('draws a line with a shape of its own as draw.io’s code draws it, and names one it can’t draw', async () => {
+    const line = (id: string, style: string) => `<mxCell id="${id}" edge="1" parent="1" source="a" target="b" style="${style}"><mxGeometry relative="1" as="geometry"/></mxCell>`;
+    const { document, losses } = await open(model(cell('a', '', 0) + cell('b', '', 300)
+      + line('arrow', 'shape=flexArrow;fillColor=#dae8fc;') + line('odd', 'shape=no.such.line;')));
+    const [arrow, odd] = document.pages[0]!.connectors;
+    expect(arrow!.extensions.drawioLine).toMatchObject({ style: { shape: 'flexArrow' }, fill: '#dae8fc' });
+    expect((arrow!.extensions.drawioLine as { parts: unknown[] }).parts.length).toBeGreaterThan(0);
+    expect(odd!.extensions.drawioLine).toBeUndefined();
+    expect(losses).toContain('draw.io’s “no.such.line” line is drawn as a plain line');
+  });
+
+  it('flips a lane’s title band with the rest of it on a dark canvas, so its title stays readable', async () => {
+    const { document } = await open(model(cell('t', 'swimlane;startSize=26;fillColor=#e0e0e0;swimlaneFillColor=#ffffff;', 0, '1', '', 200, 120)));
+    const nodes = new Map(document.pages[0]!.nodes.map((node) => [node.id, node]));
+    // draw.io's swimlane code draws the band in the lane's colour, which flips with the rest of it.
+    expect(nodes.get('t:shape')!.appearance).toMatchObject({ fill: '#e0e0e0', darkColors: 'invert' });
+    const band = resolveNodeStyle(nodes.get('t:shape')!, '#191b19');
+    const title = resolveNodeStyle(nodes.get('t:label') ?? nodes.get('t')!, '#191b19');
+    expect(contrastRatio(title.textColor, band.fill)).toBeGreaterThanOrEqual(4.5);
   });
 
   it('says an empty file is empty', async () => {

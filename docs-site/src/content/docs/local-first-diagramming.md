@@ -55,8 +55,11 @@ has no counterpart (hatched fills, groups, filled lines, some arrowheads) is nam
 A draw.io file opens every page as its own page, with shapes where they were, containers and
 swimlanes holding their children, layers, and connectors with their labels and arrowheads. Files
 draw.io compressed, and diagrams saved inside a `.drawio.svg` or `.drawio.png`, open the same way.
-draw.io's default black text and lines follow the theme, so they read on a dark canvas. What has no
-counterpart (gradients, shadows, sketch style, unknown shapes or fonts) is named in a toast.
+draw.io's default black text and lines follow the theme, so they read on a dark canvas. Shapes,
+arrowheads and the hand-drawn sketch style are drawn by draw.io's own code. What has no
+counterpart (the comic style, unknown shapes or fonts, pictures kept only on draw.io's servers) is
+named in a toast. One difference is never named: draw.io shifts its lines by half a pixel, so a 1px
+line can look grey and two pixels wide there, while OpenFlowKit draws it crisp.
 
 A document written by a newer app version opens read-only: the app preserves it instead of
 migrating it backwards. Opening never overwrites the document it came from: the file is saved

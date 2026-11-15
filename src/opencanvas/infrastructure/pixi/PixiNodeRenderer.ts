@@ -22,6 +22,8 @@ import { PixiWireframeNodeRenderer } from './PixiWireframeNodeRenderer';
 import { PixiWidgetNodeRenderer } from './PixiWidgetNodeRenderer';
 import { PixiChartNodeRenderer } from './PixiChartNodeRenderer';
 import { drawPixiNodeOutline } from './pixiNodeOutline';
+import { drawPixiDrawnShape } from './pixiDrawnShape';
+import { drawnShapeParts, drawnShapeStyle } from '../../domain/nodes/drawnShape';
 import type { PixiNodeDebugRecord } from './pixiNodeDebug';
 import { isBackdropNode, isContainerNodeKind } from '../../domain/nodes/containerNodePresentation';
 import { isSequenceParticipant } from './sequenceNodeVisual';
@@ -248,32 +250,39 @@ export class PixiNodeRenderer {
       // draw into the shared graphics and would each need an alpha argument.
       const alpha = style.opacity;
       const customPath = typeof node.content.customSvgPath === 'string' ? node.content.customSvgPath : undefined;
-      // ponytail: the shadow is drawn unblurred into the shared graphics — a blur filter per node would cost a pass each.
-      if (style.shadow && fillPaint.alpha > 0) {
-        drawPixiNodeOutline(target, renderedShape, node.size,
-          { ...matrix, tx: matrix.tx + style.shadow.offsetX, ty: matrix.ty + style.shadow.offsetY }, customPath, style.cornerRadius);
-        target.fill({ color: pixiPaintColor(style.shadow.color, 0x0f172a).color, alpha: style.shadow.opacity * 0.67 * alpha });
-      }
-      drawPixiNodeOutline(target, renderedShape, node.size, matrix, customPath, style.cornerRadius);
-      if (style.gradient) target.fill({ fill: nodeGradient(style.fill, style.gradient), alpha: alpha * fillPaint.alpha });
-      else target.fill({ color: fill, alpha: alpha * fillPaint.alpha });
-      if (style.strokeWidth > 0 && style.dash.length) {
-        const outline = basicNodeOutlinePoints(renderedShape, node.size, customPath, style.cornerRadius)
-          .map((point) => applyMatrixToPoint(matrix, point));
-        drawDashedPath(target, [...outline, outline[0]], {
-          color: `#${stroke.toString(16).padStart(6, '0')}`, width: style.strokeWidth,
-          opacity: alpha * strokePaint.alpha, dash: style.dash,
-        });
-      } else if (style.strokeWidth > 0) {
-        target.stroke({ color: stroke, width: style.strokeWidth, alpha: alpha * strokePaint.alpha });
-      }
-      // Inner lines (venn lens, target rings, note fold) ride the same stroke.
-      if (detailLevel !== 'overview' && style.strokeWidth > 0) {
-        for (const decoration of basicNodeDecorations(renderedShape, node.size)) {
-          // Open polylines, like the SVG export: a closed shape repeats its first point.
-          const points = decoration.map((point) => applyMatrixToPoint(matrix, point));
-          target.poly(points.flatMap((point) => [point.x, point.y]), false);
+      const drawn = drawnShapeParts(node);
+      if (drawn) {
+        // A draw.io shape, drawn as draw.io's own code drew it.
+        const drawnWith = Number.parseFloat(drawnShapeStyle(node)?.strokeWidth ?? '') || 1;
+        drawPixiDrawnShape(target, drawn, matrix, style, style.strokeWidth / drawnWith);
+      } else {
+        // ponytail: the shadow is drawn unblurred into the shared graphics — a blur filter per node would cost a pass each.
+        if (style.shadow && fillPaint.alpha > 0) {
+          drawPixiNodeOutline(target, renderedShape, node.size,
+            { ...matrix, tx: matrix.tx + style.shadow.offsetX, ty: matrix.ty + style.shadow.offsetY }, customPath, style.cornerRadius);
+          target.fill({ color: pixiPaintColor(style.shadow.color, 0x0f172a).color, alpha: style.shadow.opacity * 0.67 * alpha });
+        }
+        drawPixiNodeOutline(target, renderedShape, node.size, matrix, customPath, style.cornerRadius);
+        if (style.gradient) target.fill({ fill: nodeGradient(style.fill, style.gradient), alpha: alpha * fillPaint.alpha });
+        else target.fill({ color: fill, alpha: alpha * fillPaint.alpha });
+        if (style.strokeWidth > 0 && style.dash.length) {
+          const outline = basicNodeOutlinePoints(renderedShape, node.size, customPath, style.cornerRadius)
+            .map((point) => applyMatrixToPoint(matrix, point));
+          drawDashedPath(target, [...outline, outline[0]], {
+            color: `#${stroke.toString(16).padStart(6, '0')}`, width: style.strokeWidth,
+            opacity: alpha * strokePaint.alpha, dash: style.dash,
+          });
+        } else if (style.strokeWidth > 0) {
           target.stroke({ color: stroke, width: style.strokeWidth, alpha: alpha * strokePaint.alpha });
+        }
+        // Inner lines (venn lens, target rings, note fold) ride the same stroke.
+        if (detailLevel !== 'overview' && style.strokeWidth > 0) {
+          for (const decoration of basicNodeDecorations(renderedShape, node.size)) {
+            // Open polylines, like the SVG export: a closed shape repeats its first point.
+            const points = decoration.map((point) => applyMatrixToPoint(matrix, point));
+            target.poly(points.flatMap((point) => [point.x, point.y]), false);
+            target.stroke({ color: stroke, width: style.strokeWidth, alpha: alpha * strokePaint.alpha });
+          }
         }
       }
       debugRecords.push({

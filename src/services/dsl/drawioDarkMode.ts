@@ -1,24 +1,16 @@
 import type { SceneConnector, SceneNode } from '../../opencanvas/domain/document/types';
-import { darkInkReadsOn } from '../../opencanvas/domain/color/adaptiveColor';
 
-// draw.io's dark mode flips every colour a cell sets (`darkColors: 'invert'`, set by drawioNodeAppearance). A page
-// drawn dark already suits a dark canvas, and flipping it would turn its slabs light under light words: it is kept
-// as drawn.
+// draw.io's dark mode flips every colour a cell sets (`darkColors: 'invert'`, set by drawioNodeAppearance) unless the
+// page says otherwise: its `adaptiveColors` (Graph.getAdaptiveColors). `auto`, draw.io's default, flips them;
+// `simple` keeps the colours a cell sets (mxUtils.parseLightDarkColor's useLightColor); `none` keeps the whole page
+// light. The page decides, never a guess from its colours.
 
-/** Whether more of the page's solid fill area is dark than light. A page with no solid fills is drawn light. */
-export function drawnDark(nodes: readonly SceneNode[]): boolean {
-  let balance = 0;
-  for (const { appearance, size } of nodes) {
-    const fill = appearance.fill;
-    if (typeof fill !== 'string' || !/^#[0-9a-f]{6}$/i.test(fill)) continue;
-    balance += (darkInkReadsOn(fill) ? -1 : 1) * size.width * size.height;
-  }
-  return balance > 0;
-}
+/** Whether a page's `adaptiveColors` keeps the colours its cells set on a dark canvas. */
+export const keepsSetColors = (adaptiveColors: string | undefined): boolean => adaptiveColors === 'simple' || adaptiveColors === 'none';
 
-/** Keeps a page drawn dark as it is in the dark theme: its nodes and lines lose `darkColors`. */
-export function keepDarkDrawnPage(nodes: SceneNode[], connectors: SceneConnector[] = []): void {
-  if (!drawnDark(nodes)) return;
+/** Leaves a page's colours as drawn on a dark canvas when its `adaptiveColors` says to; else draw.io flips them. */
+export function applyAdaptiveColors(nodes: SceneNode[], connectors: SceneConnector[], adaptiveColors: string | undefined): void {
+  if (!keepsSetColors(adaptiveColors)) return;
   const unflip = <T extends SceneNode | SceneConnector>(items: T[]) => {
     for (const [index, item] of items.entries()) {
       if (item.appearance.darkColors === undefined) continue;

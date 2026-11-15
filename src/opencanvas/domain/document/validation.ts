@@ -109,7 +109,8 @@ function isLabel(value: unknown): value is ConnectorLabel {
     value.pathRatio >= 0 &&
     value.pathRatio <= 1 &&
     isPoint2d(value.offset) &&
-    isJsonObject(value.metadata)
+    isJsonObject(value.metadata) &&
+    (value.background === undefined || typeof value.background === 'string')
   );
 }
 
