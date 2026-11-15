@@ -1,6 +1,6 @@
 import { drawioSketchSeed } from './drawioSketch';
 import type { Point2d } from '../../opencanvas/domain/geometry/types';
-import { resolveDrawioStyle, type DrawioStyle } from './drawioStyle';
+import { drawioHandDrawn, resolveDrawioStyle, type DrawioStyle } from './drawioStyle';
 import { parseXml, type XmlElement } from './xmlReader';
 
 // A draw.io page's XML read into plain cells: ids, parents, style, geometry. Compressed pages are inflated here.
@@ -80,8 +80,8 @@ export function readCell(element: XmlElement, resolve: typeof resolveDrawioStyle
     parent: attributes.parent ?? null,
     // `noLabel=1`: draw.io draws no words for the cell, though it keeps them.
     value: style.noLabel === '1' ? '' : (wrapped ? element.attributes.label : attributes.value) ?? '',
-    // A sketched cell wobbles by its id, as in draw.io; the seed rides in its style, which is kept with its drawing.
-    style: style.sketch === '1' ? { ...style, sketchSeed: String(drawioSketchSeed(id)) } : style,
+    // A sketched or comic cell wobbles by its id, as in draw.io; the seed rides in its style, kept with its drawing.
+    style: drawioHandDrawn(style) ? { ...style, sketchSeed: String(drawioSketchSeed(id)) } : style,
     vertex: attributes.vertex === '1',
     edge: attributes.edge === '1',
     source: attributes.source ?? null,

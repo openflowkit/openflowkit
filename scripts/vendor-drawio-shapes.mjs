@@ -35,7 +35,7 @@ fs.writeFileSync(path.join(out, 'shapes.js'), `/* eslint-disable */
 // Its shape code, unchanged, joined into one function by scripts/vendor-drawio-shapes.mjs. Regenerate, never edit.
 export function runDrawioShapes(host) {
   var { window, document, navigator, mxClient, mxLog, mxEvent, mxCellRenderer, Graph, mxConnectionConstraint, mxGraphView,
-    mxCellState, mxEdgeHandler, mxVertexHandler, Element, Node, GRAPH_IMAGE_PATH } = host;
+    mxCellState, mxEdgeHandler, mxVertexHandler, Element, Node, GRAPH_IMAGE_PATH, Editor, Math } = host;
 ${body}
 ;
   return { mxConstants, mxUtils, mxRectangle, mxPoint, mxAbstractCanvas2D, mxShape, mxStencil, mxStencilRegistry,

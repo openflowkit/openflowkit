@@ -25,7 +25,7 @@ export function drawioSketchFillStyle(fillStyle: string | undefined, fill: strin
 }
 
 /** Installs draw.io's sketch canvas: a shape whose style has `sketch=1` is drawn through Rough.js onto draw.io's canvas. */
-export function installDrawioSketch(mx: Record<string, any>, rough: { canvas(canvas: { getContext(): unknown }): any }): void {
+export function installDrawioSketch(mx: Record<string, any>, rough: { canvas(canvas: { getContext(): unknown }): any }, dice: { random(): number } = { random: Math.random }): void {
   const { mxShape, mxUtils, mxConstants } = mx;
   const value = (style: any, key: string, fallback: unknown) => mxUtils.getValue(style, key, fallback);
 
@@ -144,11 +144,26 @@ export function installDrawioSketch(mx: Record<string, any>, rough: { canvas(can
   proto.fillAndStroke = function fillAndStroke(this: any) { this.drawPath(this.getStyle(true, true)); };
   proto.destroy = function destroy(this: any) { for (const name of DRAWN) this.canvas[name] = this.original[name]; };
 
-  // Graph's mxShape.createHandJiggle: a sketched shape draws through Rough.js. draw.io's comic jiggle (`comic=1`,
-  // `sketchStyle=comic`) needs its editor's settings, so those shapes draw clean (named in drawioStyleLosses).
+  // Editor's mxShape.createHandJiggle: a sketched shape draws through Rough.js, or draw.io's comic jiggle under
+  // `sketchStyle=comic`; `comic=1` alone is the shape code's own jiggle. The jiggle's dice are seeded by the cell.
+  const comic = mxShape.prototype.createHandJiggle;
   mxShape.prototype.createHandJiggle = function createHandJiggle(this: any, canvas: any) {
-    if (this.outline || this.style == null || value(this.style, 'sketch', '0') === '0') return null;
-    if (value(this.style, 'sketchStyle', 'rough') === 'comic') return null;
-    return new (RoughCanvas as any)(canvas, roughOn(canvas), this);
+    if (this.outline || this.style == null) return null;
+    const sketched = value(this.style, 'sketch', '0') !== '0';
+    if (sketched && value(this.style, 'sketchStyle', 'rough') !== 'comic') return new (RoughCanvas as any)(canvas, roughOn(canvas), this);
+    if (!sketched && value(this.style, 'comic', '0') === '0') return null;
+    dice.random = seeded(Number(value(this.style, 'sketchSeed', 1)));
+    return sketched ? this.createComicCanvas(canvas) : comic.call(this, canvas);
+  };
+}
+
+/** A small seeded generator (mulberry32) standing in for draw.io's Math.random. */
+function seeded(seed: number): () => number {
+  let state = seed >>> 0;
+  return () => {
+    state = (state + 0x6d2b79f5) >>> 0;
+    let t = Math.imul(state ^ (state >>> 15), 1 | state);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
 }

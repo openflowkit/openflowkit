@@ -3,7 +3,7 @@
 // Its shape code, unchanged, joined into one function by scripts/vendor-drawio-shapes.mjs. Regenerate, never edit.
 export function runDrawioShapes(host) {
   var { window, document, navigator, mxClient, mxLog, mxEvent, mxCellRenderer, Graph, mxConnectionConstraint, mxGraphView,
-    mxCellState, mxEdgeHandler, mxVertexHandler, Element, Node, GRAPH_IMAGE_PATH } = host;
+    mxCellState, mxEdgeHandler, mxVertexHandler, Element, Node, GRAPH_IMAGE_PATH, Editor, Math } = host;
 // ---- mxgraph/src/util/mxConstants.js
 /**
  * Copyright (c) 2006-2026, JGraph Holdings Ltd

@@ -41,3 +41,17 @@ describe('the sketch canvas', () => {
     expect(parts[0]!.path.filter((command) => command.kind === 'line')).toHaveLength(3);
   });
 });
+
+describe('the comic canvas', () => {
+  it('jiggles a comic box as draw.io does, sketched or not, the same for the same seed', async () => {
+    const code = await loadDrawioShapes();
+    for (const style of [{ shape: 'rectangle', comic: '1', sketchSeed: '42' }, { shape: 'rectangle', sketch: '1', sketchStyle: 'comic', sketchSeed: '42' }]) {
+      const parts = code.draw(style, 120, 60)!.parts;
+      // draw.io breaks each edge into short jiggled steps (one per 10 px), off the straight line.
+      const lines = parts.flatMap((part) => part.path).filter((command) => command.kind === 'line');
+      expect(lines.length).toBeGreaterThan(30);
+      expect(code.draw(style, 120, 60)!.parts).toEqual(parts);
+      expect(code.draw({ ...style, sketchSeed: '43' }, 120, 60)!.parts).not.toEqual(parts);
+    }
+  });
+});

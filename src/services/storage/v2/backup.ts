@@ -67,6 +67,8 @@ const IMAGE = /\.(png|svg)$/i;
 
 /** The draw.io XML in a file — the file itself, or what a draw.io PNG or SVG export carries — else null. */
 async function drawioIn(file: File, text: string): Promise<string | null> {
+  // Every draw.io form is a PNG or markup, so JSON and the rest never load the importer and draw.io's shape code.
+  if (!/\.(png|drawio)$/i.test(file.name) && !text.trimStart().startsWith('<')) return null;
   // Loaded on first use, like the Excalidraw importer: Home's list doesn't wait on it.
   const [{ looksLikeDrawio }, { drawioFromPng, drawioFromSvg }] = await Promise.all([import('../../dsl/drawio'), import('../../dsl/drawioFile')]);
   if (/\.png$/i.test(file.name)) return drawioFromPng(new Uint8Array(await file.arrayBuffer()));

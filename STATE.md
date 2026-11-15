@@ -35,6 +35,6 @@ smoke the MCP Worker, push `mcp-vX.Y.Z` (registry), then the app tag `vX.Y.Z` (i
   the custom picker could save `#rrggbb` when alpha is ff; CLI `--page` → `start_thread` `pageId`; #104's IME
   `composing()` in six other text fields; comment shortcuts missing from `keyboard-shortcuts.md`; an open comment card
   in its own layer (it lifts every pin above the toolbars now); `add_shape.kind` errors say only "Invalid input".
-- draw.io import (@Mr-Macharia, 11-13): every draw.io shape native (option D: draw.io's Apache-2.0 shape code on one
-  pen-move canvas, fetched in the background); then stencils, rules checked vs draw.io's viewer, picker; `shape=table`.
+- draw.io import (@Mr-Macharia, 11-15): shapes, lines, arrowheads, sketch and comic drawn by draw.io's own code
+  (vendored 32.6.10); left: commit, a headed check vs draw.io's viewer. Headed `motion-dialog.spec.ts:102` fails (a 15 px panel scrollbar).
 - Unconfirmed since 10-14: D1 migration 0004 before the share Worker; origin check on `/e`. After launch: npm trusted publishing, click-through.

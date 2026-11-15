@@ -13,7 +13,7 @@ import { drawioCornerRadius, drawioHtmlValue, drawioLabelPlate, drawioStyleLosse
 import { pageCells, pageModel, type Cell } from './drawioCells';
 import { drawioConnector, type EndNode, type LabelAt } from './drawioConnectors';
 import { drawioRoutes } from './drawioEdgeView';
-import { drawnAsLabel, drawnContent, shapedLine, drawnLine, installDrawioCode, stencilNames, usesDrawioCode } from './drawioCode';
+import { drawnAppearance, drawnAsLabel, drawnContent, shapedLine, drawnLine, installDrawioCode, stencilNames, usesDrawioCode } from './drawioCode';
 import type { DrawioShapes } from './drawioShapes';
 import { DrawioView, type EdgeState } from './drawioView';
 import { drawioFreehands, freehandContent } from './drawioStencil';
@@ -312,7 +312,7 @@ class PageBuilder {
         : lane && !backdrop ? drawioLaneLine(cell, width, height, band, drawnLine(style)) : null;
       for (const [suffix, drawn] of [['shape', backdrop], ['lines', grid && { drawio: { shape: TABLE_LINES }, drawioParts: [grid as unknown as JsonObject], drawioSize: { ...size } }]] as const) {
         if (!drawn) continue;
-        const node = createShapeNode(page, { kind: 'rectangle', id: `${cell.id}:${suffix}`, at: { x: 0, y: 0 }, size, label: '', appearance: { ...plain, strokeWidth: drawnLine(style) } });
+        const node = createShapeNode(page, { kind: 'rectangle', id: `${cell.id}:${suffix}`, at: { x: 0, y: 0 }, size, label: '', appearance: drawnAppearance(plain, style) });
         this.push({ ...node, ...base, parentId: cell.id, content: { ...node.content, ...drawn } }, placement.matrix);
       }
       wordsBelong(cell.id);
@@ -326,7 +326,7 @@ class PageBuilder {
       const layout = labelLayout(state.label, fit.padding);
       const node = createShapeNode(page, {
         kind: shape.kind, id: cell.id, at: transform.translation, size, label: fit.inside ? label : '',
-        appearance: { ...drawioNodeAppearance(style), strokeWidth: drawnLine(style), ...(fit.inside ? layout.appearance : {}) },
+        appearance: { ...drawnAppearance(drawioNodeAppearance(style), style), ...(fit.inside ? layout.appearance : {}) },
       });
       this.push(this.formatted({ ...node, ...base, transform, content: { ...node.content, ...code, sizingPolicy: layout.sizingPolicy } }, cell, style), placement.matrix);
       if (!fit.inside) wordsBelong(cell.id);

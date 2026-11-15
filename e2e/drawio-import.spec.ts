@@ -36,13 +36,14 @@ test('draw.io’s AWS template opens in the dark theme with every label readable
   await expect.poll(() => page.evaluate(() => (window as unknown as { __V2__?: { getDocument(): { pages: unknown[] } | null } })
     .__V2__?.getDocument()?.pages.length)).toBe(2);
 
-  // Page 1 is the flowchart. As in draw.io's dark mode, its deep fills turn light and their white words dark.
-  await expect.poll(async () => (await inks(page)).find((node) => node.label === 'Project')?.ink, { timeout: 20_000 }).toBe(0x121212);
+  // Page 1 is the flowchart. As in draw.io's dark mode, its deep fills turn light and their white words dark:
+  // our canvas's dark, where draw.io uses its own page's.
+  await expect.poll(async () => (await inks(page)).find((node) => node.label === 'Project')?.ink, { timeout: 20_000 }).toBe(0x191b19);
 
   // Page 2 is AWS: its navy captions (drawn for a white page) turn light grey on the dark canvas, as draw.io draws them.
   await page.getByRole('button', { name: /^Pages/ }).click();
   await page.getByRole('dialog', { name: 'Pages', exact: true }).getByRole('button', { name: 'Page 2', exact: true }).click();
-  await expect.poll(async () => (await inks(page)).find((node) => node.label === 'Bucket' && node.ink !== undefined)?.ink, { timeout: 20_000 }).toBe(0xbdc7d4);
+  await expect.poll(async () => (await inks(page)).find((node) => node.label === 'Bucket' && node.ink !== undefined)?.ink, { timeout: 20_000 }).toBe(0xbfc9d6);
   const dark = (await inks(page)).filter((node) => node.ink !== undefined && node.ink < 0x404040);
   expect(dark.map((node) => node.label)).toEqual([]);
 });

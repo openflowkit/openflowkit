@@ -82,7 +82,9 @@ export function drawioLabelBox(cell: DrawioBox, style: DrawioStyle, shape = '', 
     const [dx, dy] = [x - cx, y - cy];
     anchor = { x: dx * Math.cos(radians) - dy * Math.sin(radians) + cx, y: dy * Math.cos(radians) + dx * Math.sin(radians) + cy };
   }
-  return { x: x - along * width, y: y - down * height, width, height, align, verticalAlign, wrap: style.whiteSpace === 'wrap', anchor, rotation: turn };
+  // An overflow=fill label's block is the box's own height (mxSvgCanvas2D), so its words run from the top, wrapped.
+  const fill = overflow === 'fill';
+  return { x: x - along * width, y: y - down * height, width, height, align, verticalAlign: fill ? 'top' : verticalAlign, wrap: fill || style.whiteSpace === 'wrap', anchor, rotation: turn };
 }
 
 /** How far our wrap width may differ from draw.io's before the words get a box of their own. */

@@ -14,6 +14,7 @@ separately; its changes are listed under *For developers* in each release.
 - **Import draw.io files.** `.drawio`, `.xml`, `.drawio.svg` and `.drawio.png` open with every page, shapes where they were, and anything that can't come across named in a toast.
 - **draw.io imports look as drawn.** Library shapes come from draw.io's own stencils, labels (on shapes and on lines) keep their bold, colour, size, paragraphs, dividers, shaded bands and tables in columns, shapes and their outside labels rename together, library shapes take a new fill, gradients and shadows come across (with an Effects button to edit them), and in the dark theme colours flip as draw.io's dark mode flips them.
 - **draw.io arrowheads come across as drawn.** Filled and hollow triangles, open arrows, filled and hollow diamonds, and single crow's-foot ends keep their look instead of all becoming one arrow.
+- **draw.io shapes and lines are drawn by draw.io's own code**, its sketch and comic hand-drawn styles included; what still can't come across is named in the import report.
 
 ## [2.2.0] — 2026-11-07
 

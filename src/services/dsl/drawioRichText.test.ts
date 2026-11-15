@@ -35,6 +35,16 @@ describe('draw.io HTML labels as rich labels', () => {
     expect(drawioRichLabel('<span>Just words</span>', 12)).toBeNull();
   });
 
+  it('colours words by a CSS colour name, as orgchart’s grey job titles are', () => {
+    const blocks = drawioRichLabel('Tessa<br><i style="color: gray">CFO</i>', 12)?.blocks;
+    expect(blocks).toMatchObject([{ runs: [{ text: 'Tessa\n' }, { text: 'CFO', italic: true, color: '#808080' }] }]);
+  });
+
+  it('keeps plain paragraphs, whose margins (a browser’s 1em) part them as sysml’s requirements are parted', () => {
+    const blocks = drawioRichLabel('<p>&lt;&lt;requirement&gt;&gt;</p><p>Eco-Friendliness</p>', 12)?.blocks;
+    expect(blocks).toMatchObject([{ spaceBefore: 12, spaceAfter: 12 }, { spaceBefore: 12, spaceAfter: 12 }]);
+  });
+
   it('sets a heading large and bold, ignores code and an unclosed tag', () => {
     const { blocks } = drawioRichLabel('<h1>Title</h1><script>alert(1)</script>x < y', 12)!;
     expect(blocks[0]).toMatchObject({ kind: 'text', runs: [{ bold: true, size: 24, text: 'Title' }] });

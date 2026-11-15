@@ -50,6 +50,9 @@ describe('draw.io styles', () => {
     expect(drawioColor('#AbC')).toBe('#abc');
     expect(drawioColor('none')).toBe('transparent');
     expect(drawioColor('default')).toBeUndefined();
+    // draw.io hands a colour to the browser, which reads CSS names.
+    expect(drawioColor('Red')).toBe('#ff0000');
+    expect(drawioColor('swimlane')).toBeUndefined();
     expect(drawioColor(undefined)).toBeUndefined();
   });
 
@@ -158,13 +161,13 @@ describe('drawioStyleLosses', () => {
     expect(drawioStyleLosses(parseDrawioStyle('rounded=1;fillColor=#dae8fc;strokeColor=default;fontColor=none;fillColor2=x;fontFamily=Helvetica;'), 'shape')).toEqual([]);
     expect(drawioStyleLosses(parseDrawioStyle(
       'gradientColor=default;shadow=1;comic=1;fillStyle=hatch;glass=1;fillColor=light-dark(#fff,#000);fontFamily=Comic Sans MS;'), 'shape')).toEqual([
-      'gradient fills are drawn solid', 'the hand-drawn comic look is drawn clean',
+      'gradient fills are drawn solid',
       'hatched and patterned fills are drawn solid', 'the glass shine is left off',
       'colours not written as #hex use the theme’s instead', 'the “Comic Sans MS” font is drawn in ours',
     ]);
-    // A sketched shape, its hatching included, is drawn by draw.io's sketch code; only its comic variant isn't.
+    // A sketched or comic shape, its hatching included, is drawn by draw.io's own hand-drawn code.
     expect(drawioStyleLosses(parseDrawioStyle('sketch=1;fillStyle=zigzag;'), 'shape')).toEqual([]);
-    expect(drawioStyleLosses(parseDrawioStyle('sketch=1;sketchStyle=comic;'), 'shape')).toEqual(['the hand-drawn comic look is drawn clean']);
+    expect(drawioStyleLosses(parseDrawioStyle('sketch=1;sketchStyle=comic;'), 'shape')).toEqual([]);
     // `default` fades to the page's colour: draw.io draws it as a gradient too.
     expect(drawioStyleLosses(parseDrawioStyle('gradientColor=default;'), 'shape')).toEqual(['gradient fills are drawn solid']);
     expect(drawioStyleLosses(parseDrawioStyle('gradientColor=none;shadow=0;fillStyle=solid;fillStyle=auto;'), 'shape')).toEqual([]);

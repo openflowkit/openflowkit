@@ -1,6 +1,7 @@
 import type { RichAlign, RichBlock, RichCell, RichRun } from '../../opencanvas/domain/text/richLabel';
 import { withoutClosingBreaks, withoutCode } from './drawioStyle';
 import { decodeEntities } from './xmlReader';
+import { cssColorName } from './cssColorNames';
 
 // draw.io's `html=1` labels as our rich labels: paragraphs (`p`, `div`, headings) with their alignment, indent,
 // margins, padding and background, tables as rows of cells in columns, `hr` dividers, `br` breaks, and words made bold, italic, underlined, struck, coloured or resized by tags
@@ -43,7 +44,7 @@ function hex(value: string | undefined): string | undefined {
   if (/^#[0-9a-f]{6}$/i.test(value)) return value.toLowerCase();
   const rgb = /^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*(?:,\s*([\d.]+)\s*)?\)$/i.exec(value);
   if (rgb && (rgb[4] === undefined || Number(rgb[4]) > 0)) return `#${[rgb[1], rgb[2], rgb[3]].map((n) => Math.min(255, Number(n)).toString(16).padStart(2, '0')).join('')}`;
-  return undefined;
+  return cssColorName(value);
 }
 
 interface Paint { readonly background?: string; readonly border?: string; readonly keep?: readonly ('background' | 'border')[] }
@@ -329,7 +330,9 @@ export function drawioRichLabel(value: string, base: number, labelAlign = 'cente
   }
   if (table) endRow();
   else flush();
+  // A paragraph's margins (a `<p>`'s 1em) are formatting too: they part its lines as a break alone doesn't.
   const formatted = blocks.some((block) => block.kind !== 'text' || block.align !== undefined || (block.indent ?? 0) > 0
+    || (block.spaceBefore ?? 0) > 0 || (block.spaceAfter ?? 0) > 0
     || block.background !== undefined || block.runs.some((run) => Object.keys(run).length > 1));
   return formatted ? { blocks } : null;
 }

@@ -248,6 +248,17 @@ describe('drawioToDocument', () => {
     expect(under.transform.translation.y).toBeCloseTo(47);
   });
 
+  it('fades a shape draw.io’s code draws once, in its parts, and not its words', async () => {
+    const { document } = await open('<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>'
+      + '<mxCell id="c" value="A" style="ellipse;rounded=1;fillColor=#1699D3;strokeColor=none;opacity=50;" vertex="1" parent="1"><mxGeometry x="0" y="0" width="100" height="100" as="geometry"/></mxCell>'
+      + '</root></mxGraphModel>');
+    const circle = document.pages[0]!.nodes.find((node) => node.id === 'c')!;
+    expect(circle.content.drawioParts).toBeDefined();
+    expect(circle.appearance.opacity).toBeUndefined();
+    const parts = circle.content.drawioParts as unknown as { fillOpacity: number }[];
+    expect(parts.map((part) => part.fillOpacity)).toContain(0.5);
+  });
+
   it('brings pictures across as images, and says which ones only draw.io has', async () => {
     const model = (cells: string) => `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${cells}</root></mxGraphModel>`;
     const { document, losses } = await open(model(
@@ -514,6 +525,9 @@ describe('big and deep draw.io files', () => {
       }
     }
     const text = wrap(cells);
+    // draw.io's own shape code loads once, on the first file that needs it; the test runner transforms its
+    // 115,000 lines on that load, which is not the import's time. A two-box file loads it first.
+    await open(wrap([vertex('w', '1'), vertex('w2', '1'), '<mxCell id="we" edge="1" source="w" target="w2" parent="1"><mxGeometry relative="1" as="geometry"/></mxCell>']));
     const started = performance.now();
     const { document } = await open(text);
     expect(performance.now() - started).toBeLessThan(3_000);

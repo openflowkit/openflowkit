@@ -50,3 +50,13 @@ describe('sketched cells', () => {
     expect(drawnContent(code, '', resolveDrawioStyle('rounded=1;', 'vertex'), { width: 120, height: 60 })).toBeNull();
   });
 });
+
+describe('comic cells', () => {
+  it('load draw.io’s code, carry a seed, and draw a box by draw.io’s comic jiggle', async () => {
+    expect(usesDrawioCode(cells('<mxCell id="e" style="endArrow=none;comic=1;" edge="1" parent="1"/>'))).toBe(true);
+    expect(cells('<mxCell id="a" style="comic=1;" vertex="1" parent="1"/>').find((c) => c.id === 'a')!.style.sketchSeed).toBe(String(drawioSketchSeed('a')));
+    const code = await installDrawioCode();
+    const drawn = drawnContent(code, '', resolveDrawioStyle('comic=1;sketchSeed=7;', 'vertex'), { width: 120, height: 60 });
+    expect((drawn?.drawio as { shape?: string }).shape).toBe('rectangle');
+  });
+});

@@ -5,7 +5,7 @@ import type { Cell } from './drawioCells';
 import { DRAWIO_CODE_ROUTERS, installDrawioRouters } from './drawioEdgeView';
 import { DRAWIO_CODE_PERIMETERS, installDrawioPerimeters } from './drawioPerimeter';
 import { loadDrawioShapes, type DrawioShapes } from './drawioShapes';
-import { drawioCodeName, drawioColor, drawioShape, drawioShapeName, type DrawioStyle } from './drawioStyle';
+import { drawioCodeName, drawioColor, drawioHandDrawn, drawioShape, drawioShapeName, type DrawioStyle } from './drawioStyle';
 import type { SceneConnector } from '../../opencanvas/domain/document/types';
 import { resolveConnectorLine } from '../../opencanvas/domain/connectors/presentation';
 import type { Point2d } from '../../opencanvas/domain/geometry/types';
@@ -24,7 +24,7 @@ export const drawnAsLabel = (style: DrawioStyle): boolean => ['label', ''].inclu
 
 /** Whether a page has a shape, a line's routing or a shape's outline that only draw.io's own code draws. */
 export function usesDrawioCode(cells: readonly Cell[]): boolean {
-  return cells.some((cell) => (cell.edge && (DRAWIO_CODE_ROUTERS.has(cell.style.edgeStyle ?? '') || drawnAsShape(cell.style) || hasEnds(cell.style) || cell.style.sketch === '1'))
+  return cells.some((cell) => (cell.edge && (DRAWIO_CODE_ROUTERS.has(cell.style.edgeStyle ?? '') || drawnAsShape(cell.style) || hasEnds(cell.style) || drawioHandDrawn(cell.style)))
     || (cell.vertex && (DRAWIO_CODE_PERIMETERS.has(cell.style.perimeter ?? '') || drawioShapeName(cell.style) === 'swimlane' || (drawioShape(cell.style, 1, 1).unknown !== undefined && !namedStyle(cell.style))
       // draw.io's label card places its picture by its own code.
       || (cell.style.image !== undefined && drawnAsLabel(cell.style)))));
@@ -49,10 +49,19 @@ export async function installDrawioCode(): Promise<DrawioShapes> {
 /** The line width draw.io draws a shape with: its `strokeWidth`, else 1. */
 export const drawnLine = (style: DrawioStyle): number => Math.max(0, Number.parseFloat(style.strokeWidth ?? '') || 1);
 
+/**
+ * A drawn shape's appearance: its colours and line, without `opacity`. draw.io's code fades each part it paints by the
+ * cell's opacity (the parts carry it), and leaves the words as they are; fading the node too would fade both twice.
+ */
+export function drawnAppearance(appearance: JsonObject, style: DrawioStyle): JsonObject {
+  const { opacity: _faded, ...rest } = appearance;
+  return { ...rest, strokeWidth: drawnLine(style) };
+}
+
 /** A shape draw.io draws (code, stencil, or code with a stencil inside) as the node content that draws it; else null. */
 export function drawnContent(code: DrawioShapes | null, written: string, style: DrawioStyle, size: { width: number; height: number }): JsonObject | null {
   // A sketched box is drawn by hand by draw.io's rectangle code; a plain one without a name is ours to draw.
-  const name = style.sketch === '1' ? drawioCodeName(written) : written;
+  const name = drawioHandDrawn(style) ? drawioCodeName(written) : written;
   if (!code?.has(name) || size.width <= 0 || size.height <= 0) return null;
   const named = { ...style, shape: name };
   const drawn = code.draw(named, size.width, size.height);
@@ -81,7 +90,7 @@ export function shapedLine(code: DrawioShapes | null, connector: SceneConnector,
   // A plain line with an end is drawn by draw.io's connector too, so every one of its ends (34 kinds, at its size,
   // the line stopping where draw.io stops it) is draw.io's own; until its look is changed here (`look`).
   // So is a sketched line (`sketch=1`), drawn by hand by draw.io's sketch code.
-  if (!shaped && !hasEnds(style) && style.sketch !== '1') return { connector };
+  if (!shaped && !hasEnds(style) && !drawioHandDrawn(style)) return { connector };
   const drawnStyle = shaped ? { ...style } : { ...style, shape: 'connector' };
   // A plain line keeps no drawing of its own: it is drawn when shown (a page of 24,000 lines imports at once), and
   // where draw.io's code isn't loaded it is drawn as ours.

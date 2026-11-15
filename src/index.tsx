@@ -21,8 +21,18 @@ if (cleanSearch !== null) window.history.replaceState(null, '', `${window.locati
 window.addEventListener('vite:preloadError', () => { reloadOnStaleChunk(); });
 
 startUsage({ entry: entryOf(window.location.hash) });
-// draw.io's own shape code, fetched in the background so draw.io shapes draw as draw.io draws them.
-warmDrawioShapes();
+// draw.io's own shape code, fetched in the background so draw.io shapes draw as draw.io draws them. Only once a
+// diagram opens: on Home its parse would hold up the list, which shows saved previews and never needs it.
+const drawsDiagrams = () => !/^(#\/?(home)?)?(\?|$)/.test(window.location.hash);
+if (drawsDiagrams()) warmDrawioShapes();
+else {
+  const warmOnOpen = () => {
+    if (!drawsDiagrams()) return;
+    window.removeEventListener('hashchange', warmOnOpen);
+    warmDrawioShapes();
+  };
+  window.addEventListener('hashchange', warmOnOpen);
+}
 startFeedbackSession(Date.now(), isViewerRoute(window.location.hash));
 
 const rootElement = document.getElementById('root');

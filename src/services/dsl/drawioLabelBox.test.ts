@@ -16,6 +16,10 @@ describe('drawioLabelBox', () => {
     expect(box('align=right;verticalAlign=bottom;spacingRight=8;spacingBottom=4;')).toMatchObject({ x: 102, y: 51, width: 108, height: 52 });
   });
 
+  it('fills the shape with an overflow=fill label: no spacing, wrapped, set from the top (mxSvgCanvas2D’s block is the box’s height)', () => {
+    expect(box('overflow=fill;')).toMatchObject({ x: 100, y: 50, width: 120, height: 60, verticalAlign: 'top', wrap: true });
+  });
+
   it('moves a label by a negative spacing, as the blog wireframe’s spacingTop=-5 does', () => {
     expect(box('text;spacingTop=-5;')).toMatchObject({ x: 102, y: 52, width: 116, height: 61 });
   });

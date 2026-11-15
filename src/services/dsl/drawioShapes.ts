@@ -112,6 +112,8 @@ function host(registry: Record<string, unknown>): any {
     mxCellRenderer, Graph: inert(), mxConnectionConstraint: inert(), mxGraphView: inert(),
     mxCellState: undefined, mxEdgeHandler: undefined, mxVertexHandler: undefined,
     Element: function Element() { /* none */ }, Node: function Node() { /* none */ }, GRAPH_IMAGE_PATH: '',
+    // The comic jiggle's default and its dice: drawioSketch seeds `random` per shape, so a diagram draws the same each time.
+    Editor: { sketchDefaultJiggle: '2' }, Math: Object.create(Math),
   };
 }
 
@@ -255,8 +257,9 @@ function domOf(element: XmlElement, parent: any = null): any {
 /** Runs draw.io's shape code; the result draws any shape it registered. */
 export function createDrawioShapes(runDrawioShapes: (host: any) => Record<string, any>, measure: MeasureText = portableMeasure, rough?: Parameters<typeof installDrawioSketch>[1]): DrawioShapes {
   const registry: Record<string, any> = Object.create(null);
-  const mx = runDrawioShapes(host(registry));
-  if (rough) installDrawioSketch(mx, rough);
+  const globals = host(registry);
+  const mx = runDrawioShapes(globals);
+  if (rough) installDrawioSketch(mx, rough, globals.Math);
   const { mxConstants, mxUtils, mxRectangle } = mx;
   // draw.io's core shapes, registered as its renderer registers them.
   for (const [key, name] of [['RECTANGLE', 'mxRectangleShape'], ['ELLIPSE', 'mxEllipse'], ['RHOMBUS', 'mxRhombus'], ['CYLINDER', 'mxCylinder'],

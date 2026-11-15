@@ -3,6 +3,7 @@ import type { SceneAnchor } from '../../opencanvas/domain/document/types';
 import type { ShapeKind } from '../../opencanvas/domain/nodes/shapeNode';
 import { DRAWIO_STYLESHEET } from './drawioStylesheet';
 import { decodeEntities } from './xmlReader';
+import { cssColorName } from './cssColorNames';
 
 // draw.io's cell `style` ("rounded=1;fillColor=#dae8fc;ellipse") read into the
 // shapes and paint keys OpenFlowKit draws. What has no counterpart is named, so
@@ -80,13 +81,16 @@ const BARE = new Set(['mxgraph.bootstrap.anchor']);
 /** The name draw.io's code registers a shape under: a box written without a shape, or as `rect`, is its `rectangle`. */
 export const drawioCodeName = (name: string): string => (name === '' || name === 'rect' ? 'rectangle' : name);
 
+/** draw.io draws the cell by hand: sketched (`sketch=1`) or comic (`comic=1`). */
+export const drawioHandDrawn = (style: DrawioStyle): boolean => style.sketch === '1' || (style.comic ?? '0') !== '0';
+
 export function drawioShape(style: DrawioStyle, width: number, height: number): { readonly kind: ShapeKind; readonly unknown?: string } {
   const name = drawioShapeName(style);
   if (name === 'text') return { kind: 'text' };
   const kind = own(SHAPES, name.replace(/\./g, '_'));
   if (!kind) return { kind: 'rectangle', unknown: name };
-  // A sketched shape (`sketch=1`) is drawn by hand, by draw.io's own sketch code (drawioSketch), whatever its kind.
-  if (style.sketch === '1') return { kind: kind === 'ellipse' && Math.abs(width - height) < 1 ? 'circle' : kind, unknown: drawioCodeName(name) };
+  // A sketched or comic shape is drawn by hand, by draw.io's own sketch and comic code (drawioSketch), whatever its kind.
+  if (drawioHandDrawn(style)) return { kind: kind === 'ellipse' && Math.abs(width - height) < 1 ? 'circle' : kind, unknown: drawioCodeName(name) };
   if (kind === 'rectangle' && style.rounded === '1') return { kind: 'rounded' };
   // An ellipse is drawn by draw.io's own ellipse code, on true curves (ours is a 24-sided outline, cornered when large),
   // with any dot in it (a UML final state: `centerRadius`).
@@ -113,7 +117,7 @@ export function drawioImageUrl(style: DrawioStyle): string | null {
 export function drawioColor(value: string | undefined): string | undefined {
   if (value === undefined) return undefined;
   if (value === 'none') return 'transparent';
-  return /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(value) ? value.toLowerCase() : undefined;
+  return /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(value) ? value.toLowerCase() : cssColorName(value);
 }
 
 /**
@@ -217,8 +221,6 @@ const OUR_FONTS = new Set(['helvetica', 'arial', 'verdana', 'inter', 'sans-serif
 export function drawioStyleLosses(style: DrawioStyle, of: 'shape' | 'connector', endsDrawn = false): string[] {
   const losses: string[] = [];
   if (style.gradientColor && style.gradientColor !== 'none' && !drawioColor(style.gradientColor)) losses.push('gradient fills are drawn solid');
-  // A sketched shape is drawn by draw.io's sketch code; draw.io's older `comic` jiggle is not.
-  if (style.sketch === '1' ? style.sketchStyle === 'comic' : style.comic === '1') losses.push('the hand-drawn comic look is drawn clean');
   if (style.sketch !== '1' && style.fillStyle && style.fillStyle !== 'solid' && style.fillStyle !== 'auto') losses.push('hatched and patterned fills are drawn solid');
   if (style.glass === '1') losses.push('the glass shine is left off');
   const unread = (value: string | undefined) => value !== undefined && !COLOUR_WORDS.has(value) && drawioColor(value) === undefined;
