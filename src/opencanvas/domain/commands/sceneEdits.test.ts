@@ -417,3 +417,13 @@ describe('path connector creation', () => {
     expect(command.connector.waypoints).toEqual([]);
   });
 });
+
+describe('change shape on a draw.io shape', () => {
+  it('drops draw.io’s drawing, so the new outline is what shows', () => {
+    const drawn = createTestNode('x', { kind: 'process', content: { shape: 'rectangle', label: 'Task', drawio: { shape: 'hexagon' }, drawioParts: [], drawioSize: { width: 10, height: 10 } } });
+    const page = createTestDocument({ nodes: [drawn] }).pages[0]!;
+    const command = buildSetShapeCommand(page, ['x'], 'ellipse')!;
+    const after = command.commands[0]!.kind === 'set-node' ? command.commands[0]!.after : null;
+    expect(after?.content).toEqual({ shape: 'ellipse', label: 'Task' });
+  });
+});

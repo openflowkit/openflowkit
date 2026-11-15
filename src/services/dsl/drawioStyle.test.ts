@@ -42,7 +42,10 @@ describe('draw.io styles', () => {
     expect(image('data:image/png,iVBOR')).toBe('data:image/png;base64,iVBOR');
     expect(image('data:image/svg+xml,%3Csvg%2F%3E')).toBe('data:image/svg+xml,%3Csvg%2F%3E');
     expect(image('https://example.com/a.png')).toBe('https://example.com/a.png');
-    expect(image('img/lib/ibm/vpc/Router.svg')).toBeNull();
+    // draw.io's own library is named by its path in the app; draw.io's server serves it to any site.
+    expect(image('img/lib/clip_art/computers/Laptop_128x128.png')).toBe('https://app.diagrams.net/img/lib/clip_art/computers/Laptop_128x128.png');
+    expect(image('img/lib/ibm/vpc/Router.svg')).toBe('https://app.diagrams.net/img/lib/ibm/vpc/Router.svg');
+    expect(image('pictures/mine.png')).toBeNull();
     expect(drawioImageUrl({})).toBeNull();
   });
 

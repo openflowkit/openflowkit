@@ -107,6 +107,8 @@ export function drawioImageUrl(style: DrawioStyle): string | null {
   const value = style.image;
   if (!value) return null;
   if (/^https?:\/\//i.test(value)) return value;
+  // draw.io's own picture library, named by its path in the app: draw.io's server serves it to any site, as its viewer loads it.
+  if (/^img\/lib\//.test(value)) return `https://app.diagrams.net/${value}`;
   const embedded = /^data:(image\/[a-z0-9.+-]+)(;base64)?,(.*)$/is.exec(value);
   if (!embedded) return null;
   const [, type, base64, data] = embedded;

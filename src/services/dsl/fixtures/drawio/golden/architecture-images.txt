@@ -18,81 +18,81 @@ page "Page 1": 1 layer(s), 94 nodes, 77 connectors
   process drawn cloud "Cloud 4" @1480,220 120x80 fill #bac8d3 ink #23445d
   process drawn cloud "Internet" @970,790 120x80 fill #bac8d3 ink #23445d
   process drawn mxgraph.eip.messageChannel @360,230 440x20 fill #ffffff ink #f08705
-  process rectangle @385,97 80x80 fill transparent ink #f08705
-  process rectangle @270,97 80x80 fill transparent ink #f08705
-  process rectangle @500,97 80x80 fill transparent ink #f08705
-  process rectangle @590,97 80x80 fill transparent ink #f08705
-  process rectangle @690,97 80x80 fill transparent ink #f08705
-  process rectangle @920,97 80x80 fill transparent ink #f08705
-  process rectangle @1010,97 80x80 fill transparent ink #f08705
-  process rectangle @1110,100 77x77 fill transparent ink #f08705
-  process rectangle @500,289 80x80 fill transparent ink #f08705
-  process rectangle @590,289 80x80 fill transparent ink #f08705
-  process rectangle @690,289 80x80 fill transparent ink #ae4132
-  process rectangle @920,289 80x80 fill transparent ink #f08705
-  process rectangle @1010,289 80x80 fill transparent ink #f08705
-  process rectangle @1110,289 80x80 fill transparent ink #f08705
-  process rectangle @330,474 80x80 fill transparent ink #f08705
-  process rectangle @420,474 80x80 fill transparent ink #f08705
-  process rectangle @520,474 80x80 fill transparent ink #f08705
-  process rectangle @630,474 80x80 fill transparent ink #f08705
-  process rectangle @720,474 80x80 fill transparent ink #f08705
-  process rectangle @810,474 80x80 fill transparent ink #f08705
-  process rectangle @925,484 80x80 fill transparent ink #f08705
-  process rectangle @1025,484 80x80 fill transparent ink #f08705
-  process rectangle @1115,484 80x80 fill transparent ink #f08705
+  image "Image" @385,97 80x80
+  image "Image" @270,97 80x80
+  image "Image" @500,97 80x80
+  image "Image" @590,97 80x80
+  image "Image" @690,97 80x80
+  image "Image" @920,97 80x80
+  image "Image" @1010,97 80x80
+  image "Image" @1110,100 77x77
+  image "Image" @500,289 80x80
+  image "Image" @590,289 80x80
+  image "Image" @690,289 80x80
+  image "Image" @920,289 80x80
+  image "Image" @1010,289 80x80
+  image "Image" @1110,289 80x80
+  image "Image" @330,474 80x80
+  image "Image" @420,474 80x80
+  image "Image" @520,474 80x80
+  image "Image" @630,474 80x80
+  image "Image" @720,474 80x80
+  image "Image" @810,474 80x80
+  image "Image" @925,484 80x80
+  image "Image" @1025,484 80x80
+  image "Image" @1115,484 80x80
   process drawn mxgraph.eip.messageChannel @918,229 422x20 fill #ffffff ink #f08705
   process drawn mxgraph.eip.messageChannel @350,399 440x20 fill #ffffff ink #f08705
   process drawn mxgraph.eip.messageChannel @918,399 412x20 fill #ffffff ink #f08705
   process drawn mxgraph.eip.messageChannel @230,594 1090x20 fill #ffffff ink #f08705
   process drawn cloud "Cloud 1" @50,97 120x80 fill #bac8d3 ink #23445d
   process drawn cloud "Cloud 2" @50,359 120x80 fill #bac8d3 ink #23445d
-  process rectangle @1240,117 80x80 fill transparent ink #f08705
-  process rectangle @1250,281 80x80 fill transparent ink #f08705
-  process rectangle @660,679 80x80 fill transparent ink #f08705
-  process rectangle @1230,484 80x80 fill transparent ink #f08705
-  process rectangle @400,679 80x80 fill transparent ink #f08705
-  process rectangle @1340,484 80x80 fill transparent ink #f08705
-  process rectangle @573,815 80x80 fill transparent ink #f08705
-  process rectangle @258,815 80x80 fill transparent ink #f08705
-  process rectangle @348,815 80x80 fill transparent ink #f08705
-  process rectangle @448,815 80x80 fill transparent ink #f08705
+  image "Image" @1240,117 80x80
+  image "Image" @1250,281 80x80
+  image "Image" @660,679 80x80
+  image "Image" @1230,484 80x80
+  image "Image" @400,679 80x80
+  image "Image" @1340,484 80x80
+  image "Image" @573,815 80x80
+  image "Image" @258,815 80x80
+  image "Image" @348,815 80x80
+  image "Image" @448,815 80x80
   process drawn mxgraph.eip.messageChannel @258,925 415x20 fill #ffffff ink #f08705
-  process rectangle @362,993 80x80 fill transparent ink #f08705
-  process rectangle @452,993 80x80 fill transparent ink #f08705
-  process rectangle @552,993 80x80 fill transparent ink #f08705
+  image "Image" @362,993 80x80
+  image "Image" @452,993 80x80
+  image "Image" @552,993 80x80
   process drawn mxgraph.eip.messageChannel @362,1095 385x20 fill #ffffff ink #f08705
-  process rectangle @1502,784 80x80 fill transparent ink #f08705
-  process rectangle @1412,784 80x80 fill transparent ink #f08705
-  process rectangle @1302,784 80x80 fill transparent ink #f08705
+  image "Image" @1502,784 80x80
+  image "Image" @1412,784 80x80
+  image "Image" @1302,784 80x80
   process drawn mxgraph.eip.messageChannel @1202,908 400x20 fill #ffffff ink #f08705
-  process rectangle @1231,979 80x80 fill transparent ink #f08705
-  process rectangle @1321,979 80x80 fill transparent ink #f08705
-  process rectangle @1421,979 80x80 fill transparent ink #f08705
+  image "Image" @1231,979 80x80
+  image "Image" @1321,979 80x80
+  image "Image" @1421,979 80x80
   process drawn mxgraph.eip.messageChannel @1091,1091 430x20 fill #ffffff ink #f08705
-  process rectangle @657,993 80x80 fill transparent ink #f08705
-  process rectangle @1520,419 80x80 fill transparent ink #f08705
-  process rectangle @1520,524 80x80 fill transparent ink #f08705
-  process rectangle @1520,629 80x80 fill transparent ink #f08705
-  process rectangle @40,503 80x80 fill transparent ink #f08705
-  process rectangle @50,599 80x80 fill transparent ink #f08705
-  process rectangle @50,693 80x80 fill transparent ink #f08705
-  process rectangle @1005,679 80x80 fill transparent ink #f08705
-  process rectangle @378,289 80x80 fill transparent ink #f08705
-  process rectangle @795,930 80x80 fill transparent ink #f08705
-  process rectangle @875,930 80x80 fill transparent ink #f08705
-  process rectangle @885,1010 80x80 fill transparent ink #f08705
-  process rectangle @980,991 80x80 fill transparent ink #f08705
-  process rectangle @1202,784 80x80 fill transparent ink #f08705
-  process rectangle @1116,979 80x80 fill transparent ink #f08705
-  process rectangle @230,474 80x80 fill transparent ink #f08705
-  process rectangle @50,799 80x80 fill transparent ink #f08705
-  process rectangle @50,901 80x80 fill transparent ink #f08705
-  process rectangle @1220,659 80x80 fill transparent ink #f08705
-  process rectangle @810,289 80x80 fill transparent ink #f08705
+  image "Image" @657,993 80x80
+  image "Image" @1520,419 80x80
+  image "Image" @1520,524 80x80
+  image "Image" @1520,629 80x80
+  image "Image" @40,503 80x80
+  image "Image" @50,599 80x80
+  image "Image" @50,693 80x80
+  image "Image" @1005,679 80x80
+  image "Image" @378,289 80x80
+  image "Image" @795,930 80x80
+  image "Image" @875,930 80x80
+  image "Image" @885,1010 80x80
+  image "Image" @980,991 80x80
+  image "Image" @1202,784 80x80
+  image "Image" @1116,979 80x80
+  image "Image" @230,474 80x80
+  image "Image" @50,799 80x80
+  image "Image" @50,901 80x80
+  image "Image" @1220,659 80x80
+  image "Image" @810,289 80x80
   process rectangle "HEAD⏎OFFICE" @750,649 240x110 fill transparent ink #ae4132
   process rectangle "ENTERPRISE NETWORK" @137,15 1380x45 fill transparent ink #ae4132
-  process rectangle @1520,321 80x80 fill transparent ink #f08705
+  image "Image" @1520,321 80x80
   24 -> 20 polyline, 1 bends
   53 -> 57 bezier, 2 bends
   22 -> 23 direct, 0 bends
@@ -170,4 +170,4 @@ page "Page 1": 1 layer(s), 94 nodes, 77 connectors
   169 -> 56 polyline, 15 bends
   168 -> 168 direct, 0 bends
   27 -> 27 direct, 0 bends
-losses: 63 pictures come from draw.io’s own image library, so they are drawn as a box
+losses: none

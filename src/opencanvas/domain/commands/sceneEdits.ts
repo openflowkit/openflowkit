@@ -413,10 +413,11 @@ export function buildSetShapeCommand(page: ScenePage, nodeIds: readonly string[]
       const current = resolveBasicNodePresentation(node)?.shape;
       return selected.has(node.id) && !states.get(node.id)?.locked && current !== undefined && current !== shape;
     })
-    .map((before) => ({
-      kind: 'set-node', id: `shape:${before.id}`, label: 'Change shape', pageId: page.id,
-      before, after: { ...before, content: { ...before.content, shape } },
-    }));
+    .map((before) => {
+      // A draw.io shape is drawn by draw.io's own code from its saved style; the new outline replaces that drawing.
+      const { drawio: _drawio, drawioParts: _parts, drawioSize: _size, ...content } = before.content;
+      return { kind: 'set-node', id: `shape:${before.id}`, label: 'Change shape', pageId: page.id, before, after: { ...before, content: { ...content, shape } } };
+    });
   return commands.length ? { kind: 'batch', id: 'set-shape', label: 'Change shape', commands } : null;
 }
 

@@ -148,3 +148,33 @@ describe('container resize', () => {
     expect(transformBefore(snapshot).map((node) => node.id)).toEqual(['s', 'c']);
   });
 });
+
+describe('resizing a shape inside a container', () => {
+  it('keeps the shape where it is: the dragged corner moves, the opposite one stays put', () => {
+    const section = createTestNode('s', {
+      kind: 'section', size: { width: 600, height: 400 },
+      transform: { translation: { x: 300, y: 200 }, rotationRadians: 0, scale: { x: 1, y: 1 } },
+    });
+    const child = createTestNode('c', {
+      parentId: 's', size: { width: 100, height: 60 },
+      transform: { translation: { x: 40, y: 60 }, rotationRadians: 0, scale: { x: 1, y: 1 } },
+    });
+    const page = createTestDocument({ nodes: [section, child] }).pages[0];
+    // On the canvas the shape spans (340, 260)–(440, 320); drag its south-east corner out to (480, 340).
+    const result = resizeTransform(createTransformSnapshot(page, ['c']), { handle: 'south-east', pointer: { x: 480, y: 340 }, snap: false });
+    expect(result.nodes[0]!.size).toEqual({ width: 140, height: 80 });
+    expect(result.nodes[0]!.transform.translation).toEqual({ x: 40, y: 60 });
+  });
+});
+
+describe('rotating a shape inside a container', () => {
+  it('turns it in place', () => {
+    const section = createTestNode('s', { kind: 'section', size: { width: 600, height: 400 }, transform: { translation: { x: 300, y: 200 }, rotationRadians: 0, scale: { x: 1, y: 1 } } });
+    const child = createTestNode('c', { parentId: 's', size: { width: 100, height: 100 }, transform: { translation: { x: 40, y: 60 }, rotationRadians: 0, scale: { x: 1, y: 1 } } });
+    const page = createTestDocument({ nodes: [section, child] }).pages[0];
+    // A half turn about its own centre (390, 310) leaves a square where it was.
+    const result = rotateTransform(page, createTransformSnapshot(page, ['c']), { x: 500, y: 310 }, { x: 280, y: 310 });
+    const { x, y } = result.nodes[0]!.transform.translation;
+    expect([Math.round(x), Math.round(y)]).toEqual([140, 160]);
+  });
+});

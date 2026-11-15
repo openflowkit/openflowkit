@@ -55,6 +55,13 @@ export function connectorAppearanceWithPatch(base: JsonObject, patch: ConnectorS
     const value = patch[key];
     if (value !== undefined) appearance[key] = value;
   }
+  // A draw.io line's colours flip on a dark canvas as draw.io's do; a colour picked here is shown as picked.
+  const picked = [patch.color !== undefined && 'stroke', ...(['labelColor', 'labelBackground'] as const).filter((key) => patch[key] !== undefined)]
+    .filter((key): key is string => typeof key === 'string');
+  if (base.darkColors === 'invert' && picked.length) {
+    const kept = Array.isArray(base.keepOnDark) ? base.keepOnDark : [];
+    appearance.keepOnDark = [...kept, ...picked.filter((key) => !kept.includes(key))];
+  }
   return appearance;
 }
 

@@ -159,7 +159,9 @@ export function resolveConnectorLine(connector: SceneConnector): Pick<ConnectorP
     width: boundedNumber(connector.appearance.strokeWidth, 1.75, 0.5, 8),
     opacity: boundedNumber(connector.appearance.opacity, 1, 0, 1),
     dash: dashPattern(connector.appearance, markers.dashed),
-    ...(connector.appearance.darkColors === 'invert' && optionalString(connector.appearance.stroke) ? { invertOnDark: true } : {}),
+    // A draw.io line flips its colour on a dark canvas, unless that colour was picked here (`keepOnDark`).
+    ...(connector.appearance.darkColors === 'invert' && optionalString(connector.appearance.stroke)
+      && !(Array.isArray(connector.appearance.keepOnDark) && connector.appearance.keepOnDark.includes('stroke')) ? { invertOnDark: true } : {}),
   };
   return {
     stroke,

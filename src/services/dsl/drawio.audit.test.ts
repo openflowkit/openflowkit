@@ -95,13 +95,12 @@ describe('draw.io templates as the audit found them', () => {
     expect(lock!.appearance).toMatchObject({ fill: 'transparent', stroke: '#277116', strokeStyle: 'dashed' });
   });
 
-  it('outlines a picture from draw.io’s library in its line colour, not its unpainted white fill', async () => {
-    const { document } = await open(model(cell('pic', 'image;image=img/lib/clip_art/computers/Netbook_128x128.png;fillColor=#FFFFFF;strokeColor=#000000;', 0)
-      + cell('bare', 'image;image=img/lib/clip_art/computers/Netbook_128x128.png;fillColor=#FFFFFF;', 200)));
-    const byId = new Map(document.pages[0]!.nodes.map((node) => [node.id, node]));
-    const [pic, bare] = [byId.get('pic'), byId.get('bare')];
-    expect(pic!.appearance).toMatchObject({ fill: 'transparent', stroke: '#000000', strokeStyle: 'dashed' });
-    expect(bare!.appearance).toMatchObject({ stroke: '#000000' });
+  it('shows a picture from draw.io’s library, not a box standing in for it', async () => {
+    const { document, losses } = await open(model(cell('pic', 'image;image=img/lib/clip_art/computers/Netbook_128x128.png;fillColor=#FFFFFF;strokeColor=#000000;', 0)));
+    expect(document.pages[0]!.nodes.find((node) => node.id === 'pic')).toMatchObject({
+      kind: 'image', content: { imageUrl: 'https://app.diagrams.net/img/lib/clip_art/computers/Netbook_128x128.png' },
+    });
+    expect(losses).toEqual([]);
   });
 
   it('names a set of icons drawn as boxes once, not one line per icon', async () => {

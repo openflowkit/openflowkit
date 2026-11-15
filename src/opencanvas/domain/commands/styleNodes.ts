@@ -5,7 +5,7 @@ import { areStructurallyEqual } from './equality';
 import { buildNodeStateMap } from '../scene/nodeState';
 import { textNodeSize } from './sceneEdits';
 import { refitIconCard } from '../nodes/iconCardLayout';
-import { resolveNodeStyle } from '../nodes/nodeStyle';
+import { INVERTED_KEYS, resolveNodeStyle } from '../nodes/nodeStyle';
 
 /** The appearance keys that change how tall an icon card's caption is. */
 const TYPOGRAPHY_KEYS = ['fontSize', 'fontFamily', 'fontWeight', 'lineHeight', 'letterSpacing', 'textPadding'];
@@ -19,6 +19,12 @@ export function buildStyleNodesCommand(page: ScenePage, ids: readonly string[], 
   for (const before of page.nodes) {
     if (!selected.has(before.id) || states.get(before.id)?.locked) continue;
     const appearance = { ...before.appearance, ...patch };
+    // A draw.io node's colours flip on a dark canvas as draw.io's do; a colour picked here is shown as picked.
+    const picked = INVERTED_KEYS.filter((key) => key in patch);
+    if (before.appearance.darkColors === 'invert' && picked.length) {
+      const kept = Array.isArray(before.appearance.keepOnDark) ? before.appearance.keepOnDark : [];
+      appearance.keepOnDark = [...kept, ...picked.filter((key) => !kept.includes(key))];
+    }
     if (areStructurallyEqual(appearance, before.appearance)) continue;
     const styled = { ...before, appearance };
     // Free text hugs its content, so typography changes re-fit the box; an icon card re-fits its height to its caption.

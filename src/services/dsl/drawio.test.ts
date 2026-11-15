@@ -259,7 +259,7 @@ describe('drawioToDocument', () => {
     expect(parts.map((part) => part.fillOpacity)).toContain(0.5);
   });
 
-  it('brings pictures across as images, and says which ones only draw.io has', async () => {
+  it('brings pictures across as images, draw.io’s own library loaded from draw.io’s server', async () => {
     const model = (cells: string) => `<mxGraphModel><root><mxCell id="0"/><mxCell id="1" parent="0"/>${cells}</root></mxGraphModel>`;
     const { document, losses } = await open(model(
       '<mxCell id="logo" value="Logo" style="shape=image;image=data:image/svg+xml,PHN2Zy8+;verticalLabelPosition=bottom;" vertex="1" parent="1"><mxGeometry x="10" y="10" width="40" height="40" as="geometry"/></mxCell>'
@@ -269,8 +269,8 @@ describe('drawioToDocument', () => {
     const byId = new Map(document.pages[0]!.nodes.map((node) => [node.id, node]));
     expect(byId.get('logo')).toMatchObject({ kind: 'image', content: { imageUrl: 'data:image/svg+xml;base64,PHN2Zy8+' } });
     expect(byId.get('logo:label')).toMatchObject({ content: { label: 'Logo' } });
-    expect(byId.get('lib')).toMatchObject({ content: { shape: 'rectangle' } });
-    expect(losses).toEqual(['2 pictures come from draw.io’s own image library, so they are drawn as a box']);
+    expect(byId.get('lib')).toMatchObject({ kind: 'image', content: { imageUrl: 'https://app.diagrams.net/img/lib/ibm/vpc/Router.svg' } });
+    expect(losses).toEqual([]);
   });
 
   it('stretches a picture to its box where draw.io says imageAspect=0, and keeps its proportions otherwise', async () => {

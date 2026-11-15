@@ -280,7 +280,11 @@ function isPaletteFill(fill: string, palette: ReturnType<typeof nodePaletteName>
 }
 
 /** The colour keys draw.io's dark mode inverts. */
-const INVERTED_KEYS = ['fill', 'stroke', 'textColor', 'gradientColor', 'labelBackground'] as const;
+export const INVERTED_KEYS = ['fill', 'stroke', 'textColor', 'gradientColor', 'labelBackground'] as const;
+
+/** The colours picked in OpenFlowKit on a draw.io node (`keepOnDark`): shown as picked, not flipped with draw.io's. */
+const keptOnDark = (appearance: SceneNode['appearance']): readonly unknown[] =>
+  Array.isArray(appearance.keepOnDark) ? appearance.keepOnDark : [];
 
 /**
  * A node marked `darkColors: 'invert'` (draw.io's) is drawn on a dark canvas as draw.io's dark mode draws it: each of
@@ -290,10 +294,11 @@ function forCanvas(node: SceneNode, dark: boolean): { readonly a: SceneNode['app
   const { appearance, content } = node;
   if (!dark || appearance.darkColors !== 'invert') return { a: appearance, c: content };
   const a: Record<string, unknown> = { ...appearance };
-  for (const key of INVERTED_KEYS) if (typeof a[key] === 'string') a[key] = invertForDark(a[key] as string);
+  const kept = keptOnDark(appearance);
+  for (const key of INVERTED_KEYS) if (typeof a[key] === 'string' && !kept.includes(key)) a[key] = invertForDark(a[key] as string);
   return {
     a: a as SceneNode['appearance'],
-    c: typeof content.customColor === 'string' ? { ...content, customColor: invertForDark(content.customColor) } : content,
+    c: typeof content.customColor === 'string' && !kept.includes('textColor') ? { ...content, customColor: invertForDark(content.customColor) } : content,
   };
 }
 

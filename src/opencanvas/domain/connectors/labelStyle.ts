@@ -28,7 +28,8 @@ export function resolveConnectorLabelStyle(connector: SceneConnector): NodeStyle
   if (a.labelBackground === undefined) defaultPlate.add(style);
   if (a.darkColors === 'invert') {
     const flipped: Record<string, unknown> = { ...a };
-    for (const key of LABEL_COLOURS) if (typeof flipped[key] === 'string') flipped[key] = invertForDark(flipped[key] as string);
+    const kept = Array.isArray(a.keepOnDark) ? a.keepOnDark : [];
+    for (const key of LABEL_COLOURS) if (typeof flipped[key] === 'string' && !kept.includes(key)) flipped[key] = invertForDark(flipped[key] as string);
     darkVersion.set(style, { ...labelStyleOf(connector.id, flipped as SceneConnector['appearance']), invertColors: true });
   }
   return style;
