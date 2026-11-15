@@ -83,6 +83,11 @@ export function textNodeSize(label: string, style: NodeStyle): Size2d {
 }
 
 // I-06: completion commits exactly one set-node; empty string is a valid label.
+function withoutRichLabel(content: SceneNode['content']): SceneNode['content'] {
+  const { richLabel: _formatting, ...plain } = content;
+  return plain;
+}
+
 export function buildSetNodeLabelCommand(
   page: ScenePage,
   nodeId: string,
@@ -98,9 +103,29 @@ export function buildSetNodeLabelCommand(
     before: node,
     after: refitIconCard({
       ...node,
-      content: { ...node.content, label },
+      // New words are plain: the formatting set on the old ones (a rich label) doesn't carry over. The same words keep it.
+      content: label === node.content.label ? node.content : withoutRichLabel({ ...node.content, label }),
       size: node.kind === 'text' ? textNodeSize(label, resolveNodeStyle(node)) : node.size,
     }, node),
+  };
+}
+
+/**
+ * A label edit as the person means it: the node's words, and with them its label partner's. A shape whose words sit
+ * beside it (an imported picture's caption, words above a box) has them in a node of their own, marked
+ * `content.labelOf` with the shape's id; editing either one changes both, in one undo step.
+ */
+export function buildEditLabelCommand(page: ScenePage, nodeId: string, label: string): DocumentCommand {
+  const node = page.nodes.find((candidate) => candidate.id === nodeId);
+  if (!node) throw new RangeError(`Node "${nodeId}" was not found.`);
+  const owner = typeof node.content.labelOf === 'string' ? node.content.labelOf : node.id;
+  const partners = page.nodes.filter((candidate) => candidate.id !== nodeId
+    && (candidate.id === owner || candidate.content.labelOf === owner));
+  const own = buildSetNodeLabelCommand(page, nodeId, label);
+  if (!partners.length) return own;
+  return {
+    kind: 'batch', id: `edit-label:${nodeId}`, label: 'Edit label',
+    commands: [own, ...partners.map((partner) => buildSetNodeLabelCommand(page, partner.id, label))],
   };
 }
 
@@ -388,10 +413,11 @@ export function buildSetShapeCommand(page: ScenePage, nodeIds: readonly string[]
       const current = resolveBasicNodePresentation(node)?.shape;
       return selected.has(node.id) && !states.get(node.id)?.locked && current !== undefined && current !== shape;
     })
-    .map((before) => ({
-      kind: 'set-node', id: `shape:${before.id}`, label: 'Change shape', pageId: page.id,
-      before, after: { ...before, content: { ...before.content, shape } },
-    }));
+    .map((before) => {
+      // A draw.io shape is drawn by draw.io's own code from its saved style; the new outline replaces that drawing.
+      const { drawio: _drawio, drawioParts: _parts, drawioSize: _size, ...content } = before.content;
+      return { kind: 'set-node', id: `shape:${before.id}`, label: 'Change shape', pageId: page.id, before, after: { ...before, content: { ...content, shape } } };
+    });
   return commands.length ? { kind: 'batch', id: 'set-shape', label: 'Change shape', commands } : null;
 }
 

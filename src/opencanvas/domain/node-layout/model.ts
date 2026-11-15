@@ -133,9 +133,11 @@ export function resolveNodeContentLayout(
   return validateNodeContentLayout(content.contentLayout).value;
 }
 
+// Content wider or taller than its space keeps its aligned side (the SVG exporter's text-anchor does the same):
+// end-aligned words that don't fit grow leftward out of the box, centred ones both ways.
 function alignedOffset(space: number, size: number, alignment: ContentAlignment): number {
-  if (alignment === 'end') return Math.max(0, space - size);
-  if (alignment === 'center') return Math.max(0, (space - size) / 2);
+  if (alignment === 'end') return space - size;
+  if (alignment === 'center') return (space - size) / 2;
   return 0;
 }
 

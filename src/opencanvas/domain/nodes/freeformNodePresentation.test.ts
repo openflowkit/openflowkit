@@ -48,6 +48,12 @@ describe('freeform node presentation', () => {
     ).toMatchObject({ sourceUrl: null });
   });
 
+  it('stretches an image to its box only when its content says so', () => {
+    expect(resolveFreeformNodePresentation(node('image', { imageUrl: 'data:image/png;base64,AA==', imageFit: 'stretch' })))
+      .toMatchObject({ fit: 'stretch' });
+    expect(resolveFreeformNodePresentation(node('image', { imageUrl: 'data:image/png;base64,AA==' }))).not.toHaveProperty('fit');
+  });
+
   it('resolves annotation content and rejects unrelated families', () => {
     expect(
       resolveFreeformNodePresentation(

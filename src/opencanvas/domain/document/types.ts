@@ -1,5 +1,5 @@
 import type { Point2d, Size2d, Transform2d } from '../geometry/types';
-import type { JsonObject } from './json';
+import type { JsonObject, JsonValue } from './json';
 
 export const SCENE_DOCUMENT_FORMAT = 'openflowkit.scene' as const;
 export const SCENE_DOCUMENT_VERSION = 1 as const;
@@ -61,6 +61,10 @@ export interface ConnectorLabel {
   readonly pathRatio: number;
   readonly offset: Point2d;
   readonly metadata: JsonObject;
+  /** Formatting of `text`'s words, as a node's `content.richLabel` (see text/richLabel.ts). */
+  readonly richLabel?: JsonValue;
+  /** This label's own plate colour ('transparent': none), over the connector's label plate. */
+  readonly background?: string;
 }
 
 export interface SceneConnector {

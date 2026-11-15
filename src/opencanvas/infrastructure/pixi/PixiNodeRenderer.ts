@@ -1,10 +1,10 @@
 import { pixiPaintColor } from './pixiColor';
-import { resolveNodeStyle, type NodeStyle } from '../../domain/nodes/nodeStyle';
+import { gradientAxis, resolveNodeStyle, type NodeGradient, type NodeStyle } from '../../domain/nodes/nodeStyle';
 import { basicNodeOutlinePoints } from '../../domain/nodes/basicNodeOutline';
 import { basicNodeDecorations } from '../../domain/nodes/basicNodeDecorations';
 import { drawDashedPath } from './PixiConnectorRenderer';
 import { buildNodeStateMap } from '../../domain/scene/nodeState';
-import { Container, Graphics, Text } from 'pixi.js';
+import { Container, FillGradient, Graphics, Text } from 'pixi.js';
 import { applyMatrixToPoint, transformBounds } from '../../domain/geometry/matrix';
 import { createBounds2d, unionBounds } from '../../domain/geometry/bounds';
 import type { ScenePage } from '../../domain/document/types';
@@ -22,6 +22,8 @@ import { PixiWireframeNodeRenderer } from './PixiWireframeNodeRenderer';
 import { PixiWidgetNodeRenderer } from './PixiWidgetNodeRenderer';
 import { PixiChartNodeRenderer } from './PixiChartNodeRenderer';
 import { drawPixiNodeOutline } from './pixiNodeOutline';
+import { drawPixiDrawnShape } from './pixiDrawnShape';
+import { drawnShapeParts, drawnShapeStyle } from '../../domain/nodes/drawnShape';
 import type { PixiNodeDebugRecord } from './pixiNodeDebug';
 import { isBackdropNode, isContainerNodeKind } from '../../domain/nodes/containerNodePresentation';
 import { isSequenceParticipant } from './sequenceNodeVisual';
@@ -32,7 +34,18 @@ import { PixiTextPool } from './pixiTextPool';
 import { labelReadable, MIN_TITLE_SCREEN_PX, type SemanticDetailLevel } from './viewportProjection';
 import { numericColorToHex } from '../../domain/color/adaptiveColor';
 import { OverlapGrid } from './overlapGrid';
+
+/** A fill running from `from` to the gradient's colour across the shape's own bounds. */
+function nodeGradient(from: string, gradient: NodeGradient): FillGradient {
+  const colorStops = [{ offset: 0, color: from }, { offset: 1, color: gradient.color }];
+  const axis = gradientAxis(gradient.direction);
+  return axis
+    ? new FillGradient({ type: 'linear', start: axis.from, end: axis.to, colorStops, textureSpace: 'local' })
+    : new FillGradient({ type: 'radial', center: { x: 0.5, y: 0.5 }, innerRadius: 0, outerCenter: { x: 0.5, y: 0.5 }, outerRadius: 0.5, colorStops, textureSpace: 'local' });
+}
 import { pixiTextExtent } from './pixiTextExtent';
+import { drawPixiRichLabel } from './pixiRichLabel';
+import { richLabelOf } from '../../domain/text/richLabel';
 
 const NODE_FILL = 0xffffff;
 const NODE_STROKE = 0xcbd5e1;
@@ -237,30 +250,39 @@ export class PixiNodeRenderer {
       // draw into the shared graphics and would each need an alpha argument.
       const alpha = style.opacity;
       const customPath = typeof node.content.customSvgPath === 'string' ? node.content.customSvgPath : undefined;
-      if (style.shadow && fillPaint.alpha > 0) {
-        drawPixiNodeOutline(target, renderedShape, node.size,
-          { ...matrix, tx: matrix.tx + 2, ty: matrix.ty + 4 }, customPath, style.cornerRadius);
-        target.fill({ color: 0x0f172a, alpha: 0.12 * alpha });
-      }
-      drawPixiNodeOutline(target, renderedShape, node.size, matrix, customPath, style.cornerRadius);
-      target.fill({ color: fill, alpha: alpha * fillPaint.alpha });
-      if (style.strokeWidth > 0 && style.dash.length) {
-        const outline = basicNodeOutlinePoints(renderedShape, node.size, customPath, style.cornerRadius)
-          .map((point) => applyMatrixToPoint(matrix, point));
-        drawDashedPath(target, [...outline, outline[0]], {
-          color: `#${stroke.toString(16).padStart(6, '0')}`, width: style.strokeWidth,
-          opacity: alpha * strokePaint.alpha, dash: style.dash,
-        });
-      } else if (style.strokeWidth > 0) {
-        target.stroke({ color: stroke, width: style.strokeWidth, alpha: alpha * strokePaint.alpha });
-      }
-      // Inner lines (venn lens, target rings, note fold) ride the same stroke.
-      if (detailLevel !== 'overview' && style.strokeWidth > 0) {
-        for (const decoration of basicNodeDecorations(renderedShape, node.size)) {
-          // Open polylines, like the SVG export: a closed shape repeats its first point.
-          const points = decoration.map((point) => applyMatrixToPoint(matrix, point));
-          target.poly(points.flatMap((point) => [point.x, point.y]), false);
+      const drawn = drawnShapeParts(node);
+      if (drawn) {
+        // A draw.io shape, drawn as draw.io's own code drew it.
+        const drawnWith = Number.parseFloat(drawnShapeStyle(node)?.strokeWidth ?? '') || 1;
+        drawPixiDrawnShape(target, drawn, matrix, style, style.strokeWidth / drawnWith);
+      } else {
+        // ponytail: the shadow is drawn unblurred into the shared graphics — a blur filter per node would cost a pass each.
+        if (style.shadow && fillPaint.alpha > 0) {
+          drawPixiNodeOutline(target, renderedShape, node.size,
+            { ...matrix, tx: matrix.tx + style.shadow.offsetX, ty: matrix.ty + style.shadow.offsetY }, customPath, style.cornerRadius);
+          target.fill({ color: pixiPaintColor(style.shadow.color, 0x0f172a).color, alpha: style.shadow.opacity * 0.67 * alpha });
+        }
+        drawPixiNodeOutline(target, renderedShape, node.size, matrix, customPath, style.cornerRadius);
+        if (style.gradient) target.fill({ fill: nodeGradient(style.fill, style.gradient), alpha: alpha * fillPaint.alpha });
+        else target.fill({ color: fill, alpha: alpha * fillPaint.alpha });
+        if (style.strokeWidth > 0 && style.dash.length) {
+          const outline = basicNodeOutlinePoints(renderedShape, node.size, customPath, style.cornerRadius)
+            .map((point) => applyMatrixToPoint(matrix, point));
+          drawDashedPath(target, [...outline, outline[0]], {
+            color: `#${stroke.toString(16).padStart(6, '0')}`, width: style.strokeWidth,
+            opacity: alpha * strokePaint.alpha, dash: style.dash,
+          });
+        } else if (style.strokeWidth > 0) {
           target.stroke({ color: stroke, width: style.strokeWidth, alpha: alpha * strokePaint.alpha });
+        }
+        // Inner lines (venn lens, target rings, note fold) ride the same stroke.
+        if (detailLevel !== 'overview' && style.strokeWidth > 0) {
+          for (const decoration of basicNodeDecorations(renderedShape, node.size)) {
+            // Open polylines, like the SVG export: a closed shape repeats its first point.
+            const points = decoration.map((point) => applyMatrixToPoint(matrix, point));
+            target.poly(points.flatMap((point) => [point.x, point.y]), false);
+            target.stroke({ color: stroke, width: style.strokeWidth, alpha: alpha * strokePaint.alpha });
+          }
         }
       }
       debugRecords.push({
@@ -275,6 +297,24 @@ export class PixiNodeRenderer {
       if (detailLevel === 'overview') continue;
       const labelText = typeof node.content.label === 'string' ? node.content.label : node.id;
       const sizing = resolveLabelSizing(node, style);
+      const rich = labelText ? richLabelOf(node.content) : null;
+      if (rich) {
+        const content = new Container();
+        content.alpha = alpha;
+        drawPixiRichLabel(content, this.texts, rich, style, node.size, matrix, sizing.overflow !== 'visible');
+        if (sizing.clipContent) {
+          const corners = [{ x: 0, y: 0 }, { x: node.size.width, y: 0 }, { x: node.size.width, y: node.size.height }, { x: 0, y: node.size.height }]
+            .map((point) => applyMatrixToPoint(matrix, point));
+          const mask = new Graphics().poly(corners.flatMap((point) => [point.x, point.y])).fill(0xffffff);
+          content.addChild(mask);
+          content.mask = mask;
+        }
+        paint.labels.addChild(content);
+        if (box) painted.add(box);
+        this.labelByNodeId.set(node.id, content);
+        this.trackTitle(node.id, content);
+        continue;
+      }
       const baseLayout = resolveNodeContentLayout(node.content);
       // Style keys win over the stored content layout: one place to set alignment.
       const pad = style.textPadding;
@@ -290,7 +330,7 @@ export class PixiNodeRenderer {
       const availableTextWidth = Math.max(1, (textWidths?.get(node.id) ?? node.size.width) - pad * 2);
       const wrap = sizing.overflow === 'visible' ? null : availableTextWidth;
       const labelMeasurement = measurePortableText(labelText, {
-        fontSize: style.fontSize, fontWeight: style.fontWeight, lineHeight: style.fontSize * style.lineHeight,
+        fontSize: style.fontSize, fontWeight: style.fontWeight, lineHeight: style.fontSize * style.lineHeight, keepWords: style.keepWords,
         ...(wrap === null ? {} : { maxWidth: wrap, maxLines: sizing.maxLines, overflow: sizing.overflow }),
       });
       const label = markTitle(this.texts.styled(labelMeasurement.displayText, style, textColor, wrap));
@@ -338,8 +378,11 @@ export class PixiNodeRenderer {
         x: textPosition(geometry.labelBounds, geometry.labelAlignment),
         y: geometry.labelBounds.y,
       });
+      // The words turn with their shape; a pooled Text is set straight again when its shape is.
+      const turn = Math.atan2(matrix.b, matrix.a);
       label.anchor.set(textAnchor(geometry.labelAlignment), 0);
       label.position.set(labelPoint.x, labelPoint.y);
+      label.rotation = turn;
       const content = new Container();
       content.alpha = alpha;
       content.addChild(label);
@@ -351,6 +394,7 @@ export class PixiNodeRenderer {
         });
         subLabel.anchor.set(textAnchor(geometry.labelAlignment), 0);
         subLabel.position.set(subLabelPoint.x, subLabelPoint.y);
+        subLabel.rotation = turn;
         content.addChild(subLabel);
       }
       if (sizing.clipContent) {

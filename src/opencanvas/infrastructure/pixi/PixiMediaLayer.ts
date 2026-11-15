@@ -8,6 +8,8 @@ interface PixiMediaLoadRequest {
   readonly matrix: Matrix2d;
   readonly bounds: Bounds2d;
   readonly opacity?: number;
+  /** Fill the bounds instead of keeping the picture's proportions. */
+  readonly stretch?: boolean;
   readonly resolveUrl: () => Promise<string | null>;
   /** Names the image: a texture loaded once under this key is placed at once on every later draw (Map mode redraws per frame). */
   readonly cacheKey?: string;
@@ -31,9 +33,14 @@ const SVG_RASTER_PX = 256;
 
 export const isSvgUrl = (url: string): boolean => url.startsWith('data:image/svg+xml') || /\.svg(?:[?#]|$)/i.test(url);
 
-/** The raster resolution that takes a `width` × `height` SVG to SVG_RASTER_PX on its long side; never below 1. */
-export const svgRasterResolution = (width: number, height: number): number =>
-  Math.max(1, Math.ceil(SVG_RASTER_PX / Math.max(width, height, 1)));
+// A texture's long side stays within what every GPU takes; a bigger one is refused and nothing is drawn.
+const SVG_MAX_PX = 4096;
+
+/** The raster resolution that takes a `width` × `height` SVG to SVG_RASTER_PX on its long side, and one over SVG_MAX_PX down to it. */
+export const svgRasterResolution = (width: number, height: number): number => {
+  const side = Math.max(width, height, 1);
+  return side > SVG_MAX_PX ? SVG_MAX_PX / side : Math.max(1, Math.ceil(SVG_RASTER_PX / side));
+};
 
 async function textureFor(url: string): Promise<Texture> {
   const src = pixiAssetUrl(url);
@@ -93,8 +100,8 @@ export class PixiMediaLayer {
       request.bounds.width / textureWidth,
       request.bounds.height / textureHeight
     );
-    sprite.width = textureWidth * scale;
-    sprite.height = textureHeight * scale;
+    sprite.width = request.stretch ? request.bounds.width : textureWidth * scale;
+    sprite.height = request.stretch ? request.bounds.height : textureHeight * scale;
     sprite.position.set(
       request.bounds.x + (request.bounds.width - sprite.width) / 2,
       request.bounds.y + (request.bounds.height - sprite.height) / 2

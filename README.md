@@ -258,7 +258,8 @@ dismiss.
 
 ## Bring the diagrams you already have
 
-Paste into the code panel and it converts, with an honest list of anything it couldn't carry.
+Paste into the code panel and it converts, with an honest list of anything it couldn't carry. A draw.io
+file opens through **Import**.
 Mermaid pasted straight onto the canvas draws in place.
 
 | From | What converts |
@@ -266,6 +267,7 @@ Mermaid pasted straight onto the canvas draws in place.
 | **Mermaid** | flowchart / graph, sequenceDiagram, stateDiagram, erDiagram, classDiagram, mindmap, architecture, gitGraph |
 | **Structurizr DSL** | the model, views and styles, as a C4 workspace with one page per view |
 | **D2** | shapes, connections and containers |
+| **draw.io** | `.drawio` / `.xml` files and `.drawio.svg` / `.drawio.png`, every page, with shapes kept where they were |
 
 Going back out, **Copy as Mermaid** writes a flowchart or sequence diagram as Mermaid text for a
 README or wiki. [Mermaid](https://docs.openflowkit.com/mermaid-import/) ·

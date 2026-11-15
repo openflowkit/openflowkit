@@ -12,6 +12,70 @@ import { createWidgetNode } from '../../domain/nodes/widgetNode';
 const DSL_FIXTURES = import.meta.glob('../../../dsl/fixtures/**/*.dsl', { eager: true, query: '?raw', import: 'default' }) as Record<string, string>;
 
 describe('canonical SVG export', () => {
+  it('breaks a label that doesn’t wrap where its text breaks', () => {
+    const node = createTestNode('n', { kind: 'process', size: { width: 60, height: 60 }, content: {
+      label: 'COLLABORATIVE\nDEVELOPMENT', sizingPolicy: { version: 1, mode: 'fixed', minSize: { width: 24, height: 24 }, maxSize: { width: 1600, height: 1200 }, overflow: 'visible', clipContent: false, maxLines: 4 },
+    } });
+    const svg = exportCanonicalSvg(createTestDocument({ nodes: [node] }));
+    expect(svg).toMatch(/<tspan [^>]*>COLLABORATIVE<\/tspan><tspan [^>]*>DEVELOPMENT<\/tspan>/);
+  });
+
+  it('leaves a container’s title out when its header is off, as the canvas does', () => {
+    const titled = createTestNode('c', { kind: 'section', size: { width: 200, height: 120 }, content: { label: 'Customers' } });
+    const quiet = createTestNode('q', { kind: 'section', size: { width: 200, height: 120 }, content: { label: 'Orders', showHeader: false } });
+    const svg = exportCanonicalSvg(createTestDocument({ nodes: [titled, quiet] }));
+    expect(svg).toContain('>Customers<');
+    expect(svg).not.toContain('>Orders<');
+  });
+
+  it('fills a node with its gradient and casts its own shadow', () => {
+    const node = createTestNode('a', { kind: 'process', appearance: {
+      fill: '#dae8fc', gradientColor: '#7ea6e0', gradientDirection: 'east',
+      shadow: true, shadowColor: '#ff0000', shadowOpacity: 0.25, shadowBlur: 1, shadowOffsetX: 2, shadowOffsetY: 3,
+    } });
+    const svg = exportCanonicalSvg(createTestDocument({ nodes: [node] }));
+    expect(svg).toContain('<linearGradient id="gradient-a" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#dae8fc"/><stop offset="1" stop-color="#7ea6e0"/></linearGradient>');
+    expect(svg).toContain('fill="url(#gradient-a)"');
+    expect(svg).toContain('<feDropShadow dx="2" dy="3" stdDeviation="1" flood-color="#ff0000" flood-opacity="0.25"/>');
+  });
+
+  it('sets a rich label line by line: styled runs, its own alignment, a divider across the box', () => {
+    const node = createTestNode('t', { kind: 'process', size: { width: 160, height: 80 }, appearance: { textVerticalAlign: 'top', textAlign: 'start', textPadding: 0 }, content: {
+      label: 'Holiday\nIdHoliday',
+      richLabel: [
+        { kind: 'text', align: 'center', runs: [{ text: 'Holiday', bold: true, underline: true }] },
+        { kind: 'rule', spaceBefore: 6, spaceAfter: 6 },
+        { kind: 'text', indent: 8, runs: [{ text: 'Id', color: '#ff0000' }, { text: 'Holiday' }] },
+      ],
+    } });
+    const svg = exportCanonicalSvg(createTestDocument({ nodes: [node] }));
+    expect(svg).toMatch(/<text x="80" y="[\d.]+" text-anchor="middle"[^>]*><tspan [^>]*font-weight="700" text-decoration="underline">Holiday<\/tspan><\/text>/);
+    expect(svg).toMatch(/<text x="8" [^>]*text-anchor="start"[^>]*><tspan fill="#ff0000"[^>]*>Id<\/tspan><tspan [^>]*>Holiday<\/tspan><\/text>/);
+    expect(svg).toMatch(/<line x1="0" x2="160" y1="[\d.]+" y2="[\d.]+"/);
+  });
+
+  it('draws a paragraph’s background band and sets each table cell at its own column', () => {
+    const node = createTestNode('t', { kind: 'process', size: { width: 160, height: 80 }, appearance: { textVerticalAlign: 'top', textAlign: 'start', textPadding: 0 }, content: {
+      label: 'Table\nPK id',
+      richLabel: [
+        { kind: 'text', background: '#e4e4e4', padding: 2, runs: [{ text: 'Table' }] },
+        { kind: 'row', table: 0, padding: 2, full: true, cells: [{ runs: [{ text: 'PK' }] }, { runs: [{ text: 'id' }] }] },
+      ],
+    } });
+    const svg = exportCanonicalSvg(createTestDocument({ nodes: [node] }));
+    expect(svg).toMatch(/<rect x="0" y="0" width="160" height="[\d.]+" fill="#e4e4e4"\/>/);
+    expect(svg).toMatch(/<text x="2" [^>]*><tspan [^>]*>PK<\/tspan><\/text><text x="[\d.]+" [^>]*><tspan [^>]*>id<\/tspan><\/text>/);
+  });
+
+  it('sets a connector label’s formatted words on its plate, centred on its point', () => {
+    const a = createTestNode('a', { kind: 'process', transform: { translation: { x: 0, y: 0 }, rotationRadians: 0, scale: { x: 1, y: 1 } } });
+    const b = createTestNode('b', { kind: 'process', transform: { translation: { x: 400, y: 0 }, rotationRadians: 0, scale: { x: 1, y: 1 } } });
+    const connector = { ...createTestConnector('e', 'a', 'b'), labels: [{ id: 'e:label', text: 'calls API', pathRatio: 0.5, offset: { x: 0, y: 0 }, metadata: {},
+      richLabel: [{ kind: 'text', runs: [{ text: 'calls ', bold: true }, { text: 'API', color: '#ff0000' }] }] }] };
+    const svg = exportCanonicalSvg(createTestDocument({ nodes: [a, b], connectors: [connector] }));
+    expect(svg).toMatch(/<text x="250" [^>]*><tspan [^>]*font-weight="700">calls<\/tspan>.*?<tspan fill="#ff0000"[^>]*>API<\/tspan><\/text>/);
+  });
+
   it('a C4 element with a long description wraps it inside its box', async () => {
     const compiled = await compile('architecture\nmodel {\n system Shop {\n  container API [tech: Go, desc: "Handles every order, payment, refund and shipping request from the web and mobile clients"]\n }\n}\nviews { view container of Shop }\n');
     const api = compiled.nodes.find((node) => node.id === 'shop.api')!;
@@ -87,6 +151,22 @@ describe('canonical SVG export', () => {
     expect(first).toContain('&lt;Alpha &amp; beta&gt;');
     expect(first).toContain('data-connector-id="a-b"');
     expect(first).not.toContain('<Alpha & beta>');
+  });
+
+  it('draws a draw.io line with a shape of its own as its parts, and plain once its route changes shape', () => {
+    const a = createTestNode('a');
+    const b = createTestNode('b', { transform: { ...createTestNode('x').transform, translation: { x: 300, y: 0 } } });
+    const plain = createTestConnector('a-b', 'a', 'b');
+    const page = createTestDocument({ nodes: [a, b], connectors: [plain] }).pages[0]!;
+    const points = projectPageConnectors(page)[0]!.samples;
+    const part = { path: [{ kind: 'move', x: points[0]!.x, y: points[0]!.y - 8 }, { kind: 'line', x: points.at(-1)!.x, y: points.at(-1)!.y + 8 }, { kind: 'close' }],
+      fill: 'fill', stroke: 'stroke', strokeWidth: 1, dash: [], fillOpacity: 1, strokeOpacity: 1 };
+    const shaped = (at: readonly { x: number; y: number }[]) => ({ ...plain, extensions: { drawioLine: { style: { shape: 'flexArrow' }, fill: '#123456', points: at, parts: [part] } } });
+    const svg = exportCanonicalSvg(createTestDocument({ nodes: [a, b], connectors: [shaped(points)] }));
+    expect(svg).toContain('fill="#123456"');
+    // Once the route no longer matches the drawing (and no draw.io code redraws it), the line is drawn plain.
+    const moved = exportCanonicalSvg(createTestDocument({ nodes: [a, b], connectors: [shaped([...points, { x: 0, y: 900 }])] }));
+    expect(moved).not.toContain('fill="#123456"');
   });
 
   it('stays well-formed XML when a label carries control characters (a PowerPoint soft break)', () => {
@@ -272,6 +352,13 @@ describe('canonical SVG export', () => {
     expect(svg).not.toContain('Pressure-pen');
   });
 
+  it('draws a pen line with no colour of its own light on the dark preview, as the canvas does', () => {
+    const pen = createTestNode('ink', { kind: 'pen', size: { width: 20, height: 10 }, content: { points: [{ x: 0, y: 0 }, { x: 20, y: 10 }], strokeWidth: 2 } });
+    const document = createTestDocument({ nodes: [pen] });
+    expect(exportCanonicalSvg(document, { theme: 'dark' })).toContain('stroke="#e2e8f0"');
+    expect(exportCanonicalSvg(document, { theme: 'light' })).toContain('stroke="#334155"');
+  });
+
   it('exports rich text, annotation, and safe image interiors', () => {
     const text = createTestNode('text', {
       kind: 'text',
@@ -300,6 +387,9 @@ describe('canonical SVG export', () => {
     });
 
     const svg = exportCanonicalSvg(createTestDocument({ nodes: [text, annotation, image] }));
+    expect(svg).toContain('preserveAspectRatio="xMidYMid meet"');
+    const stretched = exportCanonicalSvg(createTestDocument({ nodes: [{ ...image, content: { ...image.content, imageFit: 'stretch' } }] }));
+    expect(stretched).toContain('preserveAspectRatio="none"');
     expect(svg).toContain('data-node-kind="text"');
     expect(svg).toContain('&lt;Release notes&gt;');
     expect(svg).toContain('font-family="serif"');

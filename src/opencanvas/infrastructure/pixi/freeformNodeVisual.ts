@@ -72,7 +72,7 @@ export function annotationColors(
 }
 
 export function projectFreeformNodeVisual(node: SceneNode, canvasColor?: unknown): PixiFreeformNodeVisual | null {
-  const presentation = resolveFreeformNodePresentation(node);
+  const presentation = resolveFreeformNodePresentation(node, canvasColor);
   if (!presentation) return null;
   if (presentation.kind === 'text') {
     const colors = resolveTextVisualStyle(
@@ -101,8 +101,10 @@ export function projectFreeformNodeVisual(node: SceneNode, canvasColor?: unknown
     };
   }
   if (isStrokePresentation(presentation)) {
+    // A stroke with no colour of its own (draw.io's and Excalidraw's default black, imported) follows the theme.
+    const themed = typeof node.content.strokeColor !== 'string' && presentation.kind !== 'highlighter' && isDarkCanvas(canvasColor);
     return { presentation, kind: presentation.kind, fill: 0, text: 0,
-      stroke: pixiHexColor(presentation.color, 0x334155) };
+      stroke: themed ? 0xe2e8f0 : pixiHexColor(presentation.color, 0x334155) };
   }
   const colors = annotationColors(node, presentation, canvasColor);
   return {

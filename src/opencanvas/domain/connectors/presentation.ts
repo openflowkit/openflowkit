@@ -6,6 +6,7 @@ import type {
   ConnectorStrokePresentation,
 } from './types';
 import { resolveConnectorLabelStyle } from './labelStyle';
+import { invertForDark, isDarkCanvas } from '../color/adaptiveColor';
 
 const DEFAULT_STROKE = '#64748b';
 
@@ -24,8 +25,15 @@ function boundedNumber(
     : fallback;
 }
 
+const GLYPHS: ReadonlySet<string> = new Set<ConnectorMarkerGlyph>([
+  'arrow', 'triangle-open', 'triangle-filled', 'diamond-open', 'diamond-filled', 'circle', 'circle-filled', 'bar', 'cross', 'crow-foot',
+]);
+
 function markerFromAppearance(value: JsonValue | undefined): ConnectorMarkerGlyph[] {
   if (typeof value === 'string') {
+    // Glyph names, one or several from the line's end inward (`crow-foot bar`), are drawn as named.
+    const words = value.trim().split(/\s+/);
+    if (words.every((word) => GLYPHS.has(word))) return words as ConnectorMarkerGlyph[];
     const text = value.toLowerCase();
     if (text.includes('arrow')) return ['arrow'];
     if (text.includes('dot') || text.includes('circle')) return ['circle'];
@@ -135,6 +143,15 @@ function semanticMarkers(connector: SceneConnector): {
 }
 
 export function resolveConnectorPresentation(connector: SceneConnector): ConnectorPresentation {
+  return {
+    ...resolveConnectorLine(connector),
+    cornerRadius: boundedNumber(connector.appearance.cornerRadius, 8, 0, 24),
+    label: resolveConnectorLabelStyle(connector),
+  };
+}
+
+/** The line alone (its stroke and its ends), without the label style a full presentation also resolves. */
+export function resolveConnectorLine(connector: SceneConnector): Pick<ConnectorPresentation, 'stroke' | 'sourceMarkers' | 'targetMarkers'> {
   const markers = semanticMarkers(connector);
   const condition = optionalString(connector.semantics.condition);
   const stroke: ConnectorStrokePresentation = {
@@ -142,18 +159,18 @@ export function resolveConnectorPresentation(connector: SceneConnector): Connect
     width: boundedNumber(connector.appearance.strokeWidth, 1.75, 0.5, 8),
     opacity: boundedNumber(connector.appearance.opacity, 1, 0, 1),
     dash: dashPattern(connector.appearance, markers.dashed),
+    // A draw.io line flips its colour on a dark canvas, unless that colour was picked here (`keepOnDark`).
+    ...(connector.appearance.darkColors === 'invert' && optionalString(connector.appearance.stroke)
+      && !(Array.isArray(connector.appearance.keepOnDark) && connector.appearance.keepOnDark.includes('stroke')) ? { invertOnDark: true } : {}),
   };
   return {
     stroke,
-    cornerRadius: boundedNumber(connector.appearance.cornerRadius, 8, 0, 24),
-    label: resolveConnectorLabelStyle(connector),
-    sourceMarkers:
-      markers.source.length > 0
-        ? markers.source
-        : markerFromAppearance(connector.appearance.markerStart),
-    targetMarkers:
-      markers.target.length > 0
-        ? markers.target
-        : markerFromAppearance(connector.appearance.markerEnd),
+    sourceMarkers: markers.source.length > 0 ? markers.source : markerFromAppearance(connector.appearance.markerStart),
+    targetMarkers: markers.target.length > 0 ? markers.target : markerFromAppearance(connector.appearance.markerEnd),
   };
+}
+
+/** The line's colour on this canvas: a draw.io line's own colour flips on a dark one; every other line keeps its colour. */
+export function connectorStrokeOnCanvas(stroke: ConnectorStrokePresentation, canvasColor?: unknown): ConnectorStrokePresentation {
+  return stroke.invertOnDark && isDarkCanvas(canvasColor) ? { ...stroke, color: invertForDark(stroke.color) } : stroke;
 }

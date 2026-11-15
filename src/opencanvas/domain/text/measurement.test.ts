@@ -61,6 +61,13 @@ describe('portable text measurement', () => {
     expect(measurePortableText('abcdefghijklmnopqrstuvwxyzabcdefghij', style).lines.length).toBeGreaterThan(1);
   });
 
+  it('keeps a word wider than the line whole when asked, as draw.io wraps', () => {
+    const style = { fontSize: 14, fontWeight: 400 as const, overflow: 'wrap' as const, maxWidth: 60, keepWords: true };
+    expect(measurePortableText('Partnerships and more', style).lines).toEqual(['Partnerships', 'and more']);
+    expect(measurePortableText('a Partnerships', style).lines).toEqual(['a', 'Partnerships']);
+    expect(measurePortableText('Partnerships', { ...style, keepWords: false }).lines.length).toBeGreaterThan(1);
+  });
+
   it('wraps a 20,000-character label in linear time', () => {
     const style = { fontSize: 14, fontWeight: 600 as const, maxWidth: 160, overflow: 'wrap' as const };
     for (const label of ['word '.repeat(4_000), 'x'.repeat(20_000)]) {

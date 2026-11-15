@@ -7,9 +7,15 @@ import type { ScenePage } from '../../domain/document/types';
 import { roundPolylineCorners } from '../../domain/geometry/polyline';
 import { distanceBetweenPoints } from '../../domain/geometry/point';
 import type { Point2d } from '../../domain/geometry/types';
-import { isDarkCanvas } from '../../domain/color/adaptiveColor';
-import { LABEL_WRAP_WIDTH, connectorLabelOnCanvas } from '../../domain/connectors/labelStyle';
+import { invertForDark, isDarkCanvas } from '../../domain/color/adaptiveColor';
+import { drawPixiDrawnShape } from './pixiDrawnShape';
+import { LABEL_WRAP_WIDTH, connectorLabelOnCanvas, connectorRichPlate, ownLabelStyle } from '../../domain/connectors/labelStyle';
+import { createMatrix2d } from '../../domain/geometry/matrix';
+import type { RichBlock } from '../../domain/text/richLabel';
+import { drawPixiRichLabel } from './pixiRichLabel';
+import { PixiTextPool } from './pixiTextPool';
 import { projectConnectors } from '../../domain/connectors/routeProjection';
+import { connectorStrokeOnCanvas } from '../../domain/connectors/presentation';
 import { connectorMarkerShapes, markerOutward } from '../../domain/connectors/markers';
 import type {
   ConnectorMarkerGlyph,
@@ -94,11 +100,12 @@ function drawMarker(
       }
       break;
     }
-    case 'circle': {
+    case 'circle':
+    case 'circle-filled': {
       const center = offsetPoint(tip, outward, -5);
       graphics
         .circle(center.x, center.y, 4)
-        .fill({ color: surface })
+        .fill({ color: glyph === 'circle-filled' ? stroke.color : surface })
         .stroke({ color: stroke.color, width: stroke.width });
       break;
     }
@@ -197,6 +204,7 @@ export class PixiConnectorRenderer {
   private smallestLabelFont = Number.POSITIVE_INFINITY;
   private zoom = 1;
   private editingConnectorId: string | null = null;
+  private readonly texts = new PixiTextPool();
 
   constructor() {
     this.container.addChild(this.paths, this.labelPlates, this.labels);
@@ -246,29 +254,37 @@ export class PixiConnectorRenderer {
         ? connector.samples
         : roundPolylineCorners(connector.samples, connector.presentation.cornerRadius);
       const { presentation } = connector;
-      if (presentation.stroke.dash.length > 0) {
-        drawDashedPath(this.paths, samples, presentation.stroke);
+      const stroke = connectorStrokeOnCanvas(presentation.stroke, canvasColor);
+      if (connector.drawn) {
+        // A line draw.io draws with a shape of its own is its parts, its ends included.
+        const flip = onDark && presentation.stroke.invertOnDark === true;
+        // Its parts are already on the page.
+        drawPixiDrawnShape(this.paths, connector.drawn.parts, createMatrix2d(1, 0, 0, 1, 0, 0), {
+          fill: flip ? invertForDark(connector.drawn.fill) : connector.drawn.fill, stroke: stroke.color, invertColors: flip, opacity: stroke.opacity,
+        }, 1);
+      } else if (stroke.dash.length > 0) {
+        drawDashedPath(this.paths, samples, stroke);
       } else {
-        drawSolidPath(this.paths, samples, presentation.stroke);
+        drawSolidPath(this.paths, samples, stroke);
       }
-      const first = samples[0];
-      const last = samples.at(-1);
+      const first = connector.drawn ? undefined : samples[0];
+      const last = connector.drawn ? undefined : samples.at(-1);
       if (first && samples[1]) {
         const outward = markerOutward(samples, 'source');
         connector.presentation.sourceMarkers.forEach((glyph, index) =>
-          drawMarker(this.paths, glyph, first, outward, index * 9, presentation.stroke, surface)
+          drawMarker(this.paths, glyph, first, outward, index * 9, stroke, surface)
         );
         markerCount += connector.presentation.sourceMarkers.length;
       }
       if (last && samples.at(-2)) {
         const outward = markerOutward(samples, 'target');
         connector.presentation.targetMarkers.forEach((glyph, index) =>
-          drawMarker(this.paths, glyph, last, outward, index * 9, presentation.stroke, surface)
+          drawMarker(this.paths, glyph, last, outward, index * 9, stroke, surface)
         );
         markerCount += connector.presentation.targetMarkers.length;
       }
       if (connector.id !== this.editingConnectorId) {
-        for (const labelGeometry of connector.labels) this.drawLabel(labelGeometry, onDark ? connectorLabelOnCanvas(presentation.label, canvasColor) : presentation.label);
+        for (const labelGeometry of connector.labels) this.drawLabel(labelGeometry, ownLabelStyle(onDark ? connectorLabelOnCanvas(presentation.label, canvasColor) : presentation.label, labelGeometry));
         labelCount += connector.labels.length;
       }
     }
@@ -325,7 +341,8 @@ export class PixiConnectorRenderer {
     this.editingConnectorId = connectorId;
   }
 
-  private drawLabel(label: { readonly text: string; readonly point: Point2d }, style: NodeStyle): void {
+  private drawLabel(label: { readonly text: string; readonly point: Point2d; readonly rich?: readonly RichBlock[] | null }, style: NodeStyle): void {
+    if (label.rich) { this.drawRichLabel(label.rich, label.point, style); return; }
     const color = pixiPaintColor(style.textColor, 0x334155).color;
     const text = new Text({ text: label.text, style: { ...pixiTextStyle(style, color, LABEL_WRAP_WIDTH), align: 'center' } });
     this.widestLabel = Math.max(this.widestLabel, text.width);
@@ -344,5 +361,20 @@ export class PixiConnectorRenderer {
     }
     decoratePixiText(this.labels, text, style, color);
     this.labels.addChild(text);
+  }
+
+  /** Formatted words, on their plate, centred on their point. */
+  private drawRichLabel(blocks: readonly RichBlock[], point: Point2d, style: NodeStyle): void {
+    const box = connectorRichPlate(blocks, style, point);
+    this.widestLabel = Math.max(this.widestLabel, box.width);
+    this.smallestLabelFont = Math.min(this.smallestLabelFont, style.fontSize);
+    const plate = pixiPaintColor(style.fill, 0xffffff);
+    const border = pixiPaintColor(style.stroke, 0xe2e8f0);
+    if (plate.alpha > 0 || border.alpha > 0) {
+      this.labelPlates.roundRect(box.x, box.y, box.width, box.height, style.cornerRadius)
+        .fill({ color: plate.color, alpha: plate.alpha * 0.96 })
+        .stroke({ color: border.color, alpha: border.alpha, width: style.strokeWidth });
+    }
+    drawPixiRichLabel(this.labels, this.texts, blocks, { ...style, textAlign: 'center', textVerticalAlign: 'middle' }, box, createMatrix2d(1, 0, 0, 1, box.x, box.y), false);
   }
 }

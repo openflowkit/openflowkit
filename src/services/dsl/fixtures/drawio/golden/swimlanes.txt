@@ -1,0 +1,61 @@
+page "Page 1": 1 layer(s), 38 nodes, 21 connectors
+  swimlane "Pool" @70,40 960x750 fill transparent ink #000000
+  process drawn swimlane @0,0 960x750 fill #ffffff ink #000000 in 77e6c97f196da883-1
+  process rectangle "Pool" @2,2 956x16 fill transparent ink #000000 in 77e6c97f196da883-1
+  swimlane "Lane 1" @0,20 160x730 fill transparent ink #000000 in 77e6c97f196da883-1
+  process drawn swimlane @0,0 160x730 fill #ffffff ink #000000 in 77e6c97f196da883-2
+  process rectangle "Lane 1" @2,2 156x16 fill transparent ink #000000 in 77e6c97f196da883-2
+  process rounded @20,65 100x60 fill #ffffff ink #000000 in 77e6c97f196da883-2
+  process rounded @20,155 100x60 fill #ffffff ink #000000 in 77e6c97f196da883-2
+  process rounded @30,560 100x60 fill #ffffff ink #000000 in 77e6c97f196da883-2
+  swimlane "Lane 2" @160,20 160x730 fill transparent ink #000000 in 77e6c97f196da883-1
+  process drawn swimlane @0,0 160x730 fill #ffffff ink #000000 in 77e6c97f196da883-3
+  process rectangle "Lane 2" @2,2 156x16 fill transparent ink #000000 in 77e6c97f196da883-3
+  process rounded @30,65 100x60 fill #ffffff ink #000000 in 77e6c97f196da883-3
+  swimlane "Lane 3" @320,20 160x730 fill transparent ink #000000 in 77e6c97f196da883-1
+  process drawn swimlane @0,0 160x730 fill #ffffff ink #000000 in 77e6c97f196da883-4
+  process rectangle "Lane 3" @2,2 156x16 fill transparent ink #000000 in 77e6c97f196da883-4
+  process rounded @30,155 100x60 fill #ffffff ink #000000 in 77e6c97f196da883-4
+  process diamond @40,240 80x60 fill #ffffff ink #000000 in 77e6c97f196da883-4
+  process rounded @30,560 100x60 fill #ffffff ink #000000 in 77e6c97f196da883-4
+  swimlane "Lane 4" @480,20 160x730 fill transparent ink #000000 in 77e6c97f196da883-1
+  process drawn swimlane @0,0 160x730 fill #ffffff ink #000000 in 77e6c97f196da883-5
+  process rectangle "Lane 4" @2,2 156x16 fill transparent ink #000000 in 77e6c97f196da883-5
+  process rounded @30,240 100x60 fill #ffffff ink #000000 in 77e6c97f196da883-5
+  process diamond @40,320 80x60 fill #ffffff ink #000000 in 77e6c97f196da883-5
+  process rounded @30,400 100x60 fill #ffffff ink #000000 in 77e6c97f196da883-5
+  process rounded @30,560 100x60 fill #ffffff ink #000000 in 77e6c97f196da883-5
+  process diamond @40,640 80x60 fill #ffffff ink #000000 in 77e6c97f196da883-5
+  swimlane "Lane 5" @640,20 160x730 fill transparent ink #000000 in 77e6c97f196da883-1
+  process drawn swimlane @0,0 160x730 fill #ffffff ink #000000 in 77e6c97f196da883-6
+  process rectangle "Lane 5" @2,2 156x16 fill transparent ink #000000 in 77e6c97f196da883-6
+  process rounded @30,400 100x60 fill #ffffff ink #000000 in 77e6c97f196da883-6
+  process rounded @30,480 100x60 fill #ffffff ink #000000 in 77e6c97f196da883-6
+  process rounded @30,560 100x60 fill #ffffff ink #000000 in 77e6c97f196da883-6
+  process rounded @30,640 100x60 fill #ffffff ink #000000 in 77e6c97f196da883-6
+  swimlane "Lane 6" @800,20 160x730 fill transparent ink #000000 in 77e6c97f196da883-1
+  process drawn swimlane @0,0 160x730 fill #ffffff ink #000000 in 77e6c97f196da883-7
+  process rectangle "Lane 6" @2,2 156x16 fill transparent ink #000000 in 77e6c97f196da883-7
+  process rounded @30,640 100x60 fill #ffffff ink #000000 in 77e6c97f196da883-7
+  77e6c97f196da883-8 -> 77e6c97f196da883-11 direct, 0 bends
+  77e6c97f196da883-11 -> 77e6c97f196da883-9 polyline, 2 bends
+  77e6c97f196da883-9 -> 77e6c97f196da883-12 direct, 0 bends
+  77e6c97f196da883-13 -> 77e6c97f196da883-9 polyline, 1 bends
+  77e6c97f196da883-16 -> 77e6c97f196da883-9 polyline, 1 bends
+  77e6c97f196da883-20 -> 77e6c97f196da883-9 polyline, 3 bends
+  77e6c97f196da883-13 -> 77e6c97f196da883-15 direct, 0 bends
+  77e6c97f196da883-20 -> 77e6c97f196da883-23 direct, 0 bends
+  77e6c97f196da883-23 -> 77e6c97f196da883-24 direct, 0 bends
+  77e6c97f196da883-17 -> 77e6c97f196da883-18 direct, 0 bends
+  77e6c97f196da883-22 -> 77e6c97f196da883-14 polyline, 3 bends
+  77e6c97f196da883-22 -> 77e6c97f196da883-19 direct, 0 bends
+  77e6c97f196da883-22 -> 77e6c97f196da883-10 polyline, 3 bends
+  77e6c97f196da883-10 -> 77e6c97f196da883-19 polyline, 3 bends
+  77e6c97f196da883-14 -> 77e6c97f196da883-19 direct, 0 bends
+  77e6c97f196da883-12 -> 77e6c97f196da883-13 polyline, 2 bends
+  77e6c97f196da883-15 -> 77e6c97f196da883-16 polyline, 2 bends
+  77e6c97f196da883-16 -> 77e6c97f196da883-17 polyline, 2 bends
+  77e6c97f196da883-19 -> 77e6c97f196da883-20 polyline, 2 bends
+  77e6c97f196da883-18 -> 77e6c97f196da883-21 polyline, 2 bends
+  77e6c97f196da883-21 -> 77e6c97f196da883-22 polyline, 2 bends
+losses: none

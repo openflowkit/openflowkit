@@ -27,6 +27,13 @@ describe('Pixi media layer', () => {
     expect(svgRasterResolution(0, 0)).toBe(256);
   });
 
+  it('shrinks an SVG too big for a texture: draw.io’s Arista racks say 188 × 367 inches', () => {
+    // Drawn at its own 18,077 × 35,216 px the GPU refuses it and the node stays a black box.
+    const resolution = svgRasterResolution(18_077, 35_216);
+    expect(35_216 * resolution).toBeLessThanOrEqual(4096);
+    expect(35_216 * resolution).toBeGreaterThan(4000);
+  });
+
   it('tells SVGs (file or data URL) from other images', () => {
     expect(isSvgUrl(SVG)).toBe(true);
     expect(isSvgUrl('./assets/Athena-C_UvYoqL.svg')).toBe(true);

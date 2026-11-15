@@ -12,6 +12,7 @@ import {
   buildReorderCommand,
   buildToggleLockCommand,
   buildQuickCreateCommand,
+  buildEditLabelCommand,
   buildSetNodeLabelCommand,
   buildSetShapeCommand,
 } from './sceneEdits';
@@ -115,6 +116,34 @@ describe('v2 label edit command', () => {
     expect(after.size).toEqual({ width: 148, height: Math.ceil(88 + 3 * 14.4 + 4) });
     expect(after.transform.translation).toEqual({ x: 40, y: 60 });
     expect(buildSetNodeLabelCommand(page, 'tile', 'API').after.size).toEqual({ width: 148, height: 107 });
+  });
+
+  it('drops a label’s formatting when its words change, keeps it when they don’t, and undo brings it back', () => {
+    const richLabel = [{ kind: 'text', runs: [{ text: 'Holiday', bold: true }] }];
+    const node = createTestNode('node-a', { content: { label: 'Holiday', richLabel } });
+    const page = { ...pageWithTwoNodes(), nodes: [node] };
+    const document = { ...createEmptyV2Document('doc-1'), pages: [page] };
+    const edited = applyDocumentCommand(document, buildSetNodeLabelCommand(page, 'node-a', 'Vacation'));
+    expect(edited.document.pages[0].nodes[0].content).not.toHaveProperty('richLabel');
+    expect(applyDocumentCommand(edited.document, edited.inverse).document.pages[0].nodes[0].content.richLabel).toEqual(richLabel);
+    expect(buildSetNodeLabelCommand(page, 'node-a', 'Holiday').after.content.richLabel).toEqual(richLabel);
+  });
+
+  it('edits a shape and the words set beside it together, from either one, in one undo step', () => {
+    const shape = createTestNode('pic', { kind: 'image', content: { label: 'Translator' } });
+    const words = createTestNode('pic:label', { parentId: 'pic', content: { label: 'Translator', labelOf: 'pic', richLabel: [{ kind: 'text', runs: [{ text: 'Translator', bold: true }] }] } });
+    const other = createTestNode('other', { content: { label: 'Translator' } });
+    const page = { ...pageWithTwoNodes(), nodes: [shape, words, other] };
+    const document = { ...createEmptyV2Document('doc-1'), pages: [page] };
+    for (const id of ['pic', 'pic:label']) {
+      const edited = applyDocumentCommand(document, buildEditLabelCommand(page, id, 'Mapper'));
+      const labels = edited.document.pages[0].nodes.map((node) => node.content.label);
+      expect(labels).toEqual(['Mapper', 'Mapper', 'Translator']);
+      expect(edited.document.pages[0].nodes[1].content).not.toHaveProperty('richLabel');
+      expect(applyDocumentCommand(edited.document, edited.inverse).document.pages[0].nodes.map((node) => node.content.label)).toEqual(['Translator', 'Translator', 'Translator']);
+    }
+    // A node with no partner edits alone.
+    expect(buildEditLabelCommand(page, 'other', 'Mapper').kind).toBe('set-node');
   });
 
   it('restores the pre-edit text on undo', () => {
@@ -386,5 +415,15 @@ describe('path connector creation', () => {
     });
     expect(command.connector.route).toEqual({ kind: 'orthogonal', ownership: 'automatic' });
     expect(command.connector.waypoints).toEqual([]);
+  });
+});
+
+describe('change shape on a draw.io shape', () => {
+  it('drops draw.io’s drawing, so the new outline is what shows', () => {
+    const drawn = createTestNode('x', { kind: 'process', content: { shape: 'rectangle', label: 'Task', drawio: { shape: 'hexagon' }, drawioParts: [], drawioSize: { width: 10, height: 10 } } });
+    const page = createTestDocument({ nodes: [drawn] }).pages[0]!;
+    const command = buildSetShapeCommand(page, ['x'], 'ellipse')!;
+    const after = command.commands[0]!.kind === 'set-node' ? command.commands[0]!.after : null;
+    expect(after?.content).toEqual({ shape: 'ellipse', label: 'Task' });
   });
 });

@@ -6,7 +6,11 @@ import type { BasicNodeShape } from '../../domain/nodes/basicNodePresentation';
 import type { IconCardText } from '../../domain/nodes/iconCardLayout';
 import { resolveLabelSizing } from '../../domain/node-sizing/labelWrap';
 import { measurePortableText, SUBLABEL_FONT } from '../../domain/text/measurement';
+import { layoutRichLabel, richLabelOf, type RichBlock, type RichPiece } from '../../domain/text/richLabel';
+import { richBaseOf, richBoxColor, richInk, richOrigin } from '../../domain/text/richLabelStyle';
 import { number, pathData, xml } from './svgMarkup';
+import { drawnPaint, drawnPathData, type DrawnPart } from '../../domain/nodes/drawnShape';
+import { invertForDark } from '../../domain/color/adaptiveColor';
 
 const SUB_LABEL_SIZE = SUBLABEL_FONT.fontSize;
 
@@ -31,6 +35,8 @@ export function iconCaptionMarkup(text: IconCardText | null, style: NodeStyle): 
 // The label sits in `nodeLabelBounds`, the rect the Pixi renderers and the DOM
 // editor use: a frame's title band, the canvas below an icon plate, a shape's inset.
 export function labelElement(style: NodeStyle, box: Bounds2d, label: string, subLabel: string, clipId: string | null, node: SceneNode): string {
+  const rich = label ? richLabelOf(node.content) : null;
+  if (rich) return richLabelElement(style, box, rich, clipId, resolveLabelSizing(node, style).overflow !== 'visible');
   const padding = style.textPadding;
   const x = style.textAlign === 'start' ? box.x + padding
     : style.textAlign === 'end' ? box.x + box.width - padding : box.x + box.width / 2;
@@ -42,8 +48,9 @@ export function labelElement(style: NodeStyle, box: Bounds2d, label: string, sub
   const wrapped = sizing.overflow !== 'visible';
   const wrap = !wrapped ? {}
     : { maxWidth: Math.max(1, node.size.width - padding * 2), maxLines: sizing.maxLines, overflow: sizing.overflow };
-  const labelLines = !wrapped ? [label] : measurePortableText(label, {
-    fontSize: style.fontSize, fontWeight: style.fontWeight, lineHeight: style.fontSize * style.lineHeight, ...wrap,
+  // Unwrapped words still break where their text does: SVG would run a line break into a space.
+  const labelLines = !wrapped ? label.split('\n') : measurePortableText(label, {
+    fontSize: style.fontSize, fontWeight: style.fontWeight, lineHeight: style.fontSize * style.lineHeight, keepWords: style.keepWords, ...wrap,
   }).lines;
   const subLines = subLabel ? measurePortableText(subLabel, {
     ...SUBLABEL_FONT, lineHeight: SUB_LABEL_SIZE * 1.2,
@@ -68,6 +75,34 @@ export function labelElement(style: NodeStyle, box: Bounds2d, label: string, sub
       ? labelLines.map((line, index) => `<tspan x="${number(x)}" y="${number(y + index * lineHeight)}">${xml(line)}</tspan>`).join('') : xml(label)}</text>`
     + (subLines.length ? `<text text-anchor="${anchor}" dominant-baseline="middle" fill="${style.textColor}" font-family="${xml(FONT_STACKS[style.fontFamily])}" font-size="${SUB_LABEL_SIZE}" font-weight="400" opacity="0.72">${subLines.map((line, index) => `<tspan x="${number(x)}" y="${number(subY(index))}">${xml(line)}</tspan>`).join('')}</text>` : '')
     + '</g>';
+}
+
+/**
+ * A rich label: one `<text>` a line, its runs as `<tspan>`s flowing in the viewer's own font from the side the line is
+ * aligned to, so they meet as the canvas sets them; where lines break is the shared layout's. Dividers are lines.
+ */
+export function richLabelElement(style: NodeStyle, box: Bounds2d, blocks: readonly RichBlock[], clipId: string | null, wraps: boolean): string {
+  const layout = layoutRichLabel(blocks, richBaseOf(style), wraps ? Math.max(1, box.width - style.textPadding * 2) : null, { keepWords: style.keepWords, box: Math.max(0, box.width - style.textPadding * 2), height: Math.max(0, box.height - style.textPadding * 2) });
+  const origin = richOrigin(style, box, layout, wraps);
+  const [left, top] = [box.x + origin.x, box.y + origin.y];
+  const family = xml(FONT_STACKS[style.fontFamily]);
+  const span = (piece: RichPiece) => {
+    const decoration = [piece.underline ? 'underline' : '', piece.strike ? 'line-through' : ''].filter(Boolean).join(' ');
+    return `<tspan fill="${richInk(piece, style)}" font-size="${number(piece.size)}" font-weight="${piece.weight}"${piece.italic ? ' font-style="italic"' : ''}${decoration ? ` text-decoration="${decoration}"` : ''}>${xml(piece.text)}</tspan>`;
+  };
+  const bands = layout.bands.map((band) => `<rect x="${number(left + band.x)}" y="${number(top + band.y)}" width="${number(band.width)}" height="${number(band.height)}" fill="${richBoxColor(band, style)}"/>`).join('');
+  const lines = layout.lines.filter((line) => line.pieces.length).map((line) => {
+    const y = number(top + line.y + line.baseline);
+    // A table row's cells each start at their own column.
+    if (line.columns) return line.pieces.map((piece) => `<text x="${number(left + piece.x)}" y="${y}" font-family="${family}" xml:space="preserve">${span(piece)}</text>`).join('');
+    const anchor = line.align === 'center' ? 'middle' : line.align === 'end' ? 'end' : 'start';
+    const x = left + (line.align === 'center' ? (line.left + line.right) / 2 : line.align === 'end' ? line.right : line.left);
+    const spans = line.pieces.map(span).join('');
+    return `<text x="${number(x)}" y="${y}" text-anchor="${anchor}" font-family="${family}" xml:space="preserve">${spans}</text>`;
+  }).join('');
+  const borders = layout.borders.map((edge) => `<rect x="${number(left + edge.x + 0.5)}" y="${number(top + edge.y + 0.5)}" width="${number(Math.max(0, edge.width - 1))}" height="${number(Math.max(0, edge.height - 1))}" fill="none" stroke="${richBoxColor(edge, style)}" stroke-width="1"/>`).join('');
+  const rules = layout.rules.map((rule) => `<line x1="${number(box.x + style.textPadding)}" x2="${number(box.x + box.width - style.textPadding)}" y1="${number(top + rule.y)}" y2="${number(top + rule.y)}" stroke="${style.textColor}" stroke-width="1"/>`).join('');
+  return `<g${clipId ? ` clip-path="url(#${clipId})"` : ''}>${bands}${borders}${lines}${rules}</g>`;
 }
 
 export function outlineMarkup(
@@ -106,5 +141,23 @@ export function decorationMarkup(shape: BasicNodeShape, size: Size2d, style: Nod
     return `<path d="M ${number(first.x)} ${number(first.y)}`
       + rest.map((point) => ` L ${number(point.x)} ${number(point.y)}`).join('')
       + `" fill="none" stroke="${stroke}" stroke-width="${number(style.strokeWidth)}"${dash}/>`;
+  }).join('');
+}
+
+/** A draw.io shape's parts as SVG paths, curves kept: the node's own colours where a part asks, its own elsewhere. */
+export function drawnShapeMarkup(parts: readonly DrawnPart[], style: Pick<NodeStyle, 'fill' | 'stroke' | 'invertColors'>, lineScale: number, filter = ''): string {
+  const own = { fill: style.fill, stroke: style.stroke };
+  const paint = (value: string | null) => {
+    const colour = drawnPaint(value, own);
+    if (colour === null || colour === 'transparent') return 'none';
+    return style.invertColors && value !== 'fill' && value !== 'stroke' ? invertForDark(colour) : colour;
+  };
+  return parts.map((part, index) => {
+    const fill = paint(part.fill);
+    const stroke = paint(part.stroke);
+    const width = part.strokeWidth * lineScale;
+    const dash = part.dash.length && stroke !== 'none' ? ` stroke-dasharray="${part.dash.map((step) => number(step * width)).join(' ')}"` : '';
+    return `<path d="${drawnPathData(part.path)}" fill="${fill}"${part.fillOpacity < 1 && fill !== 'none' ? ` fill-opacity="${number(part.fillOpacity)}"` : ''}`
+      + ` stroke="${stroke}"${stroke !== 'none' ? ` stroke-width="${number(width)}"` : ''}${part.strokeOpacity < 1 && stroke !== 'none' ? ` stroke-opacity="${number(part.strokeOpacity)}"` : ''}${dash}${index === 0 ? filter : ''}/>`;
   }).join('');
 }

@@ -1,0 +1,71 @@
+<mxfile host="app.diagrams.net" agent="Mozilla/5.0" version="24.7.17">
+  <diagram name="Checkout" id="page-a">
+    <mxGraphModel dx="1100" dy="660" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="start" value="Start" style="ellipse;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="40" y="40" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="check" value="In stock?" style="rhombus;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1">
+          <mxGeometry x="220" y="30" width="120" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="pay" value="Take&lt;br&gt;&lt;b&gt;payment&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fontStyle=1;fontColor=#333333;" vertex="1" parent="1">
+          <mxGeometry x="420" y="40" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="db" value="Orders" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;size=15;" vertex="1" parent="1">
+          <mxGeometry x="440" y="180" width="80" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="start" target="check">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e2" value="yes" style="endArrow=classic;html=1;dashed=1;strokeColor=#FF0000;" edge="1" parent="1" source="check" target="pay">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="380" y="20" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="e3" style="endArrow=none;startArrow=oval;html=1;" edge="1" parent="1" source="pay" target="db">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e3-label" value="writes" style="edgeLabel;html=1;align=center;" vertex="1" connectable="0" parent="e3">
+          <mxGeometry x="-0.5" relative="1" as="geometry"><mxPoint as="offset" /></mxGeometry>
+        </mxCell>
+        <mxCell id="loose" style="endArrow=classic;html=1;" edge="1" parent="1" source="db">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="600" y="300" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram name="Services" id="page-b">
+    <mxGraphModel>
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" value="Base" parent="0" />
+        <mxCell id="2" value="Annotations" parent="0" visible="0" />
+        <mxCell id="lane" value="Backend" style="swimlane;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="100" y="100" width="300" height="200" as="geometry" />
+        </mxCell>
+        <mxCell id="api" value="API" style="whiteSpace=wrap;html=1;" vertex="1" parent="lane">
+          <mxGeometry x="20" y="40" width="100" height="50" as="geometry" />
+        </mxCell>
+        <UserObject label="Worker" link="https://example.com" id="worker">
+          <mxCell style="shape=mxgraph.aws4.lambda_function;html=1;" vertex="1" parent="lane">
+            <mxGeometry x="160" y="40" width="100" height="50" as="geometry" />
+          </mxCell>
+        </UserObject>
+        <mxCell id="inner" style="html=1;" edge="1" parent="lane" source="api" target="worker">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="140" y="120" /></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="note" value="TODO" style="text;html=1;" vertex="1" parent="2">
+          <mxGeometry x="500" y="100" width="60" height="30" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

@@ -44,9 +44,12 @@ export function exportStrokeNode(
   node: SceneNode,
   matrix: Matrix2d,
   presentation: StrokeNodePresentation,
-  frame: { readonly className: string; readonly style: string } | null
+  frame: { readonly className: string; readonly style: string } | null,
+  theme: 'light' | 'dark' | 'print' = 'light'
 ): string {
-  const color = safeColor(presentation.color, '#334155');
+  // A line with no colour of its own (an imported draw.io pen) follows the theme, as the canvas draws it.
+  const themed = theme === 'dark' && typeof node.content.strokeColor !== 'string' && presentation.kind !== 'highlighter';
+  const color = themed ? '#e2e8f0' : safeColor(presentation.color, '#334155');
   const inputSamples = presentation.inputSamples;
   const smoothed = inputSamples || (presentation.kind !== 'pen' && presentation.kind !== 'highlighter')
     ? presentation.points : smoothStroke(presentation.points);
@@ -119,7 +122,7 @@ export function exportImageNode(
 ): string {
   const background = theme === 'dark' ? '#1e293b' : '#fff7ed';
   const media = presentation.sourceUrl
-    ? `<image href="${xml(presentation.sourceUrl)}" width="${number(node.size.width)}" height="${number(node.size.height)}" opacity="${number(presentation.opacity)}" preserveAspectRatio="xMidYMid meet"/>`
+    ? `<image href="${xml(presentation.sourceUrl)}" width="${number(node.size.width)}" height="${number(node.size.height)}" opacity="${number(presentation.opacity)}" preserveAspectRatio="${presentation.fit === 'stretch' ? 'none' : 'xMidYMid meet'}"/>`
     : textElement(
         presentation.label || 'No Image',
         node.size.width / 2,
@@ -129,7 +132,8 @@ export function exportImageNode(
       );
   return nodeGroup(
     `data-node-id="${xml(node.id)}" data-node-kind="image" transform="${matrixAttribute(matrix)}"`,
-    `<rect width="${number(node.size.width)}" height="${number(node.size.height)}" rx="8" fill="${background}" stroke="#e95420"/>${media}`,
+    // As on the canvas: the plate stands in for a missing picture; a picture is drawn on nothing.
+    `${presentation.sourceUrl ? '' : `<rect width="${number(node.size.width)}" height="${number(node.size.height)}" rx="8" fill="${background}" stroke="#e95420"/>`}${media}`,
     frame
   );
 }

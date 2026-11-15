@@ -105,3 +105,19 @@ describe('reverse and label keys', () => {
     });
   });
 });
+
+describe('a draw.io line restyled', () => {
+  it('keeps the picked colours on a dark canvas; the ones it came with still flip', async () => {
+    const { resolveConnectorLine } = await import('../connectors/presentation');
+    const { resolveConnectorLabelStyle, connectorLabelOnCanvas } = await import('../connectors/labelStyle');
+    const document = createTestDocument({
+      nodes: [createTestNode('a'), createTestNode('b')],
+      connectors: [createTestConnector('edge', 'a', 'b', { appearance: { stroke: '#000000', labelColor: '#000000', labelBackground: '#ffffff', darkColors: 'invert' } })],
+    });
+    const lined = buildStyleConnectorCommand(document.pages[0]!, 'edge', { color: '#e95420', labelColor: '#2563eb' })!.after;
+    expect(resolveConnectorLine(lined).stroke.invertOnDark).toBeUndefined();
+    const dark = connectorLabelOnCanvas(resolveConnectorLabelStyle(lined), '#191b19');
+    expect(dark.textColor).toBe('#2563eb');
+    expect(dark.fill).not.toBe('#ffffff');
+  });
+});

@@ -17,6 +17,8 @@ export interface TransformSnapshot {
   readonly nodes: readonly SceneNode[];
   /** Direct children of selected containers: they ride along in the parent's frame. */
   readonly members: readonly SceneNode[];
+  /** Where each selected node's parent sits on the canvas: a nested node's translation is from there. */
+  readonly origins?: ReadonlyMap<string, Point2d>;
 }
 
 export interface TransformResult {

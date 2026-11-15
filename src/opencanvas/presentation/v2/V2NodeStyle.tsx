@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import {
   IconAlignCenter, IconAlignLeft, IconAlignRight, IconArrowBarToDown, IconArrowBarToUp,
   IconArrowsVertical, IconChevronDown, IconBold, IconItalic, IconMoodSmile,
-  IconLayoutNavbar, IconLayoutSidebar, IconStrikethrough, IconUnderline,
+  IconLayoutNavbar, IconLayoutSidebar, IconShadow, IconStrikethrough, IconUnderline,
 } from '@tabler/icons-react';
 
 import { loadProviderShapePreview } from '@/services/shapeLibrary/providerCatalog';
@@ -25,6 +25,7 @@ import { WIDGETS, WIDGET_SEVERITIES, resolveWidgetPresentation } from '../../dom
 import { buildSetHeaderCommand } from '../../domain/commands/groupNodes';
 import { resolveArchitectureNodePresentation, type IconCardPlacement } from '../../domain/nodes/architectureNodePresentation';
 import { V2IconPicker } from './V2IconPicker';
+import { V2NodeEffects } from './V2NodeEffects';
 import { resolveNodeStyle, STYLE_LIMITS, type NodeStyle } from '../../domain/nodes/nodeStyle';
 import { isContainerNodeKind } from '../../domain/nodes/containerNodePresentation';
 import { Icon, NumberField, Segmented } from '../design-system';
@@ -43,7 +44,7 @@ function commonNodeStyle(nodes: readonly SceneNode[]): NodeStyleCommon {
   const result: Record<string, unknown> = {};
   for (const key of Object.keys(first) as (keyof NodeStyle)[]) {
     const value = first[key];
-    const same = styles.every((style) => Array.isArray(value)
+    const same = styles.every((style) => typeof value === 'object' && value !== null
       ? JSON.stringify(style[key]) === JSON.stringify(value) : style[key] === value);
     result[key] = same ? value : null;
   }
@@ -68,7 +69,7 @@ interface NodeStylePanelsProps {
   readonly onSetIcon: (icon: IconChoice) => void;
 }
 
-type Panel = 'shape' | 'icon' | 'fill' | 'outline' | 'text' | 'ink' | 'chart' | 'widget';
+type Panel = 'shape' | 'icon' | 'fill' | 'effects' | 'outline' | 'text' | 'ink' | 'chart' | 'widget';
 
 /** Change shape offers what the Shapes picker draws: Rectangle, Ellipse, then the library. */
 const CHANGE_SHAPES = SHAPE_SECTIONS.flatMap((section) => section.options)
@@ -297,13 +298,12 @@ export function V2NodeStylePanels({ page, nodeIds, commit, onPreview, onCommitte
             min={0} max={100} step={10} unit="%"
             onChange={(value) => preview({ opacity: value / 100 })} onCommit={(value) => apply({ opacity: value / 100 })} />
         </PanelRow>
-        {isContainer || isWidget ? null : (
-          <PanelRow label="Shadow">
-            <Segmented<'on' | 'off' | ''> label="Shadow" value={view('shadow') === null ? '' : view('shadow') === true ? 'on' : 'off'}
-              onChange={(value) => apply({ shadow: value === 'on' })}
-              options={[{ value: 'off', label: 'None' }, { value: 'on', label: 'Soft' }]} />
-          </PanelRow>
-        )}
+      </StyleButton>
+      )}
+      {isStroke || isChart || isContainer || isWidget ? null : (
+      <StyleButton label="Effects" open={open === 'effects'} onToggle={() => toggle('effects')} onClose={close}
+        preview={<Icon icon={IconShadow} />}>
+        <V2NodeEffects nodes={nodes} draft={draft} preview={preview} apply={apply} />
       </StyleButton>
       )}
 

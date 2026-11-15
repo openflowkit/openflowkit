@@ -1,3 +1,4 @@
+import { stencilPictureUrl } from './imageNode';
 import type { SceneNode } from '../document/types';
 import {
   optionalPresentationString,
@@ -24,6 +25,8 @@ export interface ImageNodePresentation {
   readonly sourceUrl: string | null;
   readonly assetId: string | null;
   readonly opacity: number;
+  /** `stretch` fills the box (draw.io's `imageAspect=0`); unset keeps the picture's proportions inside it. */
+  readonly fit?: 'stretch';
 }
 
 export interface AnnotationNodePresentation {
@@ -82,7 +85,8 @@ function strokeInputSamples(value: unknown, pointCount: number): readonly Stroke
   return samples;
 }
 
-export function resolveFreeformNodePresentation(node: SceneNode): FreeformNodePresentation | null {
+/** `canvasColor` lets a draw.io stencil flip its colours on a dark canvas. */
+export function resolveFreeformNodePresentation(node: SceneNode, canvasColor?: unknown): FreeformNodePresentation | null {
   if (node.kind === 'text') {
     const customColor = optionalPresentationString(node.content.customColor);
     const backgroundColor = optionalPresentationString(node.content.backgroundColor);
@@ -102,9 +106,10 @@ export function resolveFreeformNodePresentation(node: SceneNode): FreeformNodePr
     return {
       kind: 'image',
       label: presentationString(node.content.label, 'Image'),
-      sourceUrl: safeImageUrl(node.content.imageUrl),
+      sourceUrl: stencilPictureUrl(node, canvasColor) ?? safeImageUrl(node.content.imageUrl),
       assetId: optionalPresentationString(node.content.imageAssetId) ?? null,
       opacity: opacity(node.content.transparency),
+      ...(node.content.imageFit === 'stretch' ? { fit: 'stretch' as const } : {}),
     };
   }
   // Renderer-exact Mermaid output is inline SVG markup; on a canvas that

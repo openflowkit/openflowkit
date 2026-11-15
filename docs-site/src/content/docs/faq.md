@@ -62,7 +62,7 @@ your machine; see [Self-hosting](/self-hosting/).
 
 | Direction | Formats |
 | --- | --- |
-| Open or import | OpenFlowKit `.json` (including files from version 1), Mermaid (`.mmd`, `.mermaid`), D2 (`.d2`), Structurizr DSL (`.dsl`), OpenFlow DSL (`.ofk`, `.txt`), Excalidraw (`.excalidraw`) |
+| Open or import | OpenFlowKit `.json` (including files from version 1), Mermaid (`.mmd`, `.mermaid`), D2 (`.d2`), Structurizr DSL (`.dsl`), OpenFlow DSL (`.ofk`, `.txt`), Excalidraw (`.excalidraw`), draw.io (`.drawio`, `.xml`, `.drawio.svg`, `.drawio.png`) |
 | Export | PNG, SVG, PDF (through the print dialog), JSON; animated SVG, GIF, MP4 and WebM ([Animated export](/animated-export/)) |
 | Copy | PNG to the clipboard; a flowchart or sequence diagram as Mermaid text |
 
@@ -83,6 +83,14 @@ Yes. On Home, click **Import** (or drop the file) and pick a `.excalidraw` file,
 **Open file…** in the editor. The drawing keeps its layout and its arrows stay tied to their
 shapes. Shapes copied in Excalidraw paste straight onto the canvas with `⌘V`. A toast names
 anything that didn't come across, such as hatched fills or groups. See
+[Local-first diagramming](/local-first-diagramming/#opening-and-importing-files).
+
+## Can I bring in my draw.io diagrams?
+
+Yes. On Home, click **Import** (or drop the file) and pick a `.drawio` or `.xml` file, or a
+`.drawio.svg` / `.drawio.png` with the diagram saved inside; in the editor use **Open file…**.
+Every page comes across with its shapes where they were. A toast names anything that didn't come
+across, such as gradients or shadows. See
 [Local-first diagramming](/local-first-diagramming/#opening-and-importing-files).
 
 ## Which browsers does it support?

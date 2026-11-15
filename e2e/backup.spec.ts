@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { deflateRawSync } from 'node:zlib';
 import { expect, test, type Page } from './test';
 
@@ -92,4 +92,18 @@ test('Zoom to fit keeps the diagram between Layers and the code panel on a small
   expect(rects.length).toBeGreaterThan(6);
   expect(Math.min(...rects.map(({ x }) => x)), 'left edge clear of Layers').toBeGreaterThanOrEqual(left!.x + left!.width);
   expect(Math.max(...rects.map(({ x, width }) => x + width)), 'right edge clear of the code panel').toBeLessThanOrEqual(right!.x);
+});
+
+test('Home → Import opens a draw.io file with every page, and says what didn’t come across', async ({ page }) => {
+  await page.goto('/#/home');
+  const file = test.info().outputPath('checkout.drawio');
+  writeFileSync(file, readFileSync('src/services/dsl/fixtures/drawio/flow.drawio'));
+  await page.locator('input[type="file"]').setInputFiles(file);
+  await expect(page.getByText('Imported 1 diagram')).toBeVisible();
+  await expect(page.getByText(/1 thing didn’t come across/)).toBeVisible();
+  const card = page.getByRole('list', { name: 'Diagrams' }).locator('.ofk-home-card-hit', { hasText: 'checkout' });
+  await card.click();
+  await expect.poll(() => page.url()).toContain('#/d/');
+  await expect.poll(async () => (await doc(page))?.pages.length ?? 0, { timeout: 20_000 }).toBe(2);
+  expect((await doc(page))?.name).toBe('checkout');
 });

@@ -28,4 +28,12 @@ describe('Pixi freeform node visual adapter', () => {
     expect(projectFreeformNodeVisual({ ...base, kind: 'mermaid_svg', content: {} }))
       .toMatchObject({ kind: 'image', presentation: { sourceUrl: null } });
   });
+
+  it('draws a pen stroke with no colour of its own in ink that shows on the dark canvas, and a picked colour as picked', () => {
+    const base = createPixiSpikePage(8).nodes[6];
+    const pen = (content: Record<string, unknown>) => ({ ...base, kind: 'pen', content: { points: [{ x: 0, y: 0 }, { x: 10, y: 10 }], ...content } });
+    expect(projectFreeformNodeVisual(pen({}), '#191b19')?.stroke).toBe(0xe2e8f0);
+    expect(projectFreeformNodeVisual(pen({}), '#f7f7f5')?.stroke).toBe(0x334155);
+    expect(projectFreeformNodeVisual(pen({ strokeColor: '#334155' }), '#191b19')?.stroke).toBe(0x334155);
+  });
 });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { SceneConnector } from '../document/types';
-import { connectorLabelLines, connectorLabelPlate, LABEL_WRAP_WIDTH, resolveConnectorLabelStyle } from './labelStyle';
+import { invertForDark } from '../color/adaptiveColor';
+import { connectorLabelLines, connectorLabelOnCanvas, connectorLabelPlate, LABEL_WRAP_WIDTH, ownLabelStyle, resolveConnectorLabelStyle } from './labelStyle';
 
 function connector(appearance: SceneConnector['appearance']): SceneConnector {
   return {
@@ -21,6 +22,10 @@ describe('resolveConnectorLabelStyle', () => {
     expect(resolveConnectorLabelStyle(connector({
       labelBackground: 'transparent', labelColor: '#ff0000', labelFontSize: 14, labelFontFamily: 'mono', labelFontStyle: 'italic',
     }))).toMatchObject({ fill: 'transparent', textColor: '#ff0000', fontSize: 14, fontFamily: 'mono', fontStyle: 'italic' });
+  });
+  it('pads and rounds its plate unless the line sets its own (a draw.io line: tight and square)', () => {
+    expect(resolveConnectorLabelStyle(connector({}))).toMatchObject({ textPadding: 5, cornerRadius: 4 });
+    expect(resolveConnectorLabelStyle(connector({ labelPadding: 0, labelCornerRadius: 0 }))).toMatchObject({ textPadding: 0, cornerRadius: 0 });
   });
 });
 
@@ -59,5 +64,22 @@ describe('connectorLabelLines and connectorLabelPlate', () => {
 describe('connector label wrap width', () => {
   it('wraps "POST /checkout [HTTPS]" at the width the canvas does, so the plate never fills a gap', () => {
     expect(connectorLabelLines('POST /checkout [HTTPS]', resolveConnectorLabelStyle(connector({}))).length).toBe(2);
+  });
+
+  it('flips a draw.io label’s own colours on a dark canvas, as draw.io’s dark mode does, and leaves others as set', () => {
+    const drawio = resolveConnectorLabelStyle(connector({ darkColors: 'invert', labelColor: '#ff0000', labelBackground: '#ffff00' }));
+    const dark = connectorLabelOnCanvas(drawio, '#1a1a1a');
+    expect(dark).toMatchObject({ textColor: invertForDark('#ff0000'), fill: invertForDark('#ffff00'), invertColors: true });
+    expect(connectorLabelOnCanvas(drawio, '#ffffff')).toMatchObject({ textColor: '#ff0000', invertColors: false });
+    const ours = resolveConnectorLabelStyle(connector({ labelColor: '#ff0000' }));
+    expect(connectorLabelOnCanvas(ours, '#1a1a1a').textColor).toBe('#ff0000');
+  });
+});
+
+describe('ownLabelStyle', () => {
+  it('puts a label on its own plate, and leaves one without on the connector\'s', () => {
+    const style = resolveConnectorLabelStyle(connector({}));
+    expect(ownLabelStyle(style, { background: 'transparent' }).fill).toBe('transparent');
+    expect(ownLabelStyle(style, {})).toBe(style);
   });
 });

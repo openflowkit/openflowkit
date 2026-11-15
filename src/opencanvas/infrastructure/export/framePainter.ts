@@ -1,6 +1,7 @@
 import type { Bounds2d } from '../../domain/geometry/types';
 import type { ConnectorPathCommand } from '../../domain/connectors/types';
-import type { DrawOp, DrawPaint } from '../../domain/animation/drawList';
+import type { DrawGradient, DrawOp, DrawPaint } from '../../domain/animation/drawList';
+import { gradientAxis } from '../../domain/nodes/nodeStyle';
 
 // Executes a draw list. Every decision — what to draw, in what order, where —
 // is already in the ops; this file only maps world coordinates to device
@@ -25,9 +26,20 @@ function trace(context: FrameCanvas2d, commands: readonly ConnectorPathCommand[]
   }
 }
 
-function fillWith(context: FrameCanvas2d, fill: DrawPaint | null, opacity: number): void {
+function gradientStyle(context: FrameCanvas2d, from: string, gradient: DrawGradient): CanvasGradient {
+  const { width, height } = gradient;
+  const axis = gradientAxis(gradient.direction);
+  const style = axis
+    ? context.createLinearGradient(axis.from.x * width, axis.from.y * height, axis.to.x * width, axis.to.y * height)
+    : context.createRadialGradient(width / 2, height / 2, 0, width / 2, height / 2, Math.max(width, height) / 2);
+  style.addColorStop(0, from);
+  style.addColorStop(1, gradient.color);
+  return style;
+}
+
+function fillWith(context: FrameCanvas2d, fill: DrawPaint | null, opacity: number, gradient?: DrawGradient): void {
   if (!fill) return;
-  context.fillStyle = fill.color;
+  context.fillStyle = gradient ? gradientStyle(context, fill.color, gradient) : fill.color;
   context.globalAlpha = opacity * fill.alpha;
   context.fill();
 }
@@ -59,16 +71,16 @@ function paintPath(context: FrameCanvas2d, op: Extract<DrawOp, { kind: 'path' }>
   if (op.shadow) {
     // One shadow for the whole element, like the SVG filter: lay the shape
     // down shadowed first, then paint it clean over itself.
-    context.shadowColor = `rgba(15, 23, 42, ${op.shadow.alpha * op.opacity})`;
+    context.shadowColor = `${op.shadow.color.slice(0, 7)}${Math.round(op.shadow.alpha * op.opacity * 255).toString(16).padStart(2, '0')}`;
     context.shadowBlur = op.shadow.blur;
     context.shadowOffsetX = op.shadow.offsetX;
     context.shadowOffsetY = op.shadow.offsetY;
-    if (op.fill) fillWith(context, op.fill, op.opacity);
+    if (op.fill) fillWith(context, op.fill, op.opacity, op.gradient);
     else strokeWith(context, op.stroke, op.strokeWidth, op.opacity);
     context.shadowColor = 'transparent';
     context.shadowBlur = 0;
   }
-  fillWith(context, op.fill, op.opacity);
+  fillWith(context, op.fill, op.opacity, op.gradient);
   strokeWith(context, op.stroke, op.strokeWidth, op.opacity);
 }
 

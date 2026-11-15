@@ -89,7 +89,9 @@ export function pixiTextStyle(style: NodeStyle, fill: number, wrapWidth: number 
     fill,
     lineHeight: style.fontSize * style.lineHeight,
     letterSpacing: style.fontSize * style.letterSpacing,
-    ...(wrapWidth ? { wordWrap: true, wordWrapWidth: wrapWidth, breakWords: true } : {}),
+    // Each line sits on the side the label is aligned to, as the SVG export sets it; one line is unchanged by this.
+    align: style.textAlign === 'center' ? 'center' : style.textAlign === 'end' ? 'right' : 'left',
+    ...(wrapWidth ? { wordWrap: true, wordWrapWidth: wrapWidth, breakWords: !style.keepWords } : {}),
   };
 }
 
@@ -104,8 +106,9 @@ export function decoratePixiText(parent: Container, text: Text, style: NodeStyle
   const lines = text.text.split('\n').length;
   const lineHeight = style.fontSize * style.lineHeight;
   const rule = new Graphics();
-  const left = text.x - text.anchor.x * text.width;
-  const top = text.y - text.anchor.y * text.height;
+  // Ruled from the text's own anchor point, then placed and turned as the text is.
+  const left = -text.anchor.x * text.width;
+  const top = -text.anchor.y * text.height;
   const thickness = Math.max(1, style.fontSize / 14);
   for (let line = 0; line < lines; line += 1) {
     const y = style.textDecoration === 'underline'
@@ -114,6 +117,8 @@ export function decoratePixiText(parent: Container, text: Text, style: NodeStyle
     rule.rect(left, y, text.width, thickness);
   }
   rule.fill({ color });
+  rule.position.copyFrom(text.position);
+  rule.rotation = text.rotation;
   parent.addChild(rule);
 }
 

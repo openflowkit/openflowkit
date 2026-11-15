@@ -5,7 +5,7 @@ import type { DocumentCommand } from '../../domain/commands/types';
 import type { SceneNode, ScenePage } from '../../domain/document/types';
 import type { PixiRendererHost } from '../../infrastructure/pixi/PixiRendererHost';
 import { sameRect } from './V2ContextBar';
-import { buildDeleteSelectionCommand, buildSetNodeLabelCommand } from '../../domain/commands/sceneEdits';
+import { buildDeleteSelectionCommand, buildEditLabelCommand, buildSetNodeLabelCommand } from '../../domain/commands/sceneEdits';
 import { nodeTechHint, refreshAutoIcon, withoutIcon } from '../../application/dsl/iconCommands';
 import { resolveDslIcon } from '../../../services/dsl/iconResolver';
 import type { V2EditingState } from './V2CanvasHost';
@@ -142,10 +142,16 @@ export function useV2LabelEditing(options: V2LabelEditingOptions) {
       if (optionsRef.current.onRenamePlacedElement?.(node.id, value)) {
         announce('Element renamed in every view');
       } else {
-        const command = buildSetNodeLabelCommand(currentPage, node.id, value);
-        // An inferred icon follows the new label (or leaves with it).
-        const after = refreshAutoIcon(command.after, value, nodeTechHint(command.after), resolveDslIcon, (plain) => withoutIcon(plain, false));
-        if (current.isNew) amendNewNode(node.id, { ...command, after }); else commit({ ...command, after });
+        const linked = buildEditLabelCommand(currentPage, node.id, value);
+        if (linked.kind === 'batch') {
+          // A shape and its label partner (words set beside it) change together.
+          commit(linked);
+        } else {
+          const command = buildSetNodeLabelCommand(currentPage, node.id, value);
+          // An inferred icon follows the new label (or leaves with it).
+          const after = refreshAutoIcon(command.after, value, nodeTechHint(command.after), resolveDslIcon, (plain) => withoutIcon(plain, false));
+          if (current.isNew) amendNewNode(node.id, { ...command, after }); else commit({ ...command, after });
+        }
         announce('Label saved');
       }
     }

@@ -1,18 +1,20 @@
-import { resolveNodeStyle } from '../../domain/nodes/nodeStyle';
+import { gradientAxis, resolveNodeStyle } from '../../domain/nodes/nodeStyle';
 import type { SceneDocumentV1, SceneNode, ScenePage } from '../../domain/document/types';
 import { boundsFromPoints, boundsCorners } from '../../domain/geometry/bounds';
 import type { Bounds2d, Matrix2d, Point2d } from '../../domain/geometry/types';
 import { resolveBasicNodePresentation } from '../../domain/nodes/basicNodePresentation';
 import { resolveWidgetInks } from '../../domain/nodes/widgetNodePresentation';
 import { frameChromePrimitives, framePresetOf } from '../../domain/nodes/framePreset';
-import { isBackdropNode, isContainerNodeKind } from '../../domain/nodes/containerNodePresentation';
+import { isBackdropNode, isContainerNodeKind, resolveContainerNodePresentation } from '../../domain/nodes/containerNodePresentation';
 import { nodeLabelBounds, nodeOutline } from '../../domain/nodes/nodeLabelBounds';
-import { connectorLabelOnCanvas } from '../../domain/connectors/labelStyle';
+import { connectorLabelOnCanvas, ownLabelStyle } from '../../domain/connectors/labelStyle';
+import { connectorStrokeOnCanvas } from '../../domain/connectors/presentation';
 import { resolveArchitectureNodePresentation } from '../../domain/nodes/architectureNodePresentation';
 import { iconCardLayout } from '../../domain/nodes/iconCardLayout';
 import { FONT_STACKS } from '../../domain/nodes/nodeStyle';
 import { resolveFreeformNodePresentation } from '../../domain/nodes/freeformNodePresentation';
 import { projectPageConnectors } from '../../domain/connectors/routeProjection';
+import { roundedConnectorCommands } from '../../domain/connectors/routePaths';
 import { buildNodeWorldMatrices, nodeWorldBounds } from '../../domain/scene/worldGeometry';
 import { buildNodeStateMap } from '../../domain/scene/nodeState';
 import { descendantIds } from '../../domain/scene/queries';
@@ -28,7 +30,9 @@ import { iconDefs, iconMarkup, type IconSheet } from './svgIcons';
 import { exportAnnotationNode, exportImageNode, exportStrokeNode, exportTextNode } from './svgFreeformNodes';
 import { exportChartNode, exportWidgetNode, widgetPrimitivesMarkup } from './svgChartWidgetNodes';
 import { exportArchitectureCard, exportClassEntityNode, exportSequenceNode } from './svgDiagramNodes';
-import { decorationMarkup, iconCaptionMarkup, labelElement, outlineMarkup } from './svgNodeText';
+import { invertForDark } from '../../domain/color/adaptiveColor';
+import { decorationMarkup, drawnShapeMarkup, iconCaptionMarkup, labelElement, outlineMarkup } from './svgNodeText';
+import { drawnShapeParts, drawnShapeStyle } from '../../domain/nodes/drawnShape';
 import { connectorLabelMarkup, connectorPathData, markerMarkup } from './svgConnectors';
 
 export { collectIconArt, iconArtKey } from './svgIcons';
@@ -74,10 +78,10 @@ function exportNode(
   const chart = exportChartNode(node, matrix, theme, wrapper) ?? exportWidgetNode(node, matrix, theme, wrapper, parentOf)
     ?? exportSequenceNode(node, matrix, theme, wrapper) ?? exportClassEntityNode(node, matrix, wrapper);
   if (chart) return chart;
-  const freeform = resolveFreeformNodePresentation(node);
+  const freeform = resolveFreeformNodePresentation(node, theme === 'dark' ? SVG_BACKGROUND.dark : undefined);
   if (freeform && (freeform.kind === 'pen' || freeform.kind === 'highlighter'
     || freeform.kind === 'line' || freeform.kind === 'arrow')) {
-    return exportStrokeNode(node, matrix, freeform, wrapper);
+    return exportStrokeNode(node, matrix, freeform, wrapper, theme);
   }
   if (freeform?.kind === 'text') return exportTextNode(node, matrix, freeform, theme, wrapper);
   if (freeform?.kind === 'image') return exportImageNode(node, matrix, freeform, theme, wrapper);
@@ -92,26 +96,41 @@ function exportNode(
   const basic = resolveBasicNodePresentation(node);
   const preset = framePresetOf(node);
   const outline = nodeOutline(node);
+  // A draw.io shape is drawn by its parts, as draw.io's own code drew it.
+  const drawn = drawnShapeParts(node);
   const label = typeof node.content.label === 'string' ? node.content.label : node.id;
   const subLabel = typeof node.content.subLabel === 'string' ? node.content.subLabel : '';
   const clip = resolveLabelSizing(node, style).clipContent
     ? `clip-${node.id.replace(/[^A-Za-z0-9_-]/g, '-')}`
     : null;
   const shadowId = `shadow-${node.id.replace(/[^A-Za-z0-9_-]/g, '-')}`;
+  const gradientId = `gradient-${node.id.replace(/[^A-Za-z0-9_-]/g, '-')}`;
   const filter = style.shadow ? ` filter="url(#${shadowId})"` : '';
-  const defs = (style.shadow
-    ? `<filter id="${shadowId}" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="#0f172a" flood-opacity="0.18"/></filter>`
+  const { shadow, gradient } = style;
+  const axis = gradient ? gradientAxis(gradient.direction) : null;
+  const stops = gradient ? `<stop offset="0" stop-color="${style.fill}"/><stop offset="1" stop-color="${gradient.color}"/>` : '';
+  const defs = (shadow
+    ? `<filter id="${shadowId}" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="${number(shadow.offsetX)}" dy="${number(shadow.offsetY)}" stdDeviation="${number(shadow.blur)}" flood-color="${shadow.color}" flood-opacity="${number(shadow.opacity)}"/></filter>`
     : '')
+    + (gradient
+      ? axis
+        ? `<linearGradient id="${gradientId}" x1="${axis.from.x}" y1="${axis.from.y}" x2="${axis.to.x}" y2="${axis.to.y}">${stops}</linearGradient>`
+        : `<radialGradient id="${gradientId}">${stops}</radialGradient>`
+      : '')
     + (clip ? `<clipPath id="${clip}"><path d="${pathData(outline)}"/></clipPath>` : '');
   return nodeGroup(
     `data-node-id="${xml(node.id)}" transform="${matrixAttribute(matrix)}"${style.opacity < 1 ? ` opacity="${number(style.opacity)}"` : ''}`,
     (defs ? `<defs>${defs}</defs>` : '')
-      + outlineMarkup(outline, style, filter)
-      + (basic ? decorationMarkup(basic.shape, node.size, style) : '')
+      + (drawn
+        ? drawnShapeMarkup(drawn, style, style.strokeWidth / (Number.parseFloat(drawnShapeStyle(node)?.strokeWidth ?? '') || 1), filter)
+        : outlineMarkup(outline, gradient ? { ...style, fill: `url(#${gradientId})` } : style, filter)
+          + (basic ? decorationMarkup(basic.shape, node.size, style) : ''))
       + (preset ? widgetPrimitivesMarkup(frameChromePrimitives(preset, node.size), resolveWidgetInks(node, style, background), style) : '')
       + (resolveArchitectureNodePresentation(node)?.display === 'provider-icon'
         ? iconCaptionMarkup(iconCardLayout(node, style).text, style)
-        : labelElement(style, nodeLabelBounds(node), label, isContainerNodeKind(node.kind) ? '' : subLabel, clip, node))
+        // A container whose header is off shows no title, on the canvas and here alike.
+        : labelElement(style, nodeLabelBounds(node), isContainerNodeKind(node.kind) && resolveContainerNodePresentation(node)?.header === false ? '' : label,
+          isContainerNodeKind(node.kind) ? '' : subLabel, clip, node))
       + (isContainerNodeKind(node.kind) && subLabel ? textElement(subLabel, 12, node.size.height - 22, `fill="${style.textColor}" font-family="${xml(FONT_STACKS[style.fontFamily])}" font-size="10" font-weight="500" dominant-baseline="hanging"`, 12) : '')
       + iconMarkup(node, icons, style, background),
     wrapper
@@ -190,7 +209,7 @@ export function exportCanonicalSvg(
   const background = theme === 'dark' ? SVG_BACKGROUND.dark : SVG_BACKGROUND.light;
   const icons: IconSheet = { art: options.iconArt, ids: new Map() };
   const connectorMarkup = connectors.map((connector) => {
-    const stroke = safeColor(connector.presentation.stroke.color, theme === 'dark' ? '#cbd5e1' : '#475569');
+    const stroke = safeColor(connectorStrokeOnCanvas(connector.presentation.stroke, theme === 'dark' ? background : undefined).color, theme === 'dark' ? '#cbd5e1' : '#475569');
     const state = options.frame?.connectors[connector.id];
     const animation = options.animations?.('connector', connector.id);
     const pathAnimation = animation?.path ? ` class="${ANIMATED_CLASS}" style="${cssAnimation(animation.path)}"` : '';
@@ -198,9 +217,15 @@ export function exportCanonicalSvg(
       ? `${animation.path.unitLength ? ' pathLength="1"' : ''} stroke-dasharray="${animation.path.dash}"`
       : connectorPathDash(state);
     const group = elementFrameStyle('connector', connector.id, state, undefined, options.animations);
-    return `<g data-connector-id="${xml(connector.id)}"${group?.className ?? ''}${group?.style ?? ''}><path d="${connectorPathData(connector.commands)}"${pathAnimation} fill="none" stroke="${stroke}" stroke-width="${number(connector.presentation.stroke.width)}" opacity="${number(connector.presentation.stroke.opacity)}"${dash}${connector.presentation.stroke.dash.length && !dash ? ` stroke-dasharray="${connector.presentation.stroke.dash.map(number).join(' ')}"` : ''}/>`
-      + connector.labels.map((label) => connectorLabelMarkup(label.text, label.point, connectorLabelOnCanvas(connector.presentation.label, theme === 'dark' ? background : undefined))).join('')
-      + markerMarkup(connector, stroke, background)
+    // A line draw.io draws with a shape of its own is its parts (ends included), unless an animation draws the line.
+    const drawn = connector.drawn && !animation?.path ? connector.drawn : null;
+    const flip = theme === 'dark' && connector.presentation.stroke.invertOnDark === true;
+    const line = drawn
+      ? `<g opacity="${number(connector.presentation.stroke.opacity)}">${drawnShapeMarkup(drawn.parts, { fill: flip ? invertForDark(drawn.fill) : drawn.fill, stroke, invertColors: flip }, 1)}</g>`
+      : `<path d="${connectorPathData(roundedConnectorCommands(connector))}"${pathAnimation} fill="none" stroke="${stroke}" stroke-width="${number(connector.presentation.stroke.width)}" opacity="${number(connector.presentation.stroke.opacity)}"${dash}${connector.presentation.stroke.dash.length && !dash ? ` stroke-dasharray="${connector.presentation.stroke.dash.map(number).join(' ')}"` : ''}/>`;
+    return `<g data-connector-id="${xml(connector.id)}"${group?.className ?? ''}${group?.style ?? ''}>${line}`
+      + connector.labels.map((label) => connectorLabelMarkup(label.text, label.point, ownLabelStyle(connectorLabelOnCanvas(connector.presentation.label, theme === 'dark' ? background : undefined), label), label.rich ?? null)).join('')
+      + (drawn ? '' : markerMarkup(connector, stroke, background))
       + '</g>';
   }).join('');
   // The canvas's layers: containers (and a sequence's fragment bands) under the connectors, every

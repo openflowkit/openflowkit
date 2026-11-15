@@ -33,6 +33,23 @@ describe('buildV2Thumbnail', () => {
   });
 });
 
+describe('a diagram too detailed for a drawn preview', () => {
+  it('gets a small picture of itself instead of a blank card', async () => {
+    const document = await buildCanonicalFixtureDocument();
+    const raster = vi.fn(async (svg: string) => `<svg data-picture="${svg.length > 0}"/>`);
+    const thumbnail = await buildV2Thumbnail(document, 100, raster);
+    expect(thumbnail).toEqual({ light: '<svg data-picture="true"/>', dark: '<svg data-picture="true"/>' });
+    expect(raster).toHaveBeenCalledTimes(2);
+  });
+
+  it('a busy page is pictured smaller until it fits', async () => {
+    const document = await buildCanonicalFixtureDocument();
+    const raster = vi.fn(async (_svg: string, width: number) => 'x'.repeat(width / 4));
+    expect(await buildV2Thumbnail(document, 160, raster)).toEqual({ light: 'x'.repeat(75), dark: 'x'.repeat(75) });
+    expect(raster.mock.calls.map(([, width]) => width)).toEqual([400, 400, 300, 300]);
+  });
+});
+
 describe('fitThumbnail', () => {
   it('keeps the first picture that fits the cap, drawing the plainer one only when needed, else nothing', () => {
     const big = { light: 'x'.repeat(40), dark: 'y'.repeat(40) };

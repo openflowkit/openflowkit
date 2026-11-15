@@ -2,6 +2,7 @@ import type { DocumentCommand } from '../commands/types';
 import { areStructurallyEqual } from '../commands/equality';
 import type { SceneNode } from '../document/types';
 import { createBounds2d, unionBounds } from '../geometry/bounds';
+import { applyMatrixToPoint } from '../geometry/matrix';
 import { buildNodeWorldMatrices, nodeWorldBounds, nodeWorldCenter } from '../scene/worldGeometry';
 import type { ScenePage } from '../document/types';
 import type { Bounds2d, Point2d } from '../geometry/types';
@@ -53,7 +54,12 @@ export function createTransformSnapshot(
   if (nodes.length !== selected.size) throw new Error('A selected node was not found.');
   const containers = new Set(nodes.filter((node) => isContainerNodeKind(node.kind)).map((node) => node.id));
   const members = page.nodes.filter((node) => node.parentId !== null && containers.has(node.parentId) && !selected.has(node.id));
-  return { nodes, members, bounds: selectionBounds(page, nodes) };
+  const matrices = buildNodeWorldMatrices(page);
+  const origins = new Map(nodes.flatMap((node) => {
+    const parent = node.parentId ? matrices.get(node.parentId) : undefined;
+    return parent ? [[node.id, applyMatrixToPoint(parent, { x: 0, y: 0 })] as const] : [];
+  }));
+  return { nodes, members, bounds: selectionBounds(page, nodes), origins };
 }
 
 /** The records a transform command replaces, in `TransformResult.nodes` order. */
@@ -183,9 +189,11 @@ export function resizeTransform(
   const originShift = new Map<string, Point2d>();
   const nodes = snapshot.nodes.map((node) => {
     const translation = node.transform.translation;
+    // The anchor is on the canvas; a nested node's translation is from its parent's origin.
+    const origin = snapshot.origins?.get(node.id) ?? { x: 0, y: 0 };
     const moved = {
-      x: scalesX ? anchorX + (translation.x - anchorX) * scaleX : translation.x,
-      y: scalesY ? anchorY + (translation.y - anchorY) * scaleY : translation.y,
+      x: scalesX ? anchorX - origin.x + (translation.x - anchorX + origin.x) * scaleX : translation.x,
+      y: scalesY ? anchorY - origin.y + (translation.y - anchorY + origin.y) * scaleY : translation.y,
     };
     if (isContainerNodeKind(node.kind)) {
       originShift.set(node.id, { x: translation.x - moved.x, y: translation.y - moved.y });
@@ -241,14 +249,15 @@ export function rotateTransform(
       y: (node.size.height * node.transform.scale.y) / 2,
     };
     const rotatedOffset = rotatePoint(localCenter, { x: 0, y: 0 }, rotation);
+    const origin = snapshot.origins?.get(node.id) ?? { x: 0, y: 0 };
     return {
       ...node,
       transform: {
         ...node.transform,
         rotationRadians: rotation,
         translation: {
-          x: nextCenter.x - rotatedOffset.x,
-          y: nextCenter.y - rotatedOffset.y,
+          x: nextCenter.x - rotatedOffset.x - origin.x,
+          y: nextCenter.y - rotatedOffset.y - origin.y,
         },
       },
     };

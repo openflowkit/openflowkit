@@ -23,7 +23,7 @@ import {
 import { useLocation, useNavigate } from 'react-router-dom';
 import type { SceneDocumentV1 } from '../../domain/document/types';
 import { createV2Repository } from '../../../services/storage/v2/v2Repository';
-import { importFiles, importSummary, openedNotice } from '../../../services/storage/v2/backup';
+import { importDetail, importFiles, importSummary, openedNotice } from '../../../services/storage/v2/backup';
 import { track } from '../../../services/usage/usage';
 import { buildV1Backup, readV1ImportMarker } from '../../../services/storage/v2/v1Import';
 import { downloadTextFile } from './v2Export';
@@ -184,8 +184,8 @@ export function V2DocumentBar(props: V2DocumentBarProps): React.JSX.Element {
       return;
     }
     const parts = [importSummary(report)];
-    if (failed) parts.push(`Couldn’t open ${report.problems.join('; ')}.`);
-    parts.push(...report.notes, ...report.losses);
+    const detail = importDetail(report);
+    if (detail) parts.push(detail);
     navigate('/home', { state: { notice: parts.join(' '), tone: failed || report.notes.length + report.losses.length ? 'warning' : 'success' } satisfies HomeNotice });
   };
   // What opening the file had to change, told once in the new document's editor.

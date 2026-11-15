@@ -1,6 +1,7 @@
 import { isJsonObject } from '../../../opencanvas/domain/document/json';
 import { UNTITLED_DOCUMENT_NAME } from '../../../opencanvas/domain/document/defaults';
 import type { SceneDocumentV1 } from '../../../opencanvas/domain/document/types';
+import { lossNote } from '../../dsl/lossNote';
 import { documentFromFileText } from './openDocumentFile';
 import { isV1Backup, openV1Backup } from './v1Import';
 import type { V2DocumentRepository } from './v2Repository';
@@ -61,7 +62,35 @@ export function importSummary(report: ImportReport): string {
   return parts.join(' ');
 }
 export const MAX_IMPORT_CHARS = 2_000_000;
-const withoutExtension = (name: string) => name.replace(/\.[^.]+$/, '');
+const withoutExtension = (name: string) => name.replace(/(\.drawio)?\.[^.]+$/i, '');
+const IMAGE = /\.(png|svg)$/i;
+
+/** The draw.io XML in a file — the file itself, or what a draw.io PNG or SVG export carries — else null. */
+async function drawioIn(file: File, text: string): Promise<string | null> {
+  // Every draw.io form is a PNG or markup, so JSON and the rest never load the importer and draw.io's shape code.
+  if (!/\.(png|drawio)$/i.test(file.name) && !text.trimStart().startsWith('<')) return null;
+  // Loaded on first use, like the Excalidraw importer: Home's list doesn't wait on it.
+  const [{ looksLikeDrawio }, { drawioFromPng, drawioFromSvg }] = await Promise.all([import('../../dsl/drawio'), import('../../dsl/drawioFile')]);
+  if (/\.png$/i.test(file.name)) return drawioFromPng(new Uint8Array(await file.arrayBuffer()));
+  if (looksLikeDrawio(text)) return text;
+  const svg = drawioFromSvg(text);
+  // A `.drawio`, or XML, is meant as draw.io: the importer says what is wrong with it, not the JSON reader.
+  return svg ?? (/\.drawio$/i.test(file.name) || (/\.xml$/i.test(file.name) && text.trimStart().startsWith('<')) ? text : null);
+}
+
+/** The few first lines of what went wrong and what didn't come across, so a toast for 150 files still fits. */
+export function importDetail(report: Pick<ImportReport, 'problems' | 'notes' | 'losses'>): string {
+  const first = (items: readonly string[], keep: number) => items.slice(0, keep);
+  const parts: string[] = [];
+  if (report.problems.length) {
+    const more = report.problems.length > 3 ? `; and ${report.problems.length - 3} more` : '';
+    parts.push(`Couldn’t open ${first(report.problems, 3).join('; ')}${more}`.replace(/([^.])$/, '$1.'));
+  }
+  const said = [...report.notes, ...report.losses];
+  parts.push(...first(said, 2));
+  if (said.length > 2) parts.push(`and ${said.length - 2} more ${said.length - 2 === 1 ? 'file' : 'files'} lost something.`);
+  return parts.join(' ');
+}
 const SOURCE = /\.(mmd|mermaid|d2|dsl|ofk|txt)$/i;
 
 /**
@@ -96,12 +125,22 @@ export async function importFiles(files: readonly File[], repository: V2Document
   // Anything that isn't a text diagram is read as JSON, as Open file… always did: a renamed backup still opens.
   for (const file of files.filter((candidate) => !SOURCE.test(candidate.name))) {
     try {
-      const text = await file.text();
+      const text = /\.png$/i.test(file.name) ? '' : await file.text();
+      const drawio = await drawioIn(file, text);
+      if (drawio === null && IMAGE.test(file.name)) { problems.push(`${file.name}: It’s an image with no draw.io diagram in it.`); continue; }
+      if (drawio !== null) {
+        const { drawioToDocument } = await import('../../dsl/drawio');
+        const imported = await drawioToDocument(drawio, mintId());
+        if ('error' in imported) { problems.push(`${file.name}: ${imported.error}`); continue; }
+        if (imported.losses.length) losses.push(`${file.name}: ${lossNote(imported.losses)}`);
+        await save({ ...imported.document, name: withoutExtension(file.name) }, file.name);
+        continue;
+      }
       let parsed: unknown = null;
       try { parsed = JSON.parse(text); } catch { /* documentFromFileText reports it */ }
       if (isJsonObject(parsed) && (parsed.type === 'excalidraw' || parsed.type === 'excalidraw/clipboard')) {
         // Loaded on first use: Home's list doesn't wait on the importer.
-        const { excalidrawToDocument, lossNote } = await import('../../dsl/excalidraw');
+        const { excalidrawToDocument } = await import('../../dsl/excalidraw');
         const imported = excalidrawToDocument(text, mintId());
         if ('error' in imported) { problems.push(`${file.name}: ${imported.error}`); continue; }
         if (imported.losses.length) losses.push(`${file.name}: ${lossNote(imported.losses)}`);

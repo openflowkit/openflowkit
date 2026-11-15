@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { SceneNode } from '../document/types';
 import { contrastRatio as contrast, mixHex } from '../../../lib/colorUtils';
 import { darkWashFill } from '../color/adaptiveColor';
-import { nodeStyleFont, resolveNodeStyle } from './nodeStyle';
+import { DEFAULT_SHADOW, gradientAxis, startingGradientColor, nodeStyleFont, resolveNodeStyle } from './nodeStyle';
 import { createShapeNode } from './shapeNode';
 import { createTestDocument } from '../../testing/builders/documentBuilder';
 import { PALETTE_KEYS, paletteResolver } from './nodePalette';
@@ -150,8 +150,24 @@ describe('resolveNodeStyle', () => {
       fill: '#ff0000', stroke: 'transparent', strokeWidth: 24, cornerRadius: 0, fontSize: 96,
       fontFamily: 'mono', fontWeight: 700, fontStyle: 'italic', textDecoration: 'underline',
       textAlign: 'end', textVerticalAlign: 'bottom', lineHeight: 2, letterSpacing: 0.1, textPadding: 4,
-      opacity: 0.5, shadow: true,
+      opacity: 0.5, shadow: DEFAULT_SHADOW, gradient: null,
     });
+  });
+
+  it('reads a shadow’s own colour, opacity, blur and offset, clamped, and its defaults when unset', () => {
+    expect(resolveNodeStyle(node({ appearance: {} })).shadow).toBeNull();
+    expect(resolveNodeStyle(node({ appearance: {
+      shadow: true, shadowColor: '#FF0000', shadowOpacity: 0.25, shadowBlur: 99, shadowOffsetX: 2, shadowOffsetY: 'x',
+    } })).shadow).toEqual({ color: '#ff0000', opacity: 0.25, blur: 32, offsetX: 2, offsetY: DEFAULT_SHADOW.offsetY });
+  });
+
+  it('runs a gradient from the fill to its colour, south unless told, and only over a solid fill', () => {
+    expect(resolveNodeStyle(node({ appearance: { fill: '#ffffff', gradientColor: '#000000' } })).gradient)
+      .toEqual({ color: '#000000', direction: 'south' });
+    expect(resolveNodeStyle(node({ appearance: { fill: '#ffffff', gradientColor: '#000000', gradientDirection: 'radial' } })).gradient?.direction)
+      .toBe('radial');
+    expect(resolveNodeStyle(node({ appearance: { fill: 'transparent', gradientColor: '#000000' } })).gradient).toBeNull();
+    expect(resolveNodeStyle(node({ appearance: { fill: '#ffffff', gradientColor: 'nope' } })).gradient).toBeNull();
   });
 
   it('ignores malformed values', () => {
@@ -197,5 +213,23 @@ describe('icon card styles', () => {
     const style = resolveNodeStyle(card('left'));
     expect(style).toMatchObject({ cornerRadius: 10, strokeWidth: 1, textAlign: 'start', textVerticalAlign: 'middle', textPadding: 12 });
     expect(style.fill).toBe(paletteResolver()('white', 'pastel').fill);
+  });
+});
+
+describe('gradientAxis', () => {
+  it('runs south top to bottom, north and west reversed, and radial from the centre', () => {
+    expect(gradientAxis('south')).toEqual({ from: { x: 0, y: 0 }, to: { x: 0, y: 1 } });
+    expect(gradientAxis('north')).toEqual({ from: { x: 0, y: 1 }, to: { x: 0, y: 0 } });
+    expect(gradientAxis('west')).toEqual({ from: { x: 1, y: 0 }, to: { x: 0, y: 0 } });
+    expect(gradientAxis('radial')).toBeNull();
+  });
+});
+
+describe('startingGradientColor', () => {
+  it('darkens the fill by a quarter, and falls back to slate for a mixed or transparent fill', () => {
+    expect(startingGradientColor('#ffffff')).toBe('#bfbfbf');
+    expect(startingGradientColor('#ffffff80')).toBe('#bfbfbf');
+    expect(startingGradientColor(null)).toBe('#64748b');
+    expect(startingGradientColor('transparent')).toBe('#64748b');
   });
 });

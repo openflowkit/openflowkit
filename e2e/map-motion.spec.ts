@@ -82,7 +82,8 @@ test('arrows are hidden during the move and fade in after it @gate', async ({ pa
   expect((await motion(page)).arrowAlpha).toBe(1);
 });
 
-test('a click during the move lands on the target layout, and a second flip re-targets the move @gate', async ({ page }) => {
+// @local: the click must land mid-animation, which headless frame timing misses; it runs in the headed suite.
+test('a click during the move lands on the target layout, and a second flip re-targets the move @gate @local', async ({ page }) => {
   test.setTimeout(60_000);
   await openStarter(page);
   await idle(page);

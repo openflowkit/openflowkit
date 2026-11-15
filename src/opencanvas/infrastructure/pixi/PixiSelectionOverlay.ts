@@ -58,9 +58,12 @@ export class PixiSelectionOverlay {
   private drawQuickCreateGhost(index: SceneIndex, nodeId: string, side: ConnectSide, zoom: number): void {
     const node = index.nodesById.get(nodeId);
     if (!node || node.transform.rotationRadians !== 0) return;
-    const origin = quickCreateOrigin(node, side);
+    // Drawn on the canvas: a nested node's translation is from its parent, so the plan is laid out from its world box.
+    const bounds = this.nodeBounds(index, nodeId);
+    const placed = bounds ? { ...node, transform: { ...node.transform, translation: { x: bounds.x, y: bounds.y } } } : node;
+    const origin = quickCreateOrigin(placed, side);
     const ghost: Bounds2d = { x: origin.x, y: origin.y, width: node.size.width, height: node.size.height };
-    const from = sideAnchor(this.nodeBounds(index, nodeId) ?? ghost, side);
+    const from = sideAnchor(bounds ?? ghost, side);
     const to = sideAnchor(ghost, oppositeSide(side));
     this.graphics
       .roundRect(ghost.x, ghost.y, ghost.width, ghost.height, 6)

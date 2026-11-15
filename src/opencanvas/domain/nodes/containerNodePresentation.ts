@@ -31,7 +31,8 @@ export function isContainerNodeKind(kind: string): kind is ContainerNodeKind {
 
 /** The canvas's bottom layer, painted under the connectors: containers and a sequence's fragment bands. */
 export function isBackdropNode(node: SceneNode): boolean {
-  return isContainerNodeKind(node.kind) || typeof node.content.seqFragmentId === 'string';
+  // `underLines`: a shape lines are drawn over (one an imported draw.io line crossed after it was drawn).
+  return isContainerNodeKind(node.kind) || typeof node.content.seqFragmentId === 'string' || node.content.underLines === true;
 }
 
 function fallbackColorKey(node: SceneNode, kind: ContainerNodeKind): string {

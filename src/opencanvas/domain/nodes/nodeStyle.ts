@@ -5,12 +5,13 @@ import { resolveBasicNodePresentation } from './basicNodePresentation';
 import { resolveContainerNodePresentation } from './containerNodePresentation';
 import { resolveNodeStroke, type NodeStrokeStyle } from './nodeStroke';
 import { optionalPresentationString } from './nodePresentationValues';
-import { darkWashFill, isDarkCanvas, paintOver, resolveAdaptiveInk, WASH_SUB_INK } from '../color/adaptiveColor';
+import { darkWashFill, invertForDark, isDarkCanvas, paintOver, resolveAdaptiveInk, WASH_SUB_INK } from '../color/adaptiveColor';
 import { hasExplicitColor, nodePaletteName, PALETTE_KEYS, paletteResolver } from './nodePalette';
 import { widgetLabelBox } from './widgetNodePresentation';
 import { framePresetOf } from './framePreset';
 import { DRAWN_SHAPE_FILL } from './shapeNode';
-import { mixHex, normalizeHex, readableTextOn } from '../../../lib/colorUtils';
+import { drawnFillIsHatched } from './drawnShape';
+import { contrastRatio, mixHex, normalizeHex, readableTextOn } from '../../../lib/colorUtils';
 
 // Every visible property of a node, resolved from flat `appearance` keys
 // with legacy `content.*` palette/typography keys as fallbacks. Renderers, the
@@ -38,7 +39,10 @@ export interface NodeStyle {
   readonly dash: readonly number[];
   readonly cornerRadius: number;
   readonly opacity: number;
-  readonly shadow: boolean;
+  /** Null when the node casts none. */
+  readonly shadow: NodeShadow | null;
+  /** A fill that runs from `fill` to `gradient.color`; null for a solid fill. */
+  readonly gradient: NodeGradient | null;
   readonly textColor: string;
   /** Ink for descriptions, kind tags and legends when the node is a dark-canvas wash; otherwise undefined (the palette's own). */
   readonly subTextColor?: string;
@@ -47,6 +51,10 @@ export interface NodeStyle {
   readonly fontWeight: FontWeight;
   readonly fontStyle: 'normal' | 'italic';
   readonly textDecoration: TextDecoration;
+  /** A word wider than the line stays whole and runs past the edge (draw.io's labels), instead of breaking. */
+  readonly keepWords: boolean;
+  /** Colours set inside the label (a rich label's runs) are flipped as the node's own are: draw.io's dark mode. */
+  readonly invertColors: boolean;
   readonly textAlign: TextAlign;
   readonly textVerticalAlign: TextVerticalAlign;
   /** Multiplier of fontSize. */
@@ -56,6 +64,46 @@ export interface NodeStyle {
   readonly textPadding: number;
 }
 
+export interface NodeShadow {
+  readonly color: string;
+  /** 0–1. */
+  readonly opacity: number;
+  /** Blur as an SVG `stdDeviation`. */
+  readonly blur: number;
+  readonly offsetX: number;
+  readonly offsetY: number;
+}
+
+/** Where the gradient ends: `south` runs top to bottom (draw.io's default); `radial` from the centre out. */
+export type GradientDirection = 'south' | 'north' | 'east' | 'west' | 'radial';
+
+export interface NodeGradient {
+  readonly color: string;
+  readonly direction: GradientDirection;
+}
+
+/** A linear gradient's ends in the node's box, 0–1 on each axis (fill at `from`); null for radial,
+ *  which runs from the centre (fill) to the box's edge. */
+export function gradientAxis(direction: GradientDirection): { readonly from: Point; readonly to: Point } | null {
+  switch (direction) {
+    case 'north': return { from: { x: 0, y: 1 }, to: { x: 0, y: 0 } };
+    case 'east': return { from: { x: 0, y: 0 }, to: { x: 1, y: 0 } };
+    case 'west': return { from: { x: 1, y: 0 }, to: { x: 0, y: 0 } };
+    case 'radial': return null;
+    default: return { from: { x: 0, y: 0 }, to: { x: 0, y: 1 } };
+  }
+}
+
+type Point = { readonly x: number; readonly y: number };
+
+/** Where a new gradient starts: a quarter darker than the fill, or slate when the fill isn't a single hex. */
+export function startingGradientColor(fill: string | null): string {
+  return fill && /^#[0-9a-f]{6}/i.test(fill) ? mixHex(fill.slice(0, 7), '#000000', 0.25) : '#64748b';
+}
+
+/** The soft shadow a node casts when it sets no shadow keys of its own. */
+export const DEFAULT_SHADOW: NodeShadow = { color: '#0f172a', opacity: 0.18, blur: 2.5, offsetX: 0, offsetY: 2 };
+
 export const STYLE_LIMITS = {
   strokeWidth: { min: 0, max: 24 },
   cornerRadius: { min: 0, max: 64 },
@@ -63,6 +111,8 @@ export const STYLE_LIMITS = {
   lineHeight: { min: 1, max: 2 },
   letterSpacing: { min: -0.05, max: 0.2 },
   textPadding: { min: 0, max: 32 },
+  shadowOffset: { min: -64, max: 64 },
+  shadowBlur: { min: 0, max: 32 },
 } as const;
 
 const FONT_SIZE_ALIASES: Readonly<Record<string, number>> = { small: 14, medium: 16, large: 18 };
@@ -83,6 +133,23 @@ function oneOf<T extends string | number>(value: unknown, allowed: readonly T[],
 function paint(value: unknown, fallback: string): string {
   return typeof value === 'string' && (value === 'transparent' || /^#[0-9a-f]{3,8}$/i.test(value))
     ? value.toLowerCase() : fallback;
+}
+
+function shadowOf(a: SceneNode['appearance']): NodeShadow | null {
+  if (a.shadow !== true) return null;
+  return {
+    color: (typeof a.shadowColor === 'string' ? normalizeHex(a.shadowColor) : null) ?? DEFAULT_SHADOW.color,
+    opacity: clampNumber(a.shadowOpacity, { min: 0, max: 1 }, DEFAULT_SHADOW.opacity),
+    blur: clampNumber(a.shadowBlur, STYLE_LIMITS.shadowBlur, DEFAULT_SHADOW.blur),
+    offsetX: clampNumber(a.shadowOffsetX, STYLE_LIMITS.shadowOffset, DEFAULT_SHADOW.offsetX),
+    offsetY: clampNumber(a.shadowOffsetY, STYLE_LIMITS.shadowOffset, DEFAULT_SHADOW.offsetY),
+  };
+}
+
+function gradientOf(a: SceneNode['appearance'], fill: string): NodeGradient | null {
+  const color = paint(a.gradientColor, 'transparent');
+  if (color === 'transparent' || fill === 'transparent' || !fill.startsWith('#')) return null;
+  return { color, direction: oneOf<GradientDirection>(a.gradientDirection, ['south', 'north', 'east', 'west', 'radial'], 'south') };
 }
 
 export function isTextNode(node: Pick<SceneNode, 'kind'>): boolean {
@@ -212,9 +279,31 @@ function isPaletteFill(fill: string, palette: ReturnType<typeof nodePaletteName>
   return fills.has(fill.toLowerCase());
 }
 
+/** The colour keys draw.io's dark mode inverts. */
+export const INVERTED_KEYS = ['fill', 'stroke', 'textColor', 'gradientColor', 'labelBackground'] as const;
+
+/** The colours picked in OpenFlowKit on a draw.io node (`keepOnDark`): shown as picked, not flipped with draw.io's. */
+const keptOnDark = (appearance: SceneNode['appearance']): readonly unknown[] =>
+  Array.isArray(appearance.keepOnDark) ? appearance.keepOnDark : [];
+
+/**
+ * A node marked `darkColors: 'invert'` (draw.io's) is drawn on a dark canvas as draw.io's dark mode draws it: each of
+ * its own colours with its lightness flipped, so fills, lines and words keep their contrast. Unset colours are the theme's.
+ */
+function forCanvas(node: SceneNode, dark: boolean): { readonly a: SceneNode['appearance']; readonly c: SceneNode['content'] } {
+  const { appearance, content } = node;
+  if (!dark || appearance.darkColors !== 'invert') return { a: appearance, c: content };
+  const a: Record<string, unknown> = { ...appearance };
+  const kept = keptOnDark(appearance);
+  for (const key of INVERTED_KEYS) if (typeof a[key] === 'string' && !kept.includes(key)) a[key] = invertForDark(a[key] as string);
+  return {
+    a: a as SceneNode['appearance'],
+    c: typeof content.customColor === 'string' && !kept.includes('textColor') ? { ...content, customColor: invertForDark(content.customColor) } : content,
+  };
+}
+
 function computeNodeStyle(node: SceneNode, canvasColor?: string): NodeStyle {
-  const a = node.appearance;
-  const c = node.content;
+  const { a, c } = forCanvas(node, isDarkCanvas(canvasColor));
   const text = isTextNode(node);
   const defaults = familyDefaults(node);
   const stroke = resolveNodeStroke(node);
@@ -240,11 +329,16 @@ function computeNodeStyle(node: SceneNode, canvasColor?: string): NodeStyle {
   // fill or the fill is transparent. A tinted (rgba) container fill keeps its palette ink,
   // except as a dark-canvas wash.
   const opacity = clampNumber(a.opacity, { min: 0, max: 1 }, 1);
-  const textBackdrop = defaults.labelOnCanvas || fill === 'transparent' || darkWash ? canvasColor
+  const textBackdrop = defaults.labelOnCanvas || fill === 'transparent' || darkWash || drawnFillIsHatched(node) ? canvasColor
     : fill.startsWith('#') ? (canvasColor === undefined ? fill : paintOver(fill, canvasColor, opacity)) : undefined;
-  const textColor = canvasColor !== undefined && textBackdrop !== undefined
+  const adaptive = canvasColor !== undefined && textBackdrop !== undefined
     ? resolveAdaptiveInk(explicitTextColor, textBackdrop)
     : paint(a.textColor, defaults.text);
+  // A flipped mid-tone fill (teal) can read worse under flipped words than under the words as drawn: the better one is kept.
+  const drawn = a === node.appearance ? undefined : node.appearance.textColor ?? (text ? node.content.customColor : undefined);
+  // Only words on their own solid fill: a see-through label's backdrop is whatever is drawn under it, not known here.
+  const textColor = typeof drawn === 'string' && normalizeHex(drawn) && normalizeHex(fill) && textBackdrop !== undefined && explicitTextColor !== undefined
+    && contrastRatio(drawn, textBackdrop) > contrastRatio(adaptive, textBackdrop) ? normalizeHex(drawn)! : adaptive;
   // The palette's grey sub-label ink is for its own fills; on a dark authored hex it follows the label, as the export
   // draws it (72%). Palette swatches and cards (whose header reads subTextColor as a wash) keep their look.
   const darkFill = explicitTextColor !== undefined && normalizeHex(fill) !== null && readableTextOn(fill) === '#ffffff'
@@ -257,7 +351,8 @@ function computeNodeStyle(node: SceneNode, canvasColor?: string): NodeStyle {
     dash: strokeWidth > 0 ? stroke.dash : [],
     cornerRadius: clampNumber(a.cornerRadius, STYLE_LIMITS.cornerRadius, defaults.cornerRadius),
     opacity,
-    shadow: a.shadow === true,
+    shadow: shadowOf(a),
+    gradient: darkWash ? null : gradientOf(a, fill),
     textColor,
     ...(darkWash && explicitTextColor === undefined ? { subTextColor: WASH_SUB_INK }
       : darkFill ? { subTextColor: mixHex(textColor, fill, 0.28) } : {}),
@@ -267,6 +362,8 @@ function computeNodeStyle(node: SceneNode, canvasColor?: string): NodeStyle {
     fontWeight: fontWeightValue(a.fontWeight, defaults.fontWeight),
     fontStyle: oneOf(a.fontStyle, ['normal', 'italic'], text ? oneOf(c.fontStyle, ['normal', 'italic'], 'normal') : 'normal'),
     textDecoration: oneOf<TextDecoration>(a.textDecoration, ['none', 'underline', 'line-through'], 'none'),
+    keepWords: a.keepWords === true,
+    invertColors: a !== node.appearance,
     textAlign: oneOf<TextAlign>(a.textAlign, ['start', 'center', 'end'], defaults.textAlign),
     textVerticalAlign: oneOf<TextVerticalAlign>(a.textVerticalAlign, ['top', 'middle', 'bottom'], defaults.textVerticalAlign),
     lineHeight: clampNumber(a.lineHeight, STYLE_LIMITS.lineHeight, 1.2),

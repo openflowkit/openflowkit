@@ -2,7 +2,9 @@ import { FONT_STACKS, type NodeStyle } from '../../domain/nodes/nodeStyle';
 import type { Point2d } from '../../domain/geometry/types';
 import type { ConnectorMarkerGlyph, ProjectedConnector } from '../../domain/connectors/types';
 import { connectorMarkerShapes, markerOutward, type MarkerShape } from '../../domain/connectors/markers';
-import { connectorLabelLineHeight, connectorLabelLines, connectorLabelPlate } from '../../domain/connectors/labelStyle';
+import { connectorLabelLineHeight, connectorLabelLines, connectorLabelPlate, connectorRichPlate } from '../../domain/connectors/labelStyle';
+import type { RichBlock } from '../../domain/text/richLabel';
+import { richLabelElement } from './svgNodeText';
 import type { projectPageConnectors } from '../../domain/connectors/routeProjection';
 import { number, xml } from './svgMarkup';
 
@@ -14,17 +16,18 @@ export function connectorPathData(commands: ReturnType<typeof projectPageConnect
 }
 
 /** A connector label as the canvas draws it: text on a rounded plate over the line. */
-export function connectorLabelMarkup(text: string, point: Point2d, style: NodeStyle): string {
+export function connectorLabelMarkup(text: string, point: Point2d, style: NodeStyle, rich: readonly RichBlock[] | null = null): string {
   if (!text) return '';
-  const plate = connectorLabelPlate(text, style, point);
+  const plate = rich ? connectorRichPlate(rich, style, point) : connectorLabelPlate(text, style, point);
   const fill = style.fill === 'transparent' ? 'none' : style.fill;
   const stroke = style.stroke === 'transparent' || style.strokeWidth <= 0 ? 'none' : style.stroke;
   return `<rect x="${number(plate.x)}" y="${number(plate.y)}" width="${number(plate.width)}" height="${number(plate.height)}" rx="${number(style.cornerRadius)}" fill="${fill}" stroke="${stroke}" stroke-width="${number(style.strokeWidth)}"/>`
-    + connectorLabelLines(text, style).map((line, index, lines) => {
+    + (rich ? richLabelElement({ ...style, textAlign: 'center', textVerticalAlign: 'middle' }, plate, rich, null, false) : '')
+    + (rich ? [] : connectorLabelLines(text, style).map((line, index, lines) => {
       // Wrapped like the canvas: the block of lines is centred on the point.
       const y = point.y + (index - (lines.length - 1) / 2) * connectorLabelLineHeight(style);
       return `<text x="${number(point.x)}" y="${number(y)}" text-anchor="middle" dominant-baseline="middle" fill="${xml(style.textColor)}" font-family="${xml(FONT_STACKS[style.fontFamily])}" font-size="${number(style.fontSize)}" font-weight="${style.fontWeight}">${xml(line)}</text>`;
-    }).join('');
+    })).join('');
 }
 
 /** Arrowheads and end glyphs, with the exact geometry the Pixi renderer uses. */
@@ -48,7 +51,7 @@ export function markerMarkup(connector: ProjectedConnector, stroke: string, surf
 function markerShapeMarkup(shape: MarkerShape, stroke: string, width: number, opacity: number, surface: string): string {
   const paint = (fill: string) => `fill="${fill}" stroke="${stroke}" stroke-width="${number(width)}" opacity="${number(opacity)}"`;
   if (shape.kind === 'circle') {
-    return `<circle cx="${number(shape.center.x)}" cy="${number(shape.center.y)}" r="${number(shape.radius)}" ${paint(surface)}/>`;
+    return `<circle cx="${number(shape.center.x)}" cy="${number(shape.center.y)}" r="${number(shape.radius)}" ${paint(shape.filled ? stroke : surface)}/>`;
   }
   const data = shape.subpaths
     .map((points) => points.map((point, index) => `${index ? 'L' : 'M'}${number(point.x)} ${number(point.y)}`).join(' '))

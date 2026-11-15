@@ -9,6 +9,10 @@ separately; its changes are listed under *For developers* in each release.
 
 ## [Unreleased]
 
+### Added
+
+- **Import draw.io files.** `.drawio`, `.xml`, `.drawio.svg` and `.drawio.png` open with every page and shapes where they were, drawn by draw.io's own code (stencils, arrowheads, formatted labels, its sketch and comic styles, its dark-mode colours); anything that can't come across is named in the import report.
+
 ## [2.2.0] — 2026-11-07
 
 ### Highlights

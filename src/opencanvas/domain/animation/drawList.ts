@@ -7,14 +7,20 @@ import { buildNodeStateMap } from '../scene/nodeState';
 import { buildNodeWorldMatrices } from '../scene/worldGeometry';
 import { projectPageConnectors } from '../connectors/routeProjection';
 import { connectorMarkerShapes, markerOutward, type MarkerShape } from '../connectors/markers';
-import { connectorLabelLineHeight, connectorLabelLines, connectorLabelPlate } from '../connectors/labelStyle';
+import { roundedConnectorCommands } from '../connectors/routePaths';
+import { connectorLabelLineHeight, connectorLabelLines, connectorLabelPlate, connectorRichPlate, ownLabelStyle } from '../connectors/labelStyle';
+import { connectorStrokeOnCanvas } from '../connectors/presentation';
 import { resolveBasicNodePresentation } from '../nodes/basicNodePresentation';
 import { basicNodeDecorations } from '../nodes/basicNodeDecorations';
 import { nodeLabelBounds, nodeOutline } from '../nodes/nodeLabelBounds';
 import { isBackdropNode, isContainerNodeKind } from '../nodes/containerNodePresentation';
 import { measurePortableText } from '../text/measurement';
+import { drawnPaint, drawnShapeParts, drawnShapeStyle, flattenDrawnPath, type DrawnPart } from '../nodes/drawnShape';
+import { invertForDark } from '../color/adaptiveColor';
+import { layoutRichLabel, richLabelOf, type RichBlock } from '../text/richLabel';
+import { richBaseOf, richBoxColor, richInk, richOrigin } from '../text/richLabelStyle';
 import { resolveLabelSizing } from '../node-sizing/labelWrap';
-import { FONT_STACKS, resolveNodeStyle, type NodeStyle } from '../nodes/nodeStyle';
+import { FONT_STACKS, resolveNodeStyle, type GradientDirection, type NodeStyle } from '../nodes/nodeStyle';
 import { cameraFitMatrix } from './camera';
 import { PULSE_DASH, PULSE_TRAVEL } from './frame';
 import type { ElementFrameState, FrameState } from './types';
@@ -45,7 +51,7 @@ export interface DrawPaint {
 interface DrawShadow {
   readonly color: string;
   readonly alpha: number;
-  /** Canvas blur radius: `feDropShadow` stdDeviation 2.5 × 2. */
+  /** Canvas blur radius: twice the SVG `stdDeviation`. */
   readonly blur: number;
   readonly offsetX: number;
   readonly offsetY: number;
@@ -82,6 +88,15 @@ export interface DrawPathOp extends DrawOpBase {
   readonly dashOffset: number;
   readonly lineJoin: 'miter' | 'round';
   readonly shadow: DrawShadow | null;
+  /** A fill that runs from `fill` to this colour across the node's own box (local units). */
+  readonly gradient?: DrawGradient;
+}
+
+export interface DrawGradient {
+  readonly color: string;
+  readonly direction: GradientDirection;
+  readonly width: number;
+  readonly height: number;
 }
 
 export interface DrawTextOp extends DrawOpBase {
@@ -118,7 +133,6 @@ const BACKGROUNDS: Readonly<Record<DrawTheme, string>> = {
 const CONNECTOR_STROKES: Readonly<Record<DrawTheme, string>> = {
   light: '#475569', dark: '#cbd5e1', print: '#475569',
 };
-const SHADOW: DrawShadow = { color: '#0f172a', alpha: 0.18, blur: 5, offsetX: 0, offsetY: 2 };
 
 /** Mirrors `canonicalSvg.safeColor`: user JSON can hold any string, and a bad
  *  one silently poisons a canvas style for every later op. */
@@ -156,6 +170,50 @@ function decorationOf(style: NodeStyle, baselineY: number): DrawTextOp['decorati
   };
 }
 
+/**
+ * A rich label as text ops, one a run, at the shared layout's places, and dividers as rects.
+ * ponytail: each run sits at the estimated width of the runs before it, so a line of runs in another font can gap or
+ * touch — upgrade by measuring with the painter's own context before placing.
+ */
+function richLabelOps(
+  transform: Matrix2d, style: NodeStyle, box: Bounds2d, blocks: readonly RichBlock[], wraps: boolean,
+  opacity: number, clip: readonly Point2d[] | null,
+): DrawOp[] {
+  const layout = layoutRichLabel(blocks, richBaseOf(style), wraps ? Math.max(1, box.width - style.textPadding * 2) : null, { keepWords: style.keepWords, box: Math.max(0, box.width - style.textPadding * 2), height: Math.max(0, box.height - style.textPadding * 2) });
+  const origin = richOrigin(style, box, layout, wraps);
+  const [left, top] = [box.x + origin.x, box.y + origin.y];
+  const ops: DrawOp[] = layout.bands.map((band) => ({
+    kind: 'rect', transform, opacity, clip, x: left + band.x, y: top + band.y, width: band.width, height: band.height,
+    radius: 0, fill: paint(richBoxColor(band, style)), stroke: null, strokeWidth: 0,
+  }));
+  for (const edge of layout.borders) {
+    ops.push({
+      kind: 'rect', transform, opacity, clip, x: left + edge.x + 0.5, y: top + edge.y + 0.5, width: Math.max(0, edge.width - 1), height: Math.max(0, edge.height - 1),
+      radius: 0, fill: null, stroke: paint(richBoxColor(edge, style)), strokeWidth: 1,
+    });
+  }
+  for (const line of layout.lines) {
+    const baseline = top + line.y + line.baseline;
+    for (const piece of line.pieces) {
+      if (!piece.text.trim()) continue;
+      ops.push({
+        kind: 'text', transform, opacity, clip, text: piece.text, x: left + piece.x, y: baseline, baseline: 'alphabetic',
+        fontSize: piece.size, fontFamily: FONT_STACKS[style.fontFamily], fontWeight: piece.weight, fontStyle: piece.italic ? 'italic' : 'normal',
+        letterSpacing: 0, align: 'start', color: richInk(piece, style),
+        decoration: piece.underline ? { y: baseline + piece.size * 0.1, thickness: Math.max(1, piece.size / 14) }
+          : piece.strike ? { y: baseline - piece.size * 0.28, thickness: Math.max(1, piece.size / 14) } : null,
+      });
+    }
+  }
+  for (const rule of layout.rules) {
+    ops.push({
+      kind: 'rect', transform, opacity, clip, x: box.x + style.textPadding, y: top + rule.y - 0.5,
+      width: Math.max(0, box.width - style.textPadding * 2), height: 1, radius: 0, fill: paint(style.textColor), stroke: null, strokeWidth: 0,
+    });
+  }
+  return ops;
+}
+
 /** One label line, placed exactly as `labelElement` places it. */
 function labelOp(
   transform: Matrix2d, style: NodeStyle, box: Bounds2d,
@@ -188,6 +246,28 @@ function labelOp(
   };
 }
 
+/**
+ * draw.io's parts (a shape or line its code draws) as paths: 'fill' and 'stroke' are `own` colours, any other colour
+ * the shape's own, flipped with the rest when `invert`; `lineScale` thickens every part with the element's line.
+ */
+function drawnPartOps(
+  parts: readonly DrawnPart[], transform: Matrix2d, opacity: number,
+  own: { readonly fill: string; readonly stroke: string }, invert: boolean, lineScale: number,
+): DrawOp[] {
+  const colour = (value: string | null, alpha: number) => {
+    const resolved = drawnPaint(value, own);
+    if (resolved === null || resolved === 'transparent') return null;
+    return paint(invert && value !== 'fill' && value !== 'stroke' ? invertForDark(resolved) : resolved, alpha);
+  };
+  return parts.flatMap((part) => flattenDrawnPath(part.path).map((run): DrawOp => ({
+    kind: 'path', transform, opacity, clip: null,
+    commands: run.points.map((point, index) => ({ kind: index ? 'line' : 'move', point })), closed: run.closed,
+    fill: colour(part.fill, part.fillOpacity), stroke: colour(part.stroke, part.strokeOpacity),
+    strokeWidth: part.strokeWidth * lineScale, dash: part.dash.map((step) => step * part.strokeWidth * lineScale),
+    dashOffset: 0, lineJoin: 'miter', shadow: null,
+  })));
+}
+
 function shapeNodeOps(
   node: SceneNode, matrix: Matrix2d, state: ElementFrameState | undefined, theme: DrawTheme,
 ): readonly DrawOp[] {
@@ -198,16 +278,23 @@ function shapeNodeOps(
   const opacity = (state?.opacity ?? 1) * style.opacity;
   const basic = resolveBasicNodePresentation(node);
   const outline = nodeOutline(node);
-  const ops: DrawOp[] = [{
+  // A shape draw.io's code draws is its parts, as the canvas and the SVG export draw it.
+  const drawn = drawnShapeParts(node);
+  const ops: DrawOp[] = drawn ? drawnPartOps(drawn, transform, opacity, style, style.invertColors === true,
+    style.strokeWidth / (Number.parseFloat(drawnShapeStyle(node)?.strokeWidth ?? '') || 1)) : [{
     kind: 'path', transform, opacity, clip: null,
     commands: subpathCommands([outline]), closed: true,
     fill: style.fill === 'transparent' ? null : paint(style.fill),
     stroke: style.strokeWidth > 0 ? paint(style.stroke) : null,
     strokeWidth: style.strokeWidth,
     dash: style.dash, dashOffset: 0, lineJoin: 'miter',
-    shadow: style.shadow ? SHADOW : null,
+    shadow: style.shadow ? {
+      color: style.shadow.color, alpha: style.shadow.opacity, blur: style.shadow.blur * 2,
+      offsetX: style.shadow.offsetX, offsetY: style.shadow.offsetY,
+    } : null,
+    ...(style.gradient ? { gradient: { ...style.gradient, width: node.size.width, height: node.size.height } } : {}),
   }];
-  if (basic && style.strokeWidth > 0 && style.stroke !== 'transparent') {
+  if (!drawn && basic && style.strokeWidth > 0 && style.stroke !== 'transparent') {
     for (const decoration of basicNodeDecorations(basic.shape, node.size)) {
       ops.push({
         kind: 'path', transform, opacity, clip: null,
@@ -221,10 +308,13 @@ function shapeNodeOps(
   const sizing = resolveLabelSizing(node, style);
   const clip = sizing.clipContent ? outline : null;
   const labelBox = nodeLabelBounds(node);
+  const rich = label ? richLabelOf(node.content) : null;
+  if (rich) return [...ops, ...richLabelOps(transform, style, labelBox, rich, sizing.overflow !== 'visible', opacity, clip)];
   // A wrapping node (sizing policy) draws its label in the lines the canvas wraps it to, centred as a block.
   const lines = sizing.overflow === 'visible' ? [label] : measurePortableText(label, {
     fontSize: style.fontSize, fontWeight: style.fontWeight, lineHeight: style.fontSize * style.lineHeight,
     maxWidth: Math.max(1, node.size.width - style.textPadding * 2), maxLines: sizing.maxLines, overflow: sizing.overflow,
+    keepWords: style.keepWords,
   }).lines;
   const lineHeight = style.fontSize * style.lineHeight;
   lines.forEach((line, index) => {
@@ -250,7 +340,7 @@ function markerOps(connector: ProjectedConnector, opacity: number, color: string
       kind: 'rect', transform: IDENTITY, opacity, clip: null,
       x: shape.center.x - shape.radius, y: shape.center.y - shape.radius,
       width: shape.radius * 2, height: shape.radius * 2, radius: shape.radius,
-      fill: paint(surface), stroke, strokeWidth: width,
+      fill: shape.filled ? stroke : paint(surface), stroke, strokeWidth: width,
     }
     : {
       kind: 'path', transform: IDENTITY, opacity, clip: null,
@@ -290,32 +380,37 @@ function connectorOps(
   const { presentation } = connector;
   const opacity = state?.opacity ?? 1;
   const { dash, dashOffset } = connectorDash(connector, state);
-  const color = safeColor(presentation.stroke.color, CONNECTOR_STROKES[theme]);
-  const ops: DrawOp[] = [{
+  const color = safeColor(connectorStrokeOnCanvas(presentation.stroke, BACKGROUNDS[theme]).color, CONNECTOR_STROKES[theme]);
+  // A line draw.io draws with a shape of its own is its parts, ends included (an animated line is drawn plain).
+  const flip = theme === 'dark' && presentation.stroke.invertOnDark === true;
+  const animated = state?.pulsePhase !== undefined || (state !== undefined && state.drawProgress < 1);
+  const ops: DrawOp[] = connector.drawn && !animated ? drawnPartOps(connector.drawn.parts, IDENTITY, opacity * presentation.stroke.opacity,
+    { fill: flip ? invertForDark(connector.drawn.fill) : connector.drawn.fill, stroke: color }, flip, 1) : [{
     kind: 'path', transform: IDENTITY, opacity, clip: null,
-    commands: connector.commands, closed: false,
+    commands: roundedConnectorCommands(connector), closed: false,
     fill: null,
     stroke: paint(color, presentation.stroke.opacity),
     strokeWidth: presentation.stroke.width,
     dash, dashOffset, lineJoin: 'miter', shadow: null,
   }, ...markerOps(connector, opacity, color, BACKGROUNDS[theme])];
   // Labels as `connectorLabelMarkup` draws them: text on a plate over the line.
-  const style = connector.presentation.label;
   for (const label of connector.labels) {
     if (!label.text) continue;
-    const plate = connectorLabelPlate(label.text, style, label.point);
+    const style = ownLabelStyle(connector.presentation.label, label);
+    const plate = label.rich ? connectorRichPlate(label.rich, style, label.point) : connectorLabelPlate(label.text, style, label.point);
     ops.push({
       kind: 'rect', transform: IDENTITY, opacity, clip: null, ...plate, radius: style.cornerRadius,
       fill: style.fill === 'transparent' ? null : paint(style.fill),
       stroke: style.stroke === 'transparent' || style.strokeWidth <= 0 ? null : paint(style.stroke),
       strokeWidth: style.strokeWidth,
-    }, ...connectorLabelLines(label.text, style).map((line, index, lines): DrawOp => ({
+    }, ...(label.rich ? richLabelOps(IDENTITY, { ...style, textAlign: 'center', textVerticalAlign: 'middle' }, plate, label.rich, false, opacity, null) : []),
+    ...(label.rich ? [] : connectorLabelLines(label.text, style).map((line, index, lines): DrawOp => ({
       kind: 'text', transform: IDENTITY, opacity, clip: null,
       text: line, x: label.point.x, y: label.point.y + (index - (lines.length - 1) / 2) * connectorLabelLineHeight(style),
       fontSize: style.fontSize, fontFamily: FONT_STACKS[style.fontFamily], fontWeight: String(style.fontWeight),
       fontStyle: style.fontStyle, letterSpacing: 0, align: 'center', baseline: 'middle',
       color: style.textColor, decoration: null,
-    })));
+    }))));
   }
   return ops;
 }

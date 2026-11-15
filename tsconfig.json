@@ -33,4 +33,7 @@
     "stats",
     "vitest.setup.ts"
   ],
+  "exclude": [
+    "src/vendor/**/*.js"
+  ],
 }

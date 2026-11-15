@@ -44,3 +44,18 @@ describe('icon card refit', () => {
     expect(sizeAfter({ ...tile, size: { width: 148, height: 200 } }, { fill: '#abcdef' })).toEqual({ width: 148, height: 200 });
   });
 });
+
+describe('a draw.io shape restyled', () => {
+  it('shows the picked colours on a dark canvas, while the colours it came with still flip', async () => {
+    const { resolveNodeStyle } = await import('../nodes/nodeStyle');
+    const node = createTestNode('d', { kind: 'process', appearance: { fill: '#dae8fc', stroke: '#000000', textColor: '#000000', darkColors: 'invert' } });
+    const page = createTestDocument({ nodes: [node] }).pages[0]!;
+    const command = buildStyleNodesCommand(page, ['d'], { fill: '#fffbeb', stroke: '#fbbf24' })!;
+    const after = applyDocumentCommand(createTestDocument({ nodes: [node] }), command).document.pages[0]!.nodes[0]!;
+    const dark = resolveNodeStyle(after, '#191b19');
+    expect([dark.fill, dark.stroke]).toEqual(['#fffbeb', '#fbbf24']);
+    // A colour not picked here was set for draw.io's white page and still flips: a black line turns light.
+    const fillOnly = applyDocumentCommand(createTestDocument({ nodes: [node] }), buildStyleNodesCommand(page, ['d'], { fill: '#fffbeb' })!).document.pages[0]!.nodes[0]!;
+    expect(resolveNodeStyle(fillOnly, '#191b19').stroke).not.toBe('#000000');
+  });
+});

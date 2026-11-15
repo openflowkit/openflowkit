@@ -39,7 +39,7 @@ report**, rather than pretending the diagram is empty.
 
 ## Opening and importing files
 
-Home → **Import** (or dropping files on Home) takes `.json`, Excalidraw drawings (`.excalidraw`),
+Home → **Import** (or dropping files on Home) takes `.json`, Excalidraw drawings (`.excalidraw`), draw.io files (`.drawio`, `.xml`, `.drawio.svg`, `.drawio.png`),
 plus diagram text in `.mmd`, `.mermaid`, `.d2`, `.dsl`, `.ofk` and `.txt` files. A text file (one at
 a time) opens as a new diagram; Mermaid, D2 and Structurizr are converted first. In the editor,
 the canvas menu's **Open file…** takes the same files. A `.json` file can be:
@@ -51,6 +51,15 @@ An Excalidraw drawing keeps its layout: each shape, arrow, text, freehand stroke
 frame lands where it was drawn, arrows stay tied to their shapes, and Excalidraw's default black
 ink follows the theme. Shapes copied in Excalidraw paste straight onto the canvas (`⌘V`). What
 has no counterpart (hatched fills, groups, filled lines, some arrowheads) is named in a toast.
+
+A draw.io file opens every page as its own page, with shapes where they were, containers and
+swimlanes holding their children, layers, and connectors with their labels and arrowheads. Files
+draw.io compressed, and diagrams saved inside a `.drawio.svg` or `.drawio.png`, open the same way.
+draw.io's default black text and lines follow the theme, so they read on a dark canvas. Shapes,
+arrowheads and the hand-drawn sketch style are drawn by draw.io's own code. What has no
+counterpart (the comic style, unknown shapes or fonts, pictures kept only on draw.io's servers) is
+named in a toast. One difference is never named: draw.io shifts its lines by half a pixel, so a 1px
+line can look grey and two pixels wide there, while OpenFlowKit draws it crisp.
 
 A document written by a newer app version opens read-only: the app preserves it instead of
 migrating it backwards. Opening never overwrites the document it came from: the file is saved
