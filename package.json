@@ -28,7 +28,6 @@
     "build:ci": "npm run build && npm run bundle:check",
     "test:ci": "npm run test -- --run && npm run build:ci",
     "verify": "npm run typecheck && npm run lint && npm run test -- --run && npm --prefix mcp-server run test:run && tsc --noEmit -p mcp-server && playwright test --grep @gate --headed",
-    "verify:quiet": "npm run typecheck && npm run lint && npm run test -- --run && npm --prefix mcp-server run test:run && tsc --noEmit -p mcp-server && playwright test --grep @gate --grep-invert @local",
     "e2e": "playwright test",
     "e2e:headed": "playwright test --headed",
     "e2e:ci": "CI=1 playwright test --project=chromium --grep-invert @local",
